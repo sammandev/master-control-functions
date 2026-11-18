@@ -1,0 +1,386 @@
+<script lang="ts">
+	import DevicePicker from '#lib/components/DevicePicker.svelte';
+	import ExampleDetail from '#lib/components/ExampleDetail.svelte';
+	import ExampleDialog from '#lib/components/ExampleDialog.svelte';
+	import { onDestroy, onMount } from 'svelte';
+	import { page as routePage } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { Plus, RefreshCw } from '@lucide/svelte';
+	import { listExamples, deleteExample, type ExampleRow } from '#lib/examples.ts';
+	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
+	import Badge from '#lib/components/ui/badge.svelte';
+	import Button from '#lib/components/ui/button.svelte';
+	import Input from '#lib/components/ui/input.svelte';
+	import Pagination from '#lib/components/ui/pagination.svelte';
+	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
+	import { toast } from 'svelte-sonner';
+
+	// The global Examples catalog (ticket 04): filterable list beside the
+	// selected example's complete script, following the Functions and
+	// dictionary workspaces. The examples API filters device, function and
+	// search server-side, so pagination always represents the full matching
+	// result set — a match on a later page stays discoverable.
+	// Device scope meanings: no ?device= param is All-Device discovery,
+	// ?device=_global is Global-only, ?device=<name> is that Device's rows.
+	let search = $derived(routePage.url.searchParams.get('search') ?? '');
+	let source = $derived(routePage.url.searchParams.get('source') ?? '');
+	let functionName = $derived(routePage.url.searchParams.get('function_name') ?? '');
+	const params = $derived.by(() => {
+		const query = routePage.url.searchParams;
+		return {
+			search: query.get('search') || undefined,
+			source: query.get('source') || undefined,
+			function_name: query.get('function_name') || undefined,
+			page: Math.max(1, Math.floor(Number(query.get('page')) || 1)),
+			page_size: [10, 20, 50].includes(Number(query.get('page_size')))
+				? Number(query.get('page_size'))
+				: 20
+		};
+	});
+	const deviceFilter = $derived(routePage.url.searchParams.get('device'));
+	let retry = $state(0);
+	let devices = $state<DeviceSummary[]>([]);
+	let deviceError = $state('');
+	async function loadDevices() {
+		deviceError = '';
+		try {
+			devices = (await listDevices()).items;
+		} catch (error) {
+			deviceError = error instanceof Error ? error.message : String(error);
+		}
+	}
+	onMount(() => {
+		void loadDevices();
+	});
+
+	const requestKey = $derived(JSON.stringify({ params, deviceFilter, retry }));
+	let revision = 0;
+	const content = $derived.by(() => {
+		const request: { params: typeof params; deviceFilter: string | null } = JSON.parse(requestKey);
+		return load(request.params, request.deviceFilter);
+	});
+	function setQuery(key: string, value: string, reset = true, replaceState = false) {
+		const query = new SvelteURLSearchParams(routePage.url.searchParams.toString());
+		if (value) query.set(key, value);
+		else query.delete(key);
+		if (reset) {
+			query.delete('page');
+			query.delete('example');
+		}
+
+		return goto(resolve(`examples?${query.toString()}`), {
+			reset: false,
+			replace: replaceState
+		});
+	}
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	let sourceTimer: ReturnType<typeof setTimeout> | undefined;
+	let nameTimer: ReturnType<typeof setTimeout> | undefined;
+	function scheduleSearch(term: string) {
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			if (term !== (routePage.url.searchParams.get('search') ?? '')) void setQuery('search', term);
+		}, 250);
+	}
+	// The function filters share the search's debounce so typing does not
+	// fire a request per keystroke; each field keeps its own timer.
+	function scheduleFilter(key: 'source' | 'function_name', term: string) {
+		const pending = key === 'source' ? sourceTimer : nameTimer;
+		clearTimeout(pending);
+		const next = setTimeout(() => {
+			if (term !== (routePage.url.searchParams.get(key) ?? '')) void setQuery(key, term);
+		}, 250);
+		if (key === 'source') sourceTimer = next;
+		else nameTimer = next;
+	}
+
+	onDestroy(() => {
+		revision++;
+		clearTimeout(searchTimer);
+		clearTimeout(sourceTimer);
+		clearTimeout(nameTimer);
+	});
+	async function load(query: typeof params, device: string | null) {
+		const attempt = ++revision;
+		const result = await listExamples({
+			function_source: query.source,
+			function_name: query.function_name,
+			search: query.search,
+			// Absent = every Device; '' = Global-only (the API sends the key
+			// whenever it is defined, so the blank string filters blank-scope
+			// examples instead of meaning "no filter").
+			device: device === null ? undefined : device === '_global' ? '' : device,
+			page: query.page,
+			page_size: query.page_size
+		});
+		if (attempt !== revision) return result;
+		const last = Math.max(1, Math.ceil(result.total / query.page_size));
+		if (query.page > last) {
+			await setQuery('page', String(last), false, true);
+			return result;
+		}
+		if (
+			routePage.url.searchParams.has('example') &&
+			!result.items.some((row) => row.id === Number(routePage.url.searchParams.get('example')))
+		)
+			await setQuery('example', result.items[0] ? String(result.items[0].id) : '', false, true);
+		return result;
+	}
+
+	// ---- dialog + confirm state -------------------------------------------
+	let dialogOpen = $state(false);
+	let editTarget = $state<ExampleRow | null>(null);
+	let confirmRow = $state<ExampleRow | null>(null);
+
+	function openCreate() {
+		editTarget = null;
+		dialogOpen = true;
+	}
+	function openEdit(row: ExampleRow) {
+		editTarget = row;
+		dialogOpen = true;
+	}
+	async function confirmRemove() {
+		if (!confirmRow) return;
+		try {
+			await deleteExample(confirmRow.id);
+			toast.success('Example deleted');
+			confirmRow = null;
+			retry++;
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		}
+	}
+</script>
+
+<div class="filters">
+	<Input
+		class="min-w-48 flex-1"
+		placeholder="Search script or meaning…"
+		aria-label="Search examples"
+		bind:value={search}
+		oninput={(event) => scheduleSearch(event.currentTarget.value)}
+	/>
+	<Input
+		class="w-28"
+		placeholder="Source…"
+		aria-label="Function source filter"
+		bind:value={source}
+		oninput={(event) => scheduleFilter('source', event.currentTarget.value)}
+	/>
+	<Input
+		class="w-44"
+		placeholder="Function name…"
+		aria-label="Function name filter"
+		bind:value={functionName}
+		oninput={(event) => scheduleFilter('function_name', event.currentTarget.value)}
+	/>
+	<DevicePicker
+		device={deviceFilter === '_global' ? '' : (deviceFilter ?? '_all')}
+		summaries={devices}
+		label="Filter examples by Device"
+		allowAll
+		compact
+		onValueChange={(value) => {
+			void setQuery('device', value === '_all' ? '' : value || '_global');
+		}}
+	/>
+</div>
+<div class="catalog-toolbar">
+	<div class="muted">
+		<span
+			>{#await content}Loading...{:then result}{result.total}
+				{result.total === 1 ? 'example' : 'examples'}{:catch}Count unavailable{/await}</span
+		>
+		<span
+			>{deviceFilter === null
+				? 'All-Device discovery'
+				: deviceFilter === '_global'
+					? 'Global examples'
+					: `Device: ${deviceFilter}`}</span
+		>
+	</div>
+	<Button onclick={openCreate}><Plus size={16} /> New example</Button>
+</div>
+{#if deviceError}<div class="banner-error" role="alert">
+		{deviceError}<Button
+			variant="outline"
+			onclick={() => {
+				void loadDevices();
+			}}><RefreshCw size={16} /> Retry Devices</Button
+		>
+	</div>{/if}
+{#await content}<p class="banner-empty" role="status">Loading examples...</p>
+{:then result}
+	{@const selected =
+		result.items.find((row) => row.id === Number(routePage.url.searchParams.get('example'))) ??
+		result.items[0]}
+	<div class="examples-workspace">
+		<aside class="example-list" aria-label="Examples list">
+			{#each result.items as row (row.id)}
+				<button
+					class:chosen={selected?.id === row.id}
+					aria-pressed={selected?.id === row.id}
+					aria-label={`Select example of ${row.function_name} (${row.device_name || 'Global'})`}
+					onclick={() => {
+						void setQuery('example', String(row.id), false);
+					}}
+				>
+					<strong>{row.function_source}/{row.function_name}</strong>
+					<span
+						><Badge class="max-w-full break-all whitespace-normal"
+							>{row.device_name || 'Global'}</Badge
+						>
+						{#if !row.function_exists}<Badge variant="warn">orphan</Badge>{/if}</span
+					>
+					{#if row.meaning}<small>{row.meaning}</small>{/if}
+				</button>
+			{:else}<p class="banner-empty" role="status">
+					No examples match. Adjust the search or create one.
+				</p>{/each}
+			<Pagination
+				page={params.page}
+				pageSize={params.page_size}
+				total={result.total}
+				onPageChange={(value) => {
+					void setQuery('page', String(value), false);
+				}}
+				onPageSizeChange={(value) => {
+					void setQuery('page_size', String(value));
+				}}
+			/>
+		</aside>
+		<div class="detail-pane">
+			{#if selected}{#key selected}<ExampleDetail
+						row={selected}
+						onEdit={openEdit}
+						onDelete={(row) => (confirmRow = row)}
+					/>
+				{/key}
+			{:else}
+				<p class="banner-empty" role="status">No example selected.</p>
+			{/if}
+		</div>
+	</div>
+{:catch error}<div class="banner-error" role="alert">
+		{error instanceof Error ? error.message : String(error)}<Button
+			variant="outline"
+			onclick={() => retry++}><RefreshCw size={16} /> Retry examples</Button
+		>
+	</div>
+{/await}
+
+<ExampleDialog
+	bind:open={dialogOpen}
+	editRow={editTarget}
+	prefillDevice={deviceFilter && deviceFilter !== '_global' ? deviceFilter : ''}
+	onsaved={async (row) => {
+		await setQuery('example', String(row.id), false);
+		retry++;
+	}}
+/>
+
+<AlertDialog
+	open={confirmRow !== null}
+	onOpenChange={(o) => {
+		if (!o) confirmRow = null;
+	}}
+	title="Delete example"
+	description={confirmRow
+		? `Delete this example of ${confirmRow.function_name}? This cannot be undone.`
+		: ''}
+	confirmLabel="Delete"
+	onConfirm={confirmRemove}
+/>
+
+<style>
+	.filters,
+	.catalog-toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 16px;
+	}
+	.catalog-toolbar {
+		justify-content: space-between;
+		padding-bottom: 16px;
+	}
+	.catalog-toolbar span {
+		font-size: 12px;
+	}
+	.catalog-toolbar span + span {
+		margin-left: 8px;
+	}
+	.examples-workspace {
+		display: grid;
+		grid-template-columns: 300px minmax(0, 1fr);
+		border-top: 1px solid var(--border);
+	}
+	.example-list {
+		min-width: 0;
+		position: sticky;
+		top: 16px;
+		align-self: start;
+		max-height: min(640px, calc(100dvh - 32px));
+		overflow-y: auto;
+		overscroll-behavior-y: contain;
+		scrollbar-gutter: stable;
+		border-right: 1px solid var(--border);
+		padding: 16px 16px 16px 0;
+	}
+	.example-list button {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		width: 100%;
+		border: 0;
+		border-bottom: 1px solid var(--border);
+		border-left: 3px solid transparent;
+		padding: 14px 12px;
+		gap: 8px;
+		text-align: left;
+		color: var(--foreground);
+		background: transparent;
+		cursor: pointer;
+	}
+	.example-list button:hover {
+		background: var(--accent);
+	}
+	.example-list button.chosen {
+		background: var(--device-soft);
+		border-left-color: var(--device-accent);
+	}
+	.example-list button:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: -2px;
+	}
+	.example-list strong {
+		font: 600 13px/1.5 var(--mono);
+		overflow-wrap: anywhere;
+	}
+	.example-list span,
+	.example-list small {
+		font-size: 12px;
+		overflow-wrap: anywhere;
+		max-width: 100%;
+	}
+	.detail-pane {
+		min-width: 0;
+	}
+	@media (max-width: 850px) {
+		.examples-workspace {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.example-list {
+			position: static;
+			border-right: 0;
+			border-bottom: 1px solid var(--border);
+			padding-right: 0;
+			max-height: 360px;
+			overflow-y: auto;
+		}
+	}
+</style>

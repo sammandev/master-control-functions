@@ -1,0 +1,2582 @@
+diff --git a/frontend/src/lib/components/DefinitionDeleteDialog.svelte b/frontend/src/lib/components/DefinitionDeleteDialog.svelte
+new file mode 100644
+index 0000000..3a150fb
+--- /dev/null
++++ b/frontend/src/lib/components/DefinitionDeleteDialog.svelte
+@@ -0,0 +1,58 @@
++<script lang="ts">
++	import {
++		deleteDefinition,
++		ApiError,
++		type DefinitionRow,
++		type DefinitionKind
++	} from '$lib/definitions';
++	import AlertDialog from '$lib/components/ui/alert-dialog.svelte';
++	import { toast } from 'svelte-sonner';
++	let {
++		kind,
++		row,
++		onClose,
++		onDeleted
++	}: {
++		kind: DefinitionKind;
++		row: DefinitionRow;
++		onClose: () => void;
++		onDeleted: () => void | Promise<void>;
++	} = $props();
++	let force = $derived(row.usage_count > 0);
++	const impact = $derived(
++		row.device_name
++			? 'Links are retained and may resolve to a Global fallback. Without a fallback, they become unresolved.'
++			: 'Links using this Global definition are retained but become unresolved.'
++	);
++	let deleting = $state(false);
++	let error = $state('');
++	async function remove() {
++		if (deleting) return;
++		deleting = true;
++		error = '';
++		try {
++			await deleteDefinition(kind, row.id, force);
++			toast.success('Definition deleted');
++			await onDeleted();
++			onClose();
++		} catch (failure) {
++			error = failure instanceof Error ? failure.message : String(failure);
++			if (failure instanceof ApiError && failure.status === 409) force = true;
++		} finally {
++			deleting = false;
++		}
++	}
++</script>
++
++<AlertDialog
++	open={true}
++	onOpenChange={(open) => {
++		if (!open && !deleting) onClose();
++	}}
++	title={`${force ? 'Force delete' : 'Delete'} ${row.name}?`}
++	description={`${row.device_name ? `Device: ${row.device_name}` : 'Global - shared across Devices'}. ${force ? `${row.name} is referenced by Function links. ${impact}` : 'This permanently removes the definition. This cannot be undone.'}`}
++	confirmLabel="Delete"
++	onConfirm={remove}
++>
++	{#if error}<p class="banner-error" role="alert">{error}</p>{/if}
++</AlertDialog>
+diff --git a/frontend/src/lib/components/DefinitionDetail.svelte b/frontend/src/lib/components/DefinitionDetail.svelte
+new file mode 100644
+index 0000000..0ddedac
+--- /dev/null
++++ b/frontend/src/lib/components/DefinitionDetail.svelte
+@@ -0,0 +1,138 @@
++<script lang="ts">
++	import type { DefinitionRow } from '$lib/definitions';
++	import { resolve } from '$app/paths';
++	import { devicePath, deviceBadgeLinkClass } from '$lib/devices';
++	import Badge from '$lib/components/ui/badge.svelte';
++	import Button from '$lib/components/ui/button.svelte';
++	import { Pencil, Trash2, CopyPlus } from '@lucide/svelte';
++	let {
++		row,
++		onEdit,
++		onDelete,
++		onOverride
++	}: {
++		row: DefinitionRow;
++		onEdit: (row: DefinitionRow) => void;
++		onDelete: (row: DefinitionRow) => void;
++		onOverride?: (row: DefinitionRow) => void;
++	} = $props();
++</script>
++
++<section aria-label="Definition details" class="definition-detail">
++	<p class="ownership">
++		{row.device_name ? 'Device definition' : 'Global - shared across Devices'}
++	</p>
++	<h2>{row.name}</h2>
++	{#if row.device_name}<a
++			href={resolve('/devices/[name]', { name: devicePath(row.device_name) })}
++			class={deviceBadgeLinkClass}
++			><Badge class="max-w-full break-all whitespace-normal">{row.device_name}</Badge></a
++		>{/if}
++	{#if row.description}<p class="description">{row.description}</p>{/if}
++	<dl>
++		<div>
++			<dt>Type</dt>
++			<dd>{row.type}</dd>
++		</div>
++		<div>
++			<dt>Unit</dt>
++			<dd>{row.unit || 'None'}</dd>
++		</div>
++		<div>
++			<dt>Default value</dt>
++			<dd class="identifier">{row.default_value ?? 'None'}</dd>
++		</div>
++		<div>
++			<dt>Allowed values</dt>
++			<dd class="identifier">{row.allowed_values || 'None'}</dd>
++		</div>
++		<div>
++			<dt>Cardinality</dt>
++			<dd>{row.cardinality}</dd>
++		</div>
++		<div>
++			<dt>Value pattern</dt>
++			<dd class="identifier">{row.value_pattern || 'None'}</dd>
++		</div>
++		<div>
++			<dt>Required</dt>
++			<dd>{row.required ? 'Yes' : 'No'}</dd>
++		</div>
++		<div>
++			<dt>Used by</dt>
++			<dd>{row.usage_count} Function link{row.usage_count === 1 ? '' : 's'}</dd>
++		</div>
++		<div>
++			<dt>Orphan usage</dt>
++			<dd>{row.orphan_usage_count} orphan link{row.orphan_usage_count === 1 ? '' : 's'}</dd>
++		</div>
++		<div>
++			<dt>Updated</dt>
++			<dd>{row.updated_at.slice(0, 10)}</dd>
++		</div>
++	</dl>
++	<div class="actions">
++		{#if onOverride}<Button onclick={() => onOverride?.(row)}
++				><CopyPlus size={16} /> Create Device override</Button
++			>{/if}
++		<Button variant="outline" onclick={() => onEdit(row)}
++			><Pencil size={16} /> {row.device_name ? 'Edit definition' : 'Edit Global definition'}</Button
++		>
++		<Button variant="outline" onclick={() => onDelete(row)}
++			><Trash2 size={16} />
++			{row.device_name ? 'Delete definition' : 'Delete Global definition'}</Button
++		>
++	</div>
++</section>
++
++<style>
++	.definition-detail {
++		min-width: 0;
++		padding: 24px;
++	}
++	.ownership,
++	dt {
++		color: var(--muted-foreground);
++		font-size: 12px;
++	}
++	h2 {
++		margin: 8px 0 12px;
++		font: 600 22px/1.5 var(--mono);
++		overflow-wrap: anywhere;
++	}
++	.description {
++		margin: 16px 0;
++		overflow-wrap: anywhere;
++	}
++	dl {
++		display: grid;
++		grid-template-columns: repeat(2, minmax(0, 1fr));
++		gap: 20px;
++		margin: 24px 0;
++	}
++	dt {
++		margin-bottom: 4px;
++	}
++	dd {
++		margin: 0;
++		font-size: 13px;
++		overflow-wrap: anywhere;
++	}
++	.identifier {
++		font-family: var(--mono);
++		white-space: pre-wrap;
++	}
++	.actions {
++		display: flex;
++		flex-wrap: wrap;
++		gap: 8px;
++	}
++	@media (max-width: 600px) {
++		.definition-detail {
++			padding: 16px 0;
++		}
++		dl {
++			gap: 16px;
++		}
++	}
++</style>
+diff --git a/frontend/src/lib/components/DefinitionDialog.svelte b/frontend/src/lib/components/DefinitionDialog.svelte
+index a1dfedf..3f6083c 100644
+--- a/frontend/src/lib/components/DefinitionDialog.svelte
++++ b/frontend/src/lib/components/DefinitionDialog.svelte
+@@ -24,6 +24,7 @@
+ 		title,
+ 		open = $bindable(false),
+ 		editRow = null,
++		createFrom = null,
+ 		prefillDevice = '',
+ 		lockDevice = false,
+ 		onsaved
+@@ -32,9 +33,10 @@
+ 		title: string;
+ 		open?: boolean;
+ 		editRow?: DefinitionRow | null;
++		createFrom?: DefinitionRow | null;
+ 		prefillDevice?: string;
+ 		lockDevice?: boolean;
+-		onsaved?: () => void | Promise<void>;
++		onsaved?: (row: DefinitionRow) => void | Promise<void>;
+ 	} = $props();
+ 
+ 	// Form shape for the create/edit modal. Scope (device_name, ADR-0009)
+@@ -68,18 +70,19 @@
+ 	// create mode from the prefill device (blank = Global).
+ 	$effect(() => {
+ 		if (open) {
+-			form = editRow
++			const source = editRow ?? createFrom;
++			form = source
+ 				? {
+-						name: editRow.name,
+-						device_name: editRow.device_name,
+-						description: editRow.description,
+-						type: editRow.type,
+-						unit: editRow.unit,
+-						default_value: editRow.default_value,
+-						allowed_values: editRow.allowed_values,
+-						cardinality: editRow.cardinality,
+-						value_pattern: editRow.value_pattern,
+-						required: editRow.required
++						name: source.name,
++						device_name: editRow ? source.device_name : prefillDevice,
++						description: source.description,
++						type: source.type,
++						unit: source.unit,
++						default_value: source.default_value,
++						allowed_values: source.allowed_values,
++						cardinality: source.cardinality,
++						value_pattern: source.value_pattern,
++						required: source.required
+ 					}
+ 				: { ...emptyForm(), device_name: prefillDevice };
+ 			fieldErrors = {};
+@@ -88,19 +91,24 @@
+ 	});
+ 
+ 	async function save() {
++		if (saving) return;
+ 		saving = true;
+ 		fieldErrors = {};
+ 		submitError = '';
+ 		try {
++			const input = lockDevice
++				? { ...form, device_name: editRow?.device_name ?? prefillDevice }
++				: form;
++			let saved: DefinitionRow;
+ 			if (editRow) {
+-				await updateDefinition(kind, editRow.id, form);
++				saved = await updateDefinition(kind, editRow.id, input);
+ 				toast.success(`${editRow.name} updated`);
+ 			} else {
+-				await createDefinition(kind, form);
++				saved = await createDefinition(kind, input);
+ 				toast.success(`${form.name} created`);
+ 			}
++			await onsaved?.(saved);
+ 			open = false;
+-			await onsaved?.();
+ 		} catch (e) {
+ 			if (e instanceof ApiError) {
+ 				fieldErrors = e.fields;
+@@ -116,9 +124,14 @@
+ 
+ <Dialog
+ 	{open}
+-	onOpenChange={(o) => (open = o)}
++	onOpenChange={(next) => {
++		if (!saving) open = next;
++	}}
+ 	title={editRow ? `Edit ${editRow.name}` : `New ${title.toLowerCase()} entry`}
+ >
++	<p class="text-muted-foreground mb-3 text-xs">
++		{form.device_name ? `Device: ${form.device_name}` : 'Global - shared across Devices'}
++	</p>
+ 	{#if submitError}
+ 		<div class="banner-error" role="alert">{submitError}</div>
+ 	{/if}
+@@ -144,6 +157,7 @@
+ 				placeholder={lockDevice ? '' : 'blank = Global (e.g. WIFI_TEST)'}
+ 				disabled={lockDevice}
+ 			/>
++			{#if fieldErrors.device_name}<span class="field-error">{fieldErrors.device_name}</span>{/if}
+ 		</div>
+ 		<div class="field">
+ 			<Label for="d-description">Description</Label>
+@@ -174,16 +188,19 @@
+ 		<div class="field">
+ 			<Label for="d-unit">Unit</Label>
+ 			<Input id="d-unit" bind:value={form.unit} />
++			{#if fieldErrors.unit}<span class="field-error">{fieldErrors.unit}</span>{/if}
+ 		</div>
+ 		<div class="field">
+-			<Label for="d-allowed">Allowed values ({'{'}v1,v2,{'}'}…)</Label>
+-			<Input id="d-allowed" bind:value={form.allowed_values} placeholder={'{20,40,80}'} />
+-			{#if fieldErrors.allowed_values}<span class="field-error">{fieldErrors.allowed_values}</span>{/if}
++			<Label for="d-allowed">Allowed values (&#123;v1,v2,&#125;…)</Label>
++			<Input id="d-allowed" bind:value={form.allowed_values} placeholder="&#123;20,40,80&#125;" />
++			{#if fieldErrors.allowed_values}<span class="field-error">{fieldErrors.allowed_values}</span
++				>{/if}
+ 		</div>
+ 		<div class="field">
+ 			<Label for="d-default">Default value</Label>
+ 			<Input id="d-default" bind:value={form.default_value} />
+-			{#if fieldErrors.default_value}<span class="field-error">{fieldErrors.default_value}</span>{/if}
++			{#if fieldErrors.default_value}<span class="field-error">{fieldErrors.default_value}</span
++				>{/if}
+ 		</div>
+ 		<div class="field">
+ 			<Label for="d-cardinality">Cardinality</Label>
+@@ -201,13 +218,16 @@
+ 		<div class="field">
+ 			<Label for="d-pattern">Value pattern</Label>
+ 			<Input id="d-pattern" bind:value={form.value_pattern} />
++			{#if fieldErrors.value_pattern}<span class="field-error">{fieldErrors.value_pattern}</span
++				>{/if}
+ 		</div>
+ 		<div class="field">
+ 			<Label for="d-required">Required</Label>
+ 			<Checkbox id="d-required" bind:checked={form.required} />
++			{#if fieldErrors.required}<span class="field-error">{fieldErrors.required}</span>{/if}
+ 		</div>
+ 		<div class="mt-4 flex justify-end gap-2">
+-			<Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
++			<Button variant="outline" disabled={saving} onclick={() => (open = false)}>Cancel</Button>
+ 			<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+ 		</div>
+ 	</form>
+diff --git a/frontend/src/lib/components/DeviceDefinitionDetail.svelte b/frontend/src/lib/components/DeviceDefinitionDetail.svelte
+new file mode 100644
+index 0000000..7fe6774
+--- /dev/null
++++ b/frontend/src/lib/components/DeviceDefinitionDetail.svelte
+@@ -0,0 +1,77 @@
++<script lang="ts">
++	import { getDefinition, type DefinitionKind, type DefinitionRow } from '$lib/definitions';
++	import type { DeviceDefinitionRow } from '$lib/devices';
++	import DefinitionDetail from '$lib/components/DefinitionDetail.svelte';
++	import DefinitionDialog from '$lib/components/DefinitionDialog.svelte';
++	import DefinitionDeleteDialog from '$lib/components/DefinitionDeleteDialog.svelte';
++	import Button from '$lib/components/ui/button.svelte';
++	import { RefreshCw } from '@lucide/svelte';
++	let {
++		definition,
++		kind,
++		device,
++		onChanged
++	}: {
++		definition: DeviceDefinitionRow;
++		kind: DefinitionKind;
++		device: string;
++		onChanged: (row: DefinitionRow | null) => void | Promise<void>;
++	} = $props();
++	let retry = $state(0);
++	const content = $derived.by(() => {
++		void retry;
++		return getDefinition(kind, definition.id);
++	});
++	let target = $state<DefinitionRow | null>(null);
++	let dialogOpen = $state(false);
++	let override = $state(false);
++	let deleting = $state<DefinitionRow | null>(null);
++	function edit(row: DefinitionRow) {
++		target = row;
++		override = false;
++		dialogOpen = true;
++	}
++	function createOverride(row: DefinitionRow) {
++		target = row;
++		override = true;
++		dialogOpen = true;
++	}
++</script>
++
++{#await content}<p class="banner-empty" role="status">Loading definition details...</p>
++{:then row}
++	<DefinitionDetail
++		{row}
++		onEdit={edit}
++		onDelete={(selected) => {
++			deleting = selected;
++		}}
++		onOverride={!row.device_name && device ? createOverride : undefined}
++	/>
++{:catch error}<div class="banner-error" role="alert">
++		{error instanceof Error ? error.message : String(error)}<Button
++			variant="outline"
++			onclick={() => retry++}><RefreshCw size={16} /> Retry definition</Button
++		>
++	</div>{/await}
++{#if dialogOpen && target}<DefinitionDialog
++		bind:open={dialogOpen}
++		{kind}
++		title={kind === 'parameter-definitions' ? 'Parameter Definitions' : 'Criteria Definitions'}
++		editRow={override ? null : target}
++		createFrom={override ? target : null}
++		prefillDevice={override ? device : target.device_name}
++		lockDevice
++		onsaved={async (row) => {
++			await onChanged(row);
++			retry++;
++		}}
++	/>{/if}
++{#if deleting}<DefinitionDeleteDialog
++		{kind}
++		row={deleting}
++		onClose={() => {
++			deleting = null;
++		}}
++		onDeleted={() => onChanged(null)}
++	/>{/if}
+diff --git a/frontend/src/lib/components/DictionaryPage.svelte b/frontend/src/lib/components/DictionaryPage.svelte
+index 32c46b9..bff1474 100644
+--- a/frontend/src/lib/components/DictionaryPage.svelte
++++ b/frontend/src/lib/components/DictionaryPage.svelte
+@@ -1,24 +1,20 @@
+ <script lang="ts">
+-	import {
+-		listDefinitions,
+-		deleteDefinition,
+-		type DefinitionRow,
+-		type DefinitionKind
+-	} from '$lib/definitions';
+-	import { deviceHref, deviceBadgeLinkClass } from '$lib/devices';
++	import { onMount, onDestroy } from 'svelte';
++	import { page as routePage } from '$app/state';
++	import { goto, afterNavigate } from '$app/navigation';
++	import { resolve } from '$app/paths';
++	import { SvelteURLSearchParams } from 'svelte/reactivity';
++	import { listDefinitions, type DefinitionRow, type DefinitionKind } from '$lib/definitions';
++	import { listDevices, type DeviceSummary } from '$lib/devices';
+ 	import DefinitionDialog from '$lib/components/DefinitionDialog.svelte';
+-	import AlertDialog from '$lib/components/ui/alert-dialog.svelte';
++	import DefinitionDetail from '$lib/components/DefinitionDetail.svelte';
++	import DefinitionDeleteDialog from '$lib/components/DefinitionDeleteDialog.svelte';
+ 	import Badge from '$lib/components/ui/badge.svelte';
+ 	import Button from '$lib/components/ui/button.svelte';
+-	import { Card, CardContent } from '$lib/components/ui/card';
+-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+-	import SortHead from '$lib/components/SortHead.svelte';
+-	import { nextSort } from '$lib/table-sort';
+-	import { EllipsisVertical } from '@lucide/svelte';
++	import Select from '$lib/components/ui/select.svelte';
++	import { Plus, RefreshCw } from '@lucide/svelte';
+ 	import Input from '$lib/components/ui/input.svelte';
+ 	import Pagination from '$lib/components/ui/pagination.svelte';
+-	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+-	import { toast } from 'svelte-sonner';
+ 
+ 	// Shared CRUD page for the Parameter definition and Criteria definition
+ 	// dictionaries. kind picks the endpoint; everything else is identical.
+@@ -27,75 +23,103 @@
+ 	let { kind, title }: { kind: DefinitionKind; title: string } = $props();
+ 
+ 	// ---- list state -------------------------------------------------------
+-	let search = $state('');
+-	let searchDebounced = $state('');
+-	let sort = $state('name');
+-	let order = $state<'asc' | 'desc'>('asc');
+-	let page = $state(1);
+-	let pageSize = $state(20);
+-
+-	let items = $state<DefinitionRow[]>([]);
+-	let total = $state(0);
+-	let loading = $state(false);
+-	let loadError = $state('');
+-
+-	$effect(() => {
+-		const term = search;
+-		const t = setTimeout(() => {
+-			searchDebounced = term;
+-			page = 1;
+-		}, 250);
+-		return () => clearTimeout(t);
+-	});
+-
+-	function currentParams() {
++	let search = $derived(routePage.url.searchParams.get('search') ?? '');
++	const params = $derived.by(() => {
++		const query = routePage.url.searchParams;
+ 		return {
+-			search: searchDebounced || undefined,
+-			sort,
+-			order,
+-			page,
+-			page_size: pageSize
++			search: query.get('search') || undefined,
++			sort: ['name', 'type', 'updated_at'].includes(query.get('sort') ?? '')
++				? query.get('sort')!
++				: 'name',
++			order: query.get('order') === 'desc' ? ('desc' as const) : ('asc' as const),
++			page: Math.max(1, Math.floor(Number(query.get('page')) || 1)),
++			page_size: [10, 20, 50].includes(Number(query.get('page_size')))
++				? Number(query.get('page_size'))
++				: 20
+ 		};
+-	}
+-
+-	$effect(() => {
+-		load(currentParams());
+ 	});
+-
+-	async function load(params: {
+-		search?: string;
+-		sort: string;
+-		order: 'asc' | 'desc';
+-		page: number;
+-		page_size: number;
+-	}) {
+-		loading = true;
+-		loadError = '';
++	let retry = $state(0);
++	const deviceFilter = $derived(routePage.url.searchParams.get('device'));
++	let devices = $state<DeviceSummary[]>([]);
++	let deviceError = $state('');
++	async function loadDevices() {
++		deviceError = '';
+ 		try {
+-			const res = await listDefinitions(kind, params);
+-			items = res.items;
+-			total = res.total;
+-			if (page > 1) {
+-				const p = Math.max(1, Math.ceil(total / pageSize));
+-				if (page > p) {
+-					page = p;
+-					return;
+-				}
++			devices = (await listDevices()).items;
++		} catch (error) {
++			deviceError = error instanceof Error ? error.message : String(error);
++		}
++	}
++	onMount(() => {
++		void loadDevices();
++	});
++	const requestKey = $derived(JSON.stringify({ kind, params, deviceFilter, retry }));
++	let revision = 0;
++	const content = $derived.by(() => {
++		const request: { kind: DefinitionKind; params: typeof params; deviceFilter: string | null } =
++			JSON.parse(requestKey);
++		return load(request.kind, request.params, request.deviceFilter);
++	});
++	function setQuery(key: string, value: string, reset = true, replaceState = false) {
++		const query = new SvelteURLSearchParams(routePage.url.searchParams);
++		if (value) query.set(key, value);
++		else query.delete(key);
++		if (reset) {
++			query.delete('page');
++			query.delete('definition');
++		}
++		return goto(resolve(`/${kind}?${query.toString()}`), {
++			keepFocus: true,
++			noScroll: true,
++			replaceState
++		});
++	}
++	let searchTimer: ReturnType<typeof setTimeout> | undefined;
++	function scheduleSearch(term: string) {
++		clearTimeout(searchTimer);
++		searchTimer = setTimeout(() => {
++			if (term !== (routePage.url.searchParams.get('search') ?? '')) void setQuery('search', term);
++		}, 250);
++	}
++	afterNavigate(() => clearTimeout(searchTimer));
++	onDestroy(() => clearTimeout(searchTimer));
++	async function load(endpoint: DefinitionKind, query: typeof params, device: string | null) {
++		const attempt = ++revision;
++		let result;
++		if (device === null) result = await listDefinitions(endpoint, query);
++		else {
++			const first = await listDefinitions(endpoint, { ...query, page: 1, page_size: 100 });
++			const rows = [...first.items];
++			for (let next = 2; rows.length < first.total; next++) {
++				if (attempt !== revision) return { items: [], total: 0 };
++				const more = await listDefinitions(endpoint, { ...query, page: next, page_size: 100 });
++				if (!more.items.length) throw new Error('The definition list changed. Please retry.');
++				rows.push(...more.items);
+ 			}
+-		} catch (e) {
+-			items = [];
+-			total = 0;
+-			loadError = e instanceof Error ? e.message : String(e);
+-		} finally {
+-			loading = false;
++			const matches = rows.filter(
++				(row) => row.device_name === (device === '_global' ? '' : device)
++			);
++			const start = (query.page - 1) * query.page_size;
++			result = { items: matches.slice(start, start + query.page_size), total: matches.length };
++		}
++		if (attempt !== revision) return result;
++		const last = Math.max(1, Math.ceil(result.total / query.page_size));
++		if (query.page > last) {
++			await setQuery('page', String(last), false, true);
++			return result;
+ 		}
++		if (
++			routePage.url.searchParams.has('definition') &&
++			!result.items.some((row) => row.id === Number(routePage.url.searchParams.get('definition')))
++		)
++			await setQuery('definition', result.items[0] ? String(result.items[0].id) : '', false, true);
++		return result;
+ 	}
+ 
+ 	// ---- dialog state -----------------------------------------------------
+ 	// The row being edited (null = create); DefinitionDialog owns the form.
+ 	let dialogOpen = $state(false);
+ 	let editTarget = $state<DefinitionRow | null>(null);
+-	let deleting = $state(false);
+ 
+ 	function openCreate() {
+ 		editTarget = null;
+@@ -107,186 +131,249 @@
+ 		dialogOpen = true;
+ 	}
+ 
+-	// ---- delete confirm state ----------------------------------------------
+-	// The row awaiting confirmation; kept after the dialog closes so the
+-	// description stays stable until the next confirm opens.
+ 	let confirmRow = $state<DefinitionRow | null>(null);
+-	let confirmOpen = $state(false);
+ 
+ 	function requestRemove(row: DefinitionRow) {
+ 		confirmRow = row;
+-		confirmOpen = true;
+-	}
+-
+-	// A referenced definition can only be deleted with force (the server
+-	// protects it); the confirm dialog's copy warns about the links that
+-	// will turn into unresolved orphans.
+-	async function confirmRemove() {
+-		if (!confirmRow) return;
+-		deleting = true;
+-		try {
+-			await deleteDefinition(kind, confirmRow.id, confirmRow.usage_count > 0);
+-			toast.success('Definition deleted');
+-			await load(currentParams());
+-		} catch (e) {
+-			loadError = e instanceof Error ? e.message : String(e);
+-		} finally {
+-			deleting = false;
+-		}
+-	}
+-
+-	// Sort state flip through the shared transition (ticket 09), exposed
+-	// through aria-sort by the shared SortHead headers.
+-	function toggleSort(col: string) {
+-		({ key: sort, dir: order } = nextSort(sort, order, col));
+-		page = 1;
+ 	}
+ </script>
+ 
+-{#snippet linkLikeButton(row: DefinitionRow)}
+-	<button
+-		type="button"
+-		class="cursor-pointer border-none bg-transparent p-0 text-primary underline outline-none hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+-		onclick={() => openEdit(row)}
+-		title={row.description}
+-	>
+-		{row.name}
+-	</button>
+-{/snippet}
+-
+ <h1 class="mt-2 mb-4 text-xl font-semibold">{title}</h1>
+ 
+-<Card class="mb-4 py-4">
+-	<CardContent class="flex flex-wrap items-center gap-2">
+-		<Input
+-			class="min-w-60"
+-			placeholder="Search name or description…"
+-			aria-label={`Search ${title.toLowerCase()}`}
+-			bind:value={search}
+-		/>
+-		<span class="spacer"></span>
+-		<span class="muted">{loading ? 'Loading…' : `${total} entries`}</span>
+-		<Button onclick={openCreate}>New</Button>
+-	</CardContent>
+-</Card>
+-
+-{#if loadError}
+-	<div class="banner-error" role="alert">{loadError}</div>
+-{/if}
+-
+-<Card>
+-	<CardContent class="p-0">
+-		<Table class="border-0">
+-			<TableHeader>
+-				<TableRow>
+-					<SortHead label="Name" col="name" active={sort} dir={order} onclick={() => toggleSort('name')} />
+-					<SortHead label="Type" col="type" active={sort} dir={order} onclick={() => toggleSort('type')} />
+-					<TableHead>Device</TableHead>
+-					<TableHead>Cardinality</TableHead>
+-					<TableHead>Allowed values</TableHead>
+-					<TableHead>Default</TableHead>
+-					<TableHead>Required</TableHead>
+-					<TableHead>Used by</TableHead>
+-					<SortHead
+-						label="Updated"
+-						col="updated_at"
+-						active={sort}
+-						dir={order}
+-						onclick={() => toggleSort('updated_at')}
+-					/>
+-					<TableHead></TableHead>
+-				</TableRow>
+-			</TableHeader>
+-			<TableBody>
+-				{#each items as row (row.id)}
+-					<TableRow>
+-						<TableCell>{@render linkLikeButton(row)}</TableCell>
+-						<TableCell><Badge>{row.type}</Badge></TableCell>
+-						<TableCell>
+-							{#if row.device_name}
+-								<!-- Deep-link into the device browser (ADR-0009 view). -->
+-								<a class={deviceBadgeLinkClass} href={deviceHref(row.device_name)} title={`Browse device ${row.device_name}`}>
+-									<Badge>{row.device_name}</Badge>
+-								</a>
+-							{:else}
+-								<span class="muted">Global</span>
+-							{/if}
+-						</TableCell>
+-						<TableCell>{row.cardinality}</TableCell>
+-						<TableCell class="font-mono text-xs">{row.allowed_values}</TableCell>
+-						<TableCell class="font-mono text-xs">{row.default_value ?? ''}</TableCell>
+-						<TableCell>{row.required ? '✓' : ''}</TableCell>
+-						<TableCell class="muted">
+-							{row.usage_count}
+-							{#if row.orphan_usage_count > 0}
+-								<Badge
+-									variant="warn"
+-									class="ml-1"
+-									title="{row.orphan_usage_count} of these links point at a missing function (orphan)"
+-								>
+-									{row.orphan_usage_count} orphan
+-								</Badge>
+-							{/if}
+-						</TableCell>
+-						<TableCell class="text-xs text-muted-foreground">{row.updated_at.slice(0, 10)}</TableCell>
+-						<TableCell class="text-right">
+-							<DropdownMenu.Root>
+-								<DropdownMenu.Trigger>
+-									{#snippet child({ props })}
+-										<Button
+-											{...props}
+-											variant="ghost"
+-											size="icon"
+-											aria-label={`Actions for ${row.name}`}
+-										>
+-											<EllipsisVertical class="size-4" />
+-										</Button>
+-									{/snippet}
+-								</DropdownMenu.Trigger>
+-								<DropdownMenu.Content align="end" class="w-36">
+-									<DropdownMenu.Item onclick={() => openEdit(row)}>Edit</DropdownMenu.Item>
+-									<DropdownMenu.Separator />
+-									<DropdownMenu.Item
+-										variant="destructive"
+-										disabled={deleting}
+-										onclick={() => requestRemove(row)}
+-									>
+-										Delete
+-									</DropdownMenu.Item>
+-								</DropdownMenu.Content>
+-							</DropdownMenu.Root>
+-						</TableCell>
+-					</TableRow>
+-				{:else}
+-					<TableRow>
+-						<TableCell colspan={10} class="banner-empty text-center" aria-live="polite">
+-							{loading ? 'Loading…' : 'No entries match. Adjust the search or create one.'}
+-						</TableCell>
+-					</TableRow>
+-				{/each}
+-			</TableBody>
+-		</Table>
+-		<Pagination bind:page {total} bind:pageSize class="mt-0 border-t px-4 pb-3 pt-2" />
+-	</CardContent>
+-</Card>
++<div class="filters">
++	<Input
++		class="min-w-48 flex-1"
++		placeholder="Search name or description..."
++		aria-label={`Search ${title.toLowerCase()}`}
++		bind:value={search}
++		oninput={(event) => scheduleSearch(event.currentTarget.value)}
++	/>
++	<Select
++		class="w-48"
++		ariaLabel="Filter definitions by Device"
++		placeholder="All Devices"
++		value={deviceFilter ?? ''}
++		options={[
++			{ value: '', label: 'All Devices' },
++			{ value: '_global', label: 'Global definitions' },
++			...devices
++				.filter((row) => row.device_name)
++				.map((row) => ({ value: row.device_name, label: row.device_name })),
++			...(deviceFilter &&
++			deviceFilter !== '_global' &&
++			!devices.some((row) => row.device_name === deviceFilter)
++				? [{ value: deviceFilter, label: deviceFilter }]
++				: [])
++		]}
++		onchange={(value) => {
++			void setQuery('device', value);
++		}}
++	/>
++	<Select
++		class="w-36"
++		ariaLabel="Sort definitions by"
++		value={params.sort}
++		options={[
++			{ value: 'name', label: 'Name' },
++			{ value: 'type', label: 'Type' },
++			{ value: 'updated_at', label: 'Updated' }
++		]}
++		onchange={(value) => {
++			void setQuery('sort', value);
++		}}
++	/>
++	<Select
++		class="w-36"
++		ariaLabel="Sort direction"
++		value={params.order}
++		options={[
++			{ value: 'asc', label: 'Ascending' },
++			{ value: 'desc', label: 'Descending' }
++		]}
++		onchange={(value) => {
++			void setQuery('order', value);
++		}}
++	/>
++</div>
++<div class="catalog-toolbar">
++	<div class="muted">
++		<span
++			>{#await content}Loading...{:then result}{result.total} entries{:catch}Count unavailable{/await}</span
++		>
++		<span
++			>{deviceFilter === null
++				? 'All-Device discovery'
++				: deviceFilter === '_global'
++					? 'Global definitions'
++					: `Device: ${deviceFilter}`}</span
++		>
++	</div>
++	<Button onclick={openCreate}><Plus size={16} /> New</Button>
++</div>
++{#if deviceError}<div class="banner-error" role="alert">
++		{deviceError}<Button
++			variant="outline"
++			onclick={() => {
++				void loadDevices();
++			}}><RefreshCw size={16} /> Retry Devices</Button
++		>
++	</div>{/if}
++{#await content}<p class="banner-empty" role="status">Loading definitions...</p>
++{:then result}
++	{@const selected =
++		result.items.find((row) => row.id === Number(routePage.url.searchParams.get('definition'))) ??
++		result.items[0]}
++	<div class="dictionary-workspace">
++		<aside class="definition-list" aria-label="Definitions list">
++			{#each result.items as row (row.id)}
++				<button
++					class:chosen={selected?.id === row.id}
++					aria-pressed={selected?.id === row.id}
++					aria-label={`Select ${row.name} (${row.device_name || 'Global'})`}
++					onclick={() => {
++						void setQuery('definition', String(row.id), false);
++					}}
++				>
++					<strong>{row.name}</strong><span
++						><Badge class="max-w-full break-all whitespace-normal"
++							>{row.device_name || 'Global'}</Badge
++						>
++						{row.type}</span
++					>
++					{#if row.description}<small>{row.description}</small>{/if}
++				</button>
++			{:else}<p class="banner-empty" role="status">
++					No entries match. Adjust the search or create one.
++				</p>{/each}
++			<Pagination
++				page={params.page}
++				pageSize={params.page_size}
++				total={result.total}
++				onPageChange={(value) => {
++					void setQuery('page', String(value), false);
++				}}
++				onPageSizeChange={(value) => {
++					void setQuery('page_size', String(value));
++				}}
++			/>
++		</aside>
++		<div class="detail-pane">
++			{#if selected}<DefinitionDetail
++					row={selected}
++					onEdit={openEdit}
++					onDelete={requestRemove}
++				/>{:else}<p class="banner-empty" role="status">No definition selected.</p>{/if}
++		</div>
++	</div>
++{:catch error}<div class="banner-error" role="alert">
++		{error instanceof Error ? error.message : String(error)}<Button
++			variant="outline"
++			onclick={() => retry++}><RefreshCw size={16} /> Retry definitions</Button
++		>
++	</div>{/await}
+ 
+ <DefinitionDialog
+ 	bind:open={dialogOpen}
+ 	{kind}
+ 	{title}
+ 	editRow={editTarget}
+-	onsaved={() => load(currentParams())}
++	prefillDevice={deviceFilter === '_global' ? '' : (deviceFilter ?? '')}
++	onsaved={async (row) => {
++		await setQuery('definition', String(row.id), false);
++		retry++;
++	}}
+ />
+ 
+-<AlertDialog
+-	open={confirmOpen}
+-	onOpenChange={(o) => (confirmOpen = o)}
+-	title={confirmRow && confirmRow.usage_count > 0 ? `Force delete ${confirmRow.name}?` : `Delete ${confirmRow?.name ?? ''}`}
+-	description={
+-		confirmRow && confirmRow.usage_count > 0
+-			? `${confirmRow.name} is referenced by ${confirmRow.usage_count} function link(s). The links will remain but become unresolved.`
+-			: `This permanently removes the ${title.toLowerCase()} entry. This cannot be undone.`
++{#if confirmRow}<DefinitionDeleteDialog
++		{kind}
++		row={confirmRow}
++		onClose={() => {
++			confirmRow = null;
++		}}
++		onDeleted={() => {
++			retry++;
++		}}
++	/>{/if}
++
++<style>
++	.filters {
++		display: flex;
++		flex-wrap: wrap;
++		gap: 8px;
+ 	}
+-	confirmLabel="Delete"
+-	onConfirm={confirmRemove}
+-/>
++	.catalog-toolbar {
++		display: flex;
++		flex-wrap: wrap;
++		justify-content: space-between;
++		align-items: center;
++		gap: 12px;
++		padding: 16px 0;
++	}
++	.catalog-toolbar span {
++		font-size: 12px;
++	}
++	.catalog-toolbar span + span {
++		margin-left: 8px;
++	}
++	.dictionary-workspace {
++		display: grid;
++		grid-template-columns: 300px minmax(0, 1fr);
++		border-top: 1px solid var(--border);
++	}
++	.definition-list {
++		min-width: 0;
++		border-right: 1px solid var(--border);
++		padding: 16px 16px 16px 0;
++	}
++	.definition-list button {
++		display: flex;
++		flex-direction: column;
++		align-items: flex-start;
++		width: 100%;
++		border: 0;
++		border-bottom: 1px solid var(--border);
++		border-left: 3px solid transparent;
++		padding: 14px 12px;
++		gap: 8px;
++		text-align: left;
++		color: var(--foreground);
++		background: transparent;
++		cursor: pointer;
++	}
++	.definition-list button:hover {
++		background: var(--accent);
++	}
++	.definition-list button.chosen {
++		background: var(--device-soft);
++		border-left-color: var(--device-accent);
++	}
++	.definition-list button:focus-visible {
++		outline: 2px solid var(--ring);
++		outline-offset: -2px;
++	}
++	.definition-list strong {
++		font: 600 13px/1.5 var(--mono);
++		overflow-wrap: anywhere;
++	}
++	.definition-list span,
++	.definition-list small {
++		font-size: 12px;
++		overflow-wrap: anywhere;
++		max-width: 100%;
++	}
++	.detail-pane {
++		min-width: 0;
++	}
++	@media (max-width: 850px) {
++		.dictionary-workspace {
++			grid-template-columns: minmax(0, 1fr);
++		}
++		.definition-list {
++			border-right: 0;
++			border-bottom: 1px solid var(--border);
++			padding-right: 0;
++			max-height: 360px;
++			overflow-y: auto;
++		}
++	}
++</style>
+diff --git a/frontend/src/lib/definitions.ts b/frontend/src/lib/definitions.ts
+index 450b2e8..a30ba8d 100644
+--- a/frontend/src/lib/definitions.ts
++++ b/frontend/src/lib/definitions.ts
+@@ -70,6 +70,10 @@ export async function listDefinitions(
+ 	return request<DefinitionListResult>(`/api/${kind}${s ? `?${s}` : ''}`);
+ }
+ 
++export async function getDefinition(kind: DefinitionKind, id: number): Promise<DefinitionRow> {
++	return request<DefinitionRow>(`/api/${kind}/${id}`);
++}
++
+ export async function createDefinition(
+ 	kind: DefinitionKind,
+ 	input: DefinitionInput
+diff --git a/frontend/src/routes/devices/[name]/+page.svelte b/frontend/src/routes/devices/[name]/+page.svelte
+index 696c001..acb5015 100644
+--- a/frontend/src/routes/devices/[name]/+page.svelte
++++ b/frontend/src/routes/devices/[name]/+page.svelte
+@@ -16,13 +16,14 @@
+ 		type DeviceDefinitionRow
+ 	} from '$lib/devices';
+ 	import { listExamples, type ExampleRow } from '$lib/examples';
+-	import type { DefinitionKind } from '$lib/definitions';
++	import type { DefinitionKind, DefinitionRow } from '$lib/definitions';
+ 	import Breadcrumb from '$lib/components/ui/breadcrumb.svelte';
+ 	import Badge from '$lib/components/ui/badge.svelte';
+ 	import Button from '$lib/components/ui/button.svelte';
+ 	import Input from '$lib/components/ui/input.svelte';
+ 	import DevicePicker from '$lib/components/DevicePicker.svelte';
+ 	import DeviceFunctionDetail from '$lib/components/DeviceFunctionDetail.svelte';
++	import DeviceDefinitionDetail from '$lib/components/DeviceDefinitionDetail.svelte';
+ 	import DefinitionDialog from '$lib/components/DefinitionDialog.svelte';
+ 	import FunctionDialog from '$lib/components/FunctionDialog.svelte';
+ 	import * as Tabs from '$lib/components/ui/tabs/index';
+@@ -69,6 +70,7 @@
+ 
+ 	function setTab(next: string, functionId?: number) {
+ 		const query = new SvelteURLSearchParams(page.url.searchParams);
++		if (next !== tab) query.delete('definition');
+ 		query.set('tab', next);
+ 		if (functionId !== undefined) query.set('function', String(functionId));
+ 		void goto(resolve(`/devices/[name]?${query.toString()}`, { name: devicePath(device) }), {
+@@ -205,6 +207,16 @@
+ 	const critGlobalView = $derived(
+ 		critSortKey === '' ? critGlobal : sortRows(critGlobal, DEF_SORT_KEYS[critSortKey]!, critSortDir)
+ 	);
++	const selectedParameter = $derived(
++		[...paramScoped, ...paramGlobal].find(
++			(row) => row.id === Number(page.url.searchParams.get('definition'))
++		) ?? (page.url.searchParams.has('definition') ? undefined : (paramScoped[0] ?? paramGlobal[0]))
++	);
++	const selectedCriterion = $derived(
++		[...critScoped, ...critGlobal].find(
++			(row) => row.id === Number(page.url.searchParams.get('definition'))
++		) ?? (page.url.searchParams.has('definition') ? undefined : (critScoped[0] ?? critGlobal[0]))
++	);
+ 	const exampleView = $derived(
+ 		exSortKey === '' ? exampleItems : sortRows(exampleItems, EX_SORT_KEYS[exSortKey]!, exSortDir)
+ 	);
+@@ -226,7 +238,32 @@
+ 		defDialogOpen = true;
+ 	}
+ 
+-	async function reloadDefinitions() {
++	function selectDefinition(next: 'parameters' | 'criteria', id?: number, replaceState = false) {
++		const query = new SvelteURLSearchParams(page.url.searchParams);
++		query.set('tab', next);
++		if (id === undefined) query.delete('definition');
++		else query.set('definition', String(id));
++		return goto(resolve(`/devices/[name]?${query.toString()}`, { name: devicePath(device) }), {
++			keepFocus: true,
++			noScroll: true,
++			replaceState
++		});
++	}
++	async function refreshDefinitions(next: 'parameters' | 'criteria', row: DefinitionRow | null) {
++		const scope = device;
++		await selectDefinition(next, row?.id, row === null);
++		if (next === 'parameters') await loadParameters();
++		else await loadCriteria();
++		if (scope !== device) return;
++		try {
++			summaries = (await listDevices()).items;
++			summaryError = '';
++		} catch (error) {
++			summaryError = error instanceof Error ? error.message : String(error);
++		}
++	}
++	async function reloadDefinitions(row: DefinitionRow) {
++		await selectDefinition(defTab, row.id);
+ 		// Back to page 1: a fresh definition may sort onto any page.
+ 		if (defTab === 'parameters') {
+ 			paramPage = 1;
+@@ -237,6 +274,12 @@
+ 			critLoaded = false;
+ 			await loadCriteria();
+ 		}
++		try {
++			summaries = (await listDevices()).items;
++			summaryError = '';
++		} catch (error) {
++			summaryError = error instanceof Error ? error.message : String(error);
++		}
+ 	}
+ 
+ 	// Tabs load lazily on first activation and cache afterwards. Switching
+@@ -370,6 +413,11 @@
+ 		try {
+ 			const res = await listDeviceDefinitions('parameters', scope, requestedPage, requestedSize);
+ 			if (!current()) return;
++			const last = Math.max(1, Math.ceil(res.total / requestedSize));
++			if (requestedPage > last) {
++				paramPage = last;
++				return;
++			}
+ 			paramScoped = res.items;
+ 			paramGlobal = res.global_items;
+ 			paramTotal = res.total;
+@@ -399,6 +447,11 @@
+ 		try {
+ 			const res = await listDeviceDefinitions('criteria', scope, requestedPage, requestedSize);
+ 			if (!current()) return;
++			const last = Math.max(1, Math.ceil(res.total / requestedSize));
++			if (requestedPage > last) {
++				critPage = last;
++				return;
++			}
+ 			critScoped = res.items;
+ 			critGlobal = res.global_items;
+ 			critTotal = res.total;
+@@ -581,327 +634,399 @@
+ 	</Tabs.Content>
+ 
+ 	<Tabs.Content value="parameters">
+-		{#if paramError}
+-			<div class="px-4">
+-				<div class="banner-error" role="alert">{paramError}</div>
+-			</div>
+-		{/if}
+-		<p class="text-muted-foreground mb-2 px-4 text-sm">
+-			{paramTotal} parameter definition{paramTotal === 1 ? '' : 's'} scoped to {label(device)}, plus
+-			{paramGlobalTotal} resolved from Global.
+-		</p>
+-		<div class="flex items-baseline justify-between px-4">
+-			<h2 class="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
+-				Scoped
+-			</h2>
+-			<Button size="sm" variant="outline" onclick={() => openDefDialog('parameters')}>
+-				Add parameter definition
+-			</Button>
+-		</div>
+-		<Table class="border-0">
+-			<TableHeader>
+-				<TableRow>
+-					<SortHead
+-						label="Name"
+-						col="name"
+-						active={paramSortKey}
+-						dir={paramSortDir}
+-						onclick={() => applyParamSort('name')}
+-					/>
+-					<SortHead
+-						label="Type"
+-						col="type"
+-						active={paramSortKey}
+-						dir={paramSortDir}
+-						onclick={() => applyParamSort('type')}
+-					/>
+-					<SortHead
+-						label="Cardinality"
+-						col="cardinality"
+-						active={paramSortKey}
+-						dir={paramSortDir}
+-						onclick={() => applyParamSort('cardinality')}
+-					/>
+-					<SortHead
+-						label="Allowed values"
+-						col="allowed_values"
+-						active={paramSortKey}
+-						dir={paramSortDir}
+-						onclick={() => applyParamSort('allowed_values')}
+-					/>
+-					<SortHead
+-						label="Default"
+-						col="default_value"
+-						active={paramSortKey}
+-						dir={paramSortDir}
+-						onclick={() => applyParamSort('default_value')}
+-					/>
+-					<SortHead
+-						label="Pattern"
+-						col="value_pattern"
+-						active={paramSortKey}
+-						dir={paramSortDir}
+-						onclick={() => applyParamSort('value_pattern')}
+-					/>
+-				</TableRow>
+-			</TableHeader>
+-			<TableBody>
+-				{#each paramScopedView as d (d.id)}
+-					<TableRow>
+-						<TableCell class="font-medium">{d.name}</TableCell>
+-						<TableCell><Badge>{d.type}</Badge></TableCell>
+-						<TableCell>{d.cardinality}</TableCell>
+-						<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
+-						<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
+-						<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
+-					</TableRow>
+-				{:else}
+-					<TableRow>
+-						<TableCell colspan={6} class="banner-empty text-center" aria-live="polite">
+-							{paramLoading ? 'Loading…' : 'No definitions scoped to this device.'}
+-						</TableCell>
+-					</TableRow>
+-				{/each}
+-			</TableBody>
+-		</Table>
+-		{#if paramTotal > paramPageSize}
+-			<Pagination
+-				class="mt-0 border-t px-4 pt-2 pb-3"
+-				bind:page={paramPage}
+-				total={paramTotal}
+-				bind:pageSize={paramPageSize}
+-			/>
+-		{/if}
+-
+-		{#if paramGlobal.length > 0}
+-			<h2
+-				class="text-muted-foreground mt-4 mb-1 px-4 text-xs font-semibold tracking-wide uppercase"
+-			>
+-				Resolved from Global
+-			</h2>
+-			<Table class="text-muted-foreground border-0">
+-				<TableHeader>
+-					<TableRow>
+-						<SortHead
+-							label="Name"
+-							col="name"
+-							active={paramSortKey}
+-							dir={paramSortDir}
+-							onclick={() => applyParamSort('name')}
+-						/>
+-						<SortHead
+-							label="Type"
+-							col="type"
+-							active={paramSortKey}
+-							dir={paramSortDir}
+-							onclick={() => applyParamSort('type')}
+-						/>
+-						<SortHead
+-							label="Cardinality"
+-							col="cardinality"
+-							active={paramSortKey}
+-							dir={paramSortDir}
+-							onclick={() => applyParamSort('cardinality')}
+-						/>
+-						<SortHead
+-							label="Allowed values"
+-							col="allowed_values"
+-							active={paramSortKey}
+-							dir={paramSortDir}
+-							onclick={() => applyParamSort('allowed_values')}
+-						/>
+-						<SortHead
+-							label="Default"
+-							col="default_value"
+-							active={paramSortKey}
+-							dir={paramSortDir}
+-							onclick={() => applyParamSort('default_value')}
+-						/>
+-						<SortHead
+-							label="Pattern"
+-							col="value_pattern"
+-							active={paramSortKey}
+-							dir={paramSortDir}
+-							onclick={() => applyParamSort('value_pattern')}
+-						/>
+-					</TableRow>
+-				</TableHeader>
+-				<TableBody>
+-					{#each paramGlobalView as d (d.id)}
++		<div class="definition-browser">
++			<div class="definition-tables">
++				{#if paramError}
++					<div class="px-4">
++						<div class="banner-error" role="alert">
++							{paramError}<Button size="sm" variant="outline" onclick={loadParameters}
++								><RefreshCw size={16} /> Retry parameters</Button
++							>
++						</div>
++					</div>
++				{/if}
++				<p class="text-muted-foreground mb-2 px-4 text-sm">
++					{paramTotal} parameter definition{paramTotal === 1 ? '' : 's'} scoped to {label(device)},
++					plus
++					{paramGlobalTotal} resolved from Global.
++				</p>
++				<div class="flex items-baseline justify-between px-4">
++					<h2 class="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
++						Scoped
++					</h2>
++					<Button size="sm" variant="outline" onclick={() => openDefDialog('parameters')}>
++						Add parameter definition
++					</Button>
++				</div>
++				<Table class="border-0">
++					<TableHeader>
+ 						<TableRow>
+-							<TableCell class="font-medium">{d.name}</TableCell>
+-							<TableCell><Badge>{d.type}</Badge></TableCell>
+-							<TableCell>{d.cardinality}</TableCell>
+-							<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
+-							<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
+-							<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
++							<SortHead
++								label="Name"
++								col="name"
++								active={paramSortKey}
++								dir={paramSortDir}
++								onclick={() => applyParamSort('name')}
++							/>
++							<SortHead
++								label="Type"
++								col="type"
++								active={paramSortKey}
++								dir={paramSortDir}
++								onclick={() => applyParamSort('type')}
++							/>
++							<SortHead
++								label="Cardinality"
++								col="cardinality"
++								active={paramSortKey}
++								dir={paramSortDir}
++								onclick={() => applyParamSort('cardinality')}
++							/>
++							<SortHead
++								label="Allowed values"
++								col="allowed_values"
++								active={paramSortKey}
++								dir={paramSortDir}
++								onclick={() => applyParamSort('allowed_values')}
++							/>
++							<SortHead
++								label="Default"
++								col="default_value"
++								active={paramSortKey}
++								dir={paramSortDir}
++								onclick={() => applyParamSort('default_value')}
++							/>
++							<SortHead
++								label="Pattern"
++								col="value_pattern"
++								active={paramSortKey}
++								dir={paramSortDir}
++								onclick={() => applyParamSort('value_pattern')}
++							/>
+ 						</TableRow>
+-					{/each}
+-				</TableBody>
+-			</Table>
+-		{/if}
+-	</Tabs.Content>
++					</TableHeader>
++					<TableBody>
++						{#each paramScopedView as d (d.id)}
++							<TableRow>
++								<TableCell class="font-medium"
++									><button
++										class="definition-choice"
++										aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
++										onclick={() => {
++											void selectDefinition('parameters', d.id);
++										}}>{d.name}</button
++									></TableCell
++								>
++								<TableCell><Badge>{d.type}</Badge></TableCell>
++								<TableCell>{d.cardinality}</TableCell>
++								<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
++								<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
++								<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
++							</TableRow>
++						{:else}
++							<TableRow>
++								<TableCell colspan={6} class="banner-empty text-center" aria-live="polite">
++									{paramLoading ? 'Loading…' : 'No definitions scoped to this device.'}
++								</TableCell>
++							</TableRow>
++						{/each}
++					</TableBody>
++				</Table>
++				{#if paramTotal > paramPageSize}
++					<Pagination
++						class="mt-0 border-t px-4 pt-2 pb-3"
++						bind:page={paramPage}
++						total={paramTotal}
++						bind:pageSize={paramPageSize}
++					/>
++				{/if}
+ 
+-	<Tabs.Content value="criteria">
+-		{#if critError}
+-			<div class="px-4">
+-				<div class="banner-error" role="alert">{critError}</div>
++				{#if paramGlobal.length > 0}
++					<h2
++						class="text-muted-foreground mt-4 mb-1 px-4 text-xs font-semibold tracking-wide uppercase"
++					>
++						Resolved from Global
++					</h2>
++					<Table class="text-muted-foreground border-0">
++						<TableHeader>
++							<TableRow>
++								<SortHead
++									label="Name"
++									col="name"
++									active={paramSortKey}
++									dir={paramSortDir}
++									onclick={() => applyParamSort('name')}
++								/>
++								<SortHead
++									label="Type"
++									col="type"
++									active={paramSortKey}
++									dir={paramSortDir}
++									onclick={() => applyParamSort('type')}
++								/>
++								<SortHead
++									label="Cardinality"
++									col="cardinality"
++									active={paramSortKey}
++									dir={paramSortDir}
++									onclick={() => applyParamSort('cardinality')}
++								/>
++								<SortHead
++									label="Allowed values"
++									col="allowed_values"
++									active={paramSortKey}
++									dir={paramSortDir}
++									onclick={() => applyParamSort('allowed_values')}
++								/>
++								<SortHead
++									label="Default"
++									col="default_value"
++									active={paramSortKey}
++									dir={paramSortDir}
++									onclick={() => applyParamSort('default_value')}
++								/>
++								<SortHead
++									label="Pattern"
++									col="value_pattern"
++									active={paramSortKey}
++									dir={paramSortDir}
++									onclick={() => applyParamSort('value_pattern')}
++								/>
++							</TableRow>
++						</TableHeader>
++						<TableBody>
++							{#each paramGlobalView as d (d.id)}
++								<TableRow>
++									<TableCell class="font-medium"
++										><button
++											class="definition-choice"
++											aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
++											onclick={() => {
++												void selectDefinition('parameters', d.id);
++											}}>{d.name}</button
++										></TableCell
++									>
++									<TableCell><Badge>{d.type}</Badge></TableCell>
++									<TableCell>{d.cardinality}</TableCell>
++									<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
++									<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
++									<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
++								</TableRow>
++							{/each}
++						</TableBody>
++					</Table>
++				{/if}
++			</div>
++			<div class="definition-pane">
++				{#if selectedParameter && !paramLoading && !paramError}{#key `${device}/parameters/${selectedParameter.id}`}<DeviceDefinitionDetail
++							definition={selectedParameter}
++							kind="parameter-definitions"
++							{device}
++							onChanged={(row) => refreshDefinitions('parameters', row)}
++						/>{/key}
++				{:else if !paramLoading}<p class="banner-empty" role="status">
++						Select a parameter definition.
++					</p>{/if}
+ 			</div>
+-		{/if}
+-		<p class="text-muted-foreground mb-2 px-4 text-sm">
+-			{critTotal} criteria definition{critTotal === 1 ? '' : 's'} scoped to {label(device)}, plus
+-			{critGlobalTotal} resolved from Global.
+-		</p>
+-		<div class="flex items-baseline justify-between px-4">
+-			<h2 class="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
+-				Scoped
+-			</h2>
+-			<Button size="sm" variant="outline" onclick={() => openDefDialog('criteria')}>
+-				Add criteria definition
+-			</Button>
+ 		</div>
+-		<Table class="border-0">
+-			<TableHeader>
+-				<TableRow>
+-					<SortHead
+-						label="Name"
+-						col="name"
+-						active={critSortKey}
+-						dir={critSortDir}
+-						onclick={() => applyCritSort('name')}
+-					/>
+-					<SortHead
+-						label="Type"
+-						col="type"
+-						active={critSortKey}
+-						dir={critSortDir}
+-						onclick={() => applyCritSort('type')}
+-					/>
+-					<SortHead
+-						label="Cardinality"
+-						col="cardinality"
+-						active={critSortKey}
+-						dir={critSortDir}
+-						onclick={() => applyCritSort('cardinality')}
+-					/>
+-					<SortHead
+-						label="Allowed values"
+-						col="allowed_values"
+-						active={critSortKey}
+-						dir={critSortDir}
+-						onclick={() => applyCritSort('allowed_values')}
+-					/>
+-					<SortHead
+-						label="Default"
+-						col="default_value"
+-						active={critSortKey}
+-						dir={critSortDir}
+-						onclick={() => applyCritSort('default_value')}
+-					/>
+-					<SortHead
+-						label="Pattern"
+-						col="value_pattern"
+-						active={critSortKey}
+-						dir={critSortDir}
+-						onclick={() => applyCritSort('value_pattern')}
+-					/>
+-				</TableRow>
+-			</TableHeader>
+-			<TableBody>
+-				{#each critScopedView as d (d.id)}
+-					<TableRow>
+-						<TableCell class="font-medium">{d.name}</TableCell>
+-						<TableCell><Badge>{d.type}</Badge></TableCell>
+-						<TableCell>{d.cardinality}</TableCell>
+-						<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
+-						<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
+-						<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
+-					</TableRow>
+-				{:else}
+-					<TableRow>
+-						<TableCell colspan={6} class="banner-empty text-center" aria-live="polite">
+-							{critLoading ? 'Loading…' : 'No definitions scoped to this device.'}
+-						</TableCell>
+-					</TableRow>
+-				{/each}
+-			</TableBody>
+-		</Table>
+-		{#if critTotal > critPageSize}
+-			<Pagination
+-				class="mt-0 border-t px-4 pt-2 pb-3"
+-				bind:page={critPage}
+-				total={critTotal}
+-				bind:pageSize={critPageSize}
+-			/>
+-		{/if}
++	</Tabs.Content>
+ 
+-		{#if critGlobal.length > 0}
+-			<h2
+-				class="text-muted-foreground mt-4 mb-1 px-4 text-xs font-semibold tracking-wide uppercase"
+-			>
+-				Resolved from Global
+-			</h2>
+-			<Table class="text-muted-foreground border-0">
+-				<TableHeader>
+-					<TableRow>
+-						<SortHead
+-							label="Name"
+-							col="name"
+-							active={critSortKey}
+-							dir={critSortDir}
+-							onclick={() => applyCritSort('name')}
+-						/>
+-						<SortHead
+-							label="Type"
+-							col="type"
+-							active={critSortKey}
+-							dir={critSortDir}
+-							onclick={() => applyCritSort('type')}
+-						/>
+-						<SortHead
+-							label="Cardinality"
+-							col="cardinality"
+-							active={critSortKey}
+-							dir={critSortDir}
+-							onclick={() => applyCritSort('cardinality')}
+-						/>
+-						<SortHead
+-							label="Allowed values"
+-							col="allowed_values"
+-							active={critSortKey}
+-							dir={critSortDir}
+-							onclick={() => applyCritSort('allowed_values')}
+-						/>
+-						<SortHead
+-							label="Default"
+-							col="default_value"
+-							active={critSortKey}
+-							dir={critSortDir}
+-							onclick={() => applyCritSort('default_value')}
+-						/>
+-						<SortHead
+-							label="Pattern"
+-							col="value_pattern"
+-							active={critSortKey}
+-							dir={critSortDir}
+-							onclick={() => applyCritSort('value_pattern')}
+-						/>
+-					</TableRow>
+-				</TableHeader>
+-				<TableBody>
+-					{#each critGlobalView as d (d.id)}
++	<Tabs.Content value="criteria">
++		<div class="definition-browser">
++			<div class="definition-tables">
++				{#if critError}
++					<div class="px-4">
++						<div class="banner-error" role="alert">
++							{critError}<Button size="sm" variant="outline" onclick={loadCriteria}
++								><RefreshCw size={16} /> Retry criteria</Button
++							>
++						</div>
++					</div>
++				{/if}
++				<p class="text-muted-foreground mb-2 px-4 text-sm">
++					{critTotal} criteria definition{critTotal === 1 ? '' : 's'} scoped to {label(device)},
++					plus
++					{critGlobalTotal} resolved from Global.
++				</p>
++				<div class="flex items-baseline justify-between px-4">
++					<h2 class="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
++						Scoped
++					</h2>
++					<Button size="sm" variant="outline" onclick={() => openDefDialog('criteria')}>
++						Add criteria definition
++					</Button>
++				</div>
++				<Table class="border-0">
++					<TableHeader>
+ 						<TableRow>
+-							<TableCell class="font-medium">{d.name}</TableCell>
+-							<TableCell><Badge>{d.type}</Badge></TableCell>
+-							<TableCell>{d.cardinality}</TableCell>
+-							<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
+-							<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
+-							<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
++							<SortHead
++								label="Name"
++								col="name"
++								active={critSortKey}
++								dir={critSortDir}
++								onclick={() => applyCritSort('name')}
++							/>
++							<SortHead
++								label="Type"
++								col="type"
++								active={critSortKey}
++								dir={critSortDir}
++								onclick={() => applyCritSort('type')}
++							/>
++							<SortHead
++								label="Cardinality"
++								col="cardinality"
++								active={critSortKey}
++								dir={critSortDir}
++								onclick={() => applyCritSort('cardinality')}
++							/>
++							<SortHead
++								label="Allowed values"
++								col="allowed_values"
++								active={critSortKey}
++								dir={critSortDir}
++								onclick={() => applyCritSort('allowed_values')}
++							/>
++							<SortHead
++								label="Default"
++								col="default_value"
++								active={critSortKey}
++								dir={critSortDir}
++								onclick={() => applyCritSort('default_value')}
++							/>
++							<SortHead
++								label="Pattern"
++								col="value_pattern"
++								active={critSortKey}
++								dir={critSortDir}
++								onclick={() => applyCritSort('value_pattern')}
++							/>
+ 						</TableRow>
+-					{/each}
+-				</TableBody>
+-			</Table>
+-		{/if}
++					</TableHeader>
++					<TableBody>
++						{#each critScopedView as d (d.id)}
++							<TableRow>
++								<TableCell class="font-medium"
++									><button
++										class="definition-choice"
++										aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
++										onclick={() => {
++											void selectDefinition('criteria', d.id);
++										}}>{d.name}</button
++									></TableCell
++								>
++								<TableCell><Badge>{d.type}</Badge></TableCell>
++								<TableCell>{d.cardinality}</TableCell>
++								<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
++								<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
++								<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
++							</TableRow>
++						{:else}
++							<TableRow>
++								<TableCell colspan={6} class="banner-empty text-center" aria-live="polite">
++									{critLoading ? 'Loading…' : 'No definitions scoped to this device.'}
++								</TableCell>
++							</TableRow>
++						{/each}
++					</TableBody>
++				</Table>
++				{#if critTotal > critPageSize}
++					<Pagination
++						class="mt-0 border-t px-4 pt-2 pb-3"
++						bind:page={critPage}
++						total={critTotal}
++						bind:pageSize={critPageSize}
++					/>
++				{/if}
++
++				{#if critGlobal.length > 0}
++					<h2
++						class="text-muted-foreground mt-4 mb-1 px-4 text-xs font-semibold tracking-wide uppercase"
++					>
++						Resolved from Global
++					</h2>
++					<Table class="text-muted-foreground border-0">
++						<TableHeader>
++							<TableRow>
++								<SortHead
++									label="Name"
++									col="name"
++									active={critSortKey}
++									dir={critSortDir}
++									onclick={() => applyCritSort('name')}
++								/>
++								<SortHead
++									label="Type"
++									col="type"
++									active={critSortKey}
++									dir={critSortDir}
++									onclick={() => applyCritSort('type')}
++								/>
++								<SortHead
++									label="Cardinality"
++									col="cardinality"
++									active={critSortKey}
++									dir={critSortDir}
++									onclick={() => applyCritSort('cardinality')}
++								/>
++								<SortHead
++									label="Allowed values"
++									col="allowed_values"
++									active={critSortKey}
++									dir={critSortDir}
++									onclick={() => applyCritSort('allowed_values')}
++								/>
++								<SortHead
++									label="Default"
++									col="default_value"
++									active={critSortKey}
++									dir={critSortDir}
++									onclick={() => applyCritSort('default_value')}
++								/>
++								<SortHead
++									label="Pattern"
++									col="value_pattern"
++									active={critSortKey}
++									dir={critSortDir}
++									onclick={() => applyCritSort('value_pattern')}
++								/>
++							</TableRow>
++						</TableHeader>
++						<TableBody>
++							{#each critGlobalView as d (d.id)}
++								<TableRow>
++									<TableCell class="font-medium"
++										><button
++											class="definition-choice"
++											aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
++											onclick={() => {
++												void selectDefinition('criteria', d.id);
++											}}>{d.name}</button
++										></TableCell
++									>
++									<TableCell><Badge>{d.type}</Badge></TableCell>
++									<TableCell>{d.cardinality}</TableCell>
++									<TableCell class="font-mono text-xs">{d.allowed_values}</TableCell>
++									<TableCell class="font-mono text-xs">{d.default_value}</TableCell>
++									<TableCell class="font-mono text-xs">{d.value_pattern}</TableCell>
++								</TableRow>
++							{/each}
++						</TableBody>
++					</Table>
++				{/if}
++			</div>
++			<div class="definition-pane">
++				{#if selectedCriterion && !critLoading && !critError}{#key `${device}/criteria/${selectedCriterion.id}`}<DeviceDefinitionDetail
++							definition={selectedCriterion}
++							kind="criteria-definitions"
++							{device}
++							onChanged={(row) => refreshDefinitions('criteria', row)}
++						/>{/key}
++				{:else if !critLoading}<p class="banner-empty" role="status">
++						Select a criteria definition.
++					</p>{/if}
++			</div>
++		</div>
+ 	</Tabs.Content>
+ 
+ 	<Tabs.Content value="examples">
+@@ -1000,6 +1125,41 @@
+ />
+ 
+ <style>
++	.definition-browser {
++		display: grid;
++		grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
++		border-top: 1px solid var(--border);
++	}
++	.definition-tables,
++	.definition-pane {
++		min-width: 0;
++	}
++	.definition-tables {
++		overflow-x: auto;
++	}
++	.definition-pane {
++		border-left: 1px solid var(--border);
++	}
++	.definition-choice {
++		color: var(--primary);
++		font-family: var(--mono);
++		text-align: left;
++		text-decoration: underline;
++		cursor: pointer;
++	}
++	.definition-choice:focus-visible {
++		outline: 2px solid var(--ring);
++		outline-offset: 2px;
++	}
++	@media (max-width: 1100px) {
++		.definition-browser {
++			grid-template-columns: minmax(0, 1fr);
++		}
++		.definition-pane {
++			border-left: 0;
++			border-top: 1px solid var(--border);
++		}
++	}
+ 	.catalog-actions {
+ 		display: flex;
+ 		justify-content: flex-end;
+diff --git a/frontend/tests/e2e/polish.spec.ts b/frontend/tests/e2e/polish.spec.ts
+index 6f796d1..6e2a38c 100644
+--- a/frontend/tests/e2e/polish.spec.ts
++++ b/frontend/tests/e2e/polish.spec.ts
+@@ -1,4 +1,5 @@
+ import { test, expect, type Page } from '@playwright/test';
++import type { DefinitionKind, DefinitionRow } from '../../src/lib/definitions';
+ 
+ async function mockDeviceHub(page: Page, functionName = 'TX_MULTI_VERIFICATION') {
+ 	await page.route('**/api/**', async (route) => {
+@@ -73,7 +74,29 @@ async function mockDeviceHub(page: Page, functionName = 'TX_MULTI_VERIFICATION')
+ 				],
+ 				total: 5
+ 			};
+-		else if (url.pathname.endsWith('/functions'))
++		else if (
++			/^\/api\/(?:parameter|criteria)-definitions\/\d+$/.test(url.pathname) &&
++			route.request().method() === 'GET'
++		) {
++			const canonical = [
++				definition,
++				{ ...definition, id: 13, device_name: 'GOLDENKV', default_value: '2' },
++				globalDefinition,
++				globalAnt,
++				globalTimeout,
++				criterion,
++				{ ...criterion, id: 24, device_name: 'GOLDENKV', default_value: '20' }
++			].find((row) => row.id === Number(url.pathname.split('/').pop()));
++			if (!canonical)
++				return route.fulfill({ status: 404, json: { error: 'Definition not found' } });
++			json = {
++				...canonical,
++				usage_count: 2,
++				orphan_usage_count: 0,
++				created_at: '2026-10-06',
++				updated_at: '2026-10-06'
++			};
++		} else if (url.pathname.endsWith('/functions'))
+ 			json = {
+ 				items: url.pathname.includes('GPIB') ? [] : [functionRow, receive],
+ 				total: url.pathname.includes('GPIB') ? 0 : 2,
+@@ -297,6 +320,106 @@ async function mockFunctionCatalog(page: Page) {
+ 	return { functions, requests, mutations };
+ }
+ 
++async function mockDictionary(page: Page, kind: DefinitionKind) {
++	await mockDeviceHub(page);
++	const rows: DefinitionRow[] = ['', 'WIFI_TEST', 'GOLDENKV'].map((device_name, index) => ({
++		id: index + 1,
++		name: 'ANT',
++		device_name,
++		description: 'Antenna selection.',
++		type: 'int',
++		unit: 'ms',
++		default_value: String(index),
++		allowed_values: '{0,1,2}',
++		cardinality: 'SINGLE',
++		value_pattern: '^[0-9]+$',
++		required: true,
++		usage_count: 2,
++		orphan_usage_count: 1,
++		created_at: '2026-10-06',
++		updated_at: '2026-10-06'
++	}));
++	const requests: URLSearchParams[] = [];
++	const mutations: { method: string; path: string; body: Record<string, unknown> | null }[] = [];
++	await page.route(new RegExp(`/api/${kind}(?:\\?.*)?$`), (route) => {
++		if (route.request().method() === 'POST') {
++			const body = route.request().postDataJSON();
++			if (!body.name)
++				return route.fulfill({
++					status: 422,
++					json: { error: 'Invalid definition', fields: { name: 'Name is required.' } }
++				});
++			if (body.unit === 'INVALID')
++				return route.fulfill({
++					status: 422,
++					json: { error: 'Invalid definition', fields: { unit: 'Unit is invalid.' } }
++				});
++			const row = {
++				...rows[0],
++				...body,
++				id: Math.max(...rows.map((row) => row.id), 0) + 1,
++				usage_count: 0,
++				orphan_usage_count: 0
++			};
++			rows.push(row);
++			mutations.push({ method: 'POST', path: `/api/${kind}`, body });
++			return route.fulfill({ status: 201, json: row });
++		}
++		if (route.request().method() !== 'GET')
++			return route.fulfill({ status: 500, json: { error: 'Unexpected dictionary mutation' } });
++		const query = new URL(route.request().url()).searchParams;
++		requests.push(query);
++		const matches = rows.filter((row) =>
++			`${row.name} ${row.description}`
++				.toLowerCase()
++				.includes((query.get('search') ?? '').toLowerCase())
++		);
++		const sort =
++			query.get('sort') === 'type'
++				? 'type'
++				: query.get('sort') === 'updated_at'
++					? 'updated_at'
++					: 'name';
++		matches.sort(
++			(left, right) =>
++				left[sort].localeCompare(right[sort]) * (query.get('order') === 'desc' ? -1 : 1)
++		);
++		const number = Number(query.get('page') ?? 1);
++		const size = Number(query.get('page_size') ?? 20);
++		return route.fulfill({
++			json: {
++				items: matches.slice((number - 1) * size, number * size),
++				total: matches.length,
++				page: number,
++				page_size: size
++			}
++		});
++	});
++	await page.route(new RegExp(`/api/${kind}/[0-9]+(?:\\?.*)?$`), (route) => {
++		const url = new URL(route.request().url());
++		const id = Number(url.pathname.split('/').pop());
++		const index = rows.findIndex((row) => row.id === id);
++		if (index < 0) return route.fulfill({ status: 404, json: { error: 'Definition not found' } });
++		const method = route.request().method();
++		if (method === 'PUT') {
++			const body = route.request().postDataJSON();
++			mutations.push({ method, path: url.pathname, body });
++			Object.assign(rows[index], body);
++			return route.fulfill({ json: rows[index] });
++		}
++		if (method === 'DELETE') {
++			if (rows[index].usage_count > 0 && url.searchParams.get('force') !== 'true')
++				return route.fulfill({ status: 409, json: { error: 'Definition is in use.' } });
++			mutations.push({ method, path: url.pathname + url.search, body: null });
++			rows.splice(index, 1);
++			return route.fulfill({ status: 204 });
++		}
++		if (method === 'GET') return route.fulfill({ json: rows[index] });
++		return route.fulfill({ status: 500, json: { error: 'Unexpected definition request' } });
++	});
++	return { rows, requests, mutations };
++}
++
+ async function switchDevice(page: Page, device: string) {
+ 	await page.getByRole('button', { name: /^Device: / }).click();
+ 	const popup = page.getByRole('dialog', { name: 'Choose Device', exact: true });
+@@ -304,6 +427,478 @@ async function switchDevice(page: Page, device: string) {
+ 	await popup.getByRole('option', { name: device || 'Global definitions', exact: true }).click();
+ }
+ 
++for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
++	test(`${kind} dictionary separates same-name ownership and browses constraints before editing`, async ({
++		page
++	}) => {
++		await mockDictionary(page, kind);
++		await page.goto(`/${kind}?definition=2`);
++		const list = page.getByRole('complementary', { name: 'Definitions list', exact: true });
++		const detail = page.getByRole('region', { name: 'Definition details', exact: true });
++		await expect(list).toBeVisible();
++		await expect(detail.getByRole('heading', { name: 'ANT', exact: true })).toBeVisible();
++		await expect(detail.getByText('WIFI_TEST', { exact: true })).toBeVisible();
++		await expect(detail).toContainText('^[0-9]+$');
++		await expect(detail).toContainText('{0,1,2}');
++		await expect(
++			detail.getByRole('button', { name: 'Edit definition', exact: true })
++		).toBeVisible();
++		await expect(
++			detail.getByRole('button', { name: 'Delete definition', exact: true })
++		).toBeVisible();
++		await list.getByRole('button', { name: 'Select ANT (Global)', exact: true }).click();
++		await expect(page).toHaveURL(/definition=1/);
++		await expect(detail.getByText('Global - shared across Devices', { exact: true })).toBeVisible();
++		await expect(detail.getByText('1 orphan link', { exact: true })).toBeVisible();
++		await expect(page.getByRole('dialog')).toHaveCount(0);
++		await page.goBack();
++		await expect(detail.getByText('WIFI_TEST', { exact: true })).toBeVisible();
++	});
++	test(`${kind} dictionary filters complete Device results and keeps Global distinct`, async ({
++		page
++	}) => {
++		const { rows, requests } = await mockDictionary(page, kind);
++		rows.push(
++			...Array.from({ length: 100 }, (_, index) => ({
++				...rows[0],
++				id: index + 10,
++				name: `EARLY_${index}`
++			}))
++		);
++		rows.push({ ...rows[1], id: 200, name: 'LATE_DEVICE_DEFINITION' });
++		await page.goto(`/${kind}?device=WIFI_TEST`);
++		await expect(page.getByText('2 entries', { exact: true })).toBeVisible();
++		const list = page.getByRole('complementary', { name: 'Definitions list', exact: true });
++		await list
++			.getByRole('button', { name: 'Select LATE_DEVICE_DEFINITION (WIFI_TEST)', exact: true })
++			.click();
++		await expect(
++			page
++				.getByRole('region', { name: 'Definition details', exact: true })
++				.getByRole('heading', { name: 'LATE_DEVICE_DEFINITION', exact: true })
++		).toBeVisible();
++		expect(
++			requests.some((query) => query.get('page') === '2' && query.get('page_size') === '100')
++		).toBe(true);
++		await page.getByRole('button', { name: 'Filter definitions by Device', exact: true }).click();
++		await page.getByRole('option', { name: 'Global definitions', exact: true }).click();
++		await expect(page).toHaveURL(/device=_global/);
++		await expect(page.getByText('101 entries', { exact: true })).toBeVisible();
++		await expect(
++			list.getByRole('button', { name: 'Select ANT (WIFI_TEST)', exact: true })
++		).toHaveCount(0);
++		await page
++			.getByRole('textbox', { name: /^Search .* definitions$/ })
++			.fill('LATE_DEVICE_DEFINITION');
++		await expect(page.getByText('0 entries', { exact: true })).toBeVisible();
++		await expect(
++			list.getByText('No entries match. Adjust the search or create one.', { exact: true })
++		).toBeVisible();
++	});
++	test(`${kind} dictionary CRUD retains validation context and usage-protected deletion`, async ({
++		page
++	}) => {
++		const { mutations } = await mockDictionary(page, kind);
++		await page.goto(`/${kind}?device=WIFI_TEST&search=ANT&definition=2`);
++		await page.getByRole('button', { name: 'New', exact: true }).click();
++		let dialog = page.getByRole('dialog');
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toHaveValue(
++			'WIFI_TEST'
++		);
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		await expect(dialog.getByText('Name is required.', { exact: true })).toBeVisible();
++		await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('ANT_NEW');
++		await dialog.getByRole('textbox', { name: 'Unit', exact: true }).fill('INVALID');
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		await expect(dialog.getByText('Unit is invalid.', { exact: true })).toBeVisible();
++		await dialog.getByRole('textbox', { name: 'Unit', exact: true }).fill('ms');
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		const details = page.getByRole('region', { name: 'Definition details', exact: true });
++		await expect(details.getByRole('heading', { name: 'ANT_NEW', exact: true })).toBeVisible();
++		await expect(page).toHaveURL(/device=WIFI_TEST&search=ANT&definition=4/);
++		await details.getByRole('button', { name: 'Edit definition', exact: true }).click();
++		dialog = page.getByRole('dialog');
++		await dialog.getByRole('textbox', { name: 'Description', exact: true }).fill('Discarded');
++		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
++		expect(mutations.filter((call) => call.method === 'PUT')).toHaveLength(0);
++		await details.getByRole('button', { name: 'Edit definition', exact: true }).click();
++		await dialog
++			.getByRole('textbox', { name: 'Description', exact: true })
++			.fill('Updated definition');
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		await expect(details.getByText('Updated definition', { exact: true })).toBeVisible();
++		expect(mutations.find((call) => call.method === 'PUT')?.body?.device_name).toBe('WIFI_TEST');
++		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
++		await page
++			.getByRole('alertdialog')
++			.getByRole('button', { name: 'Delete', exact: true })
++			.click();
++		await expect(details.getByRole('heading', { name: 'ANT', exact: true })).toBeVisible();
++		await expect(page).toHaveURL(/definition=2/);
++		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
++		const confirmation = page.getByRole('alertdialog', { name: 'Force delete ANT?', exact: true });
++		await expect(confirmation).toContainText(
++			'Links are retained and may resolve to a Global fallback.'
++		);
++		await expect(confirmation).toContainText('Without a fallback, they become unresolved.');
++		await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
++		expect(mutations.filter((call) => call.method === 'DELETE')).toHaveLength(1);
++		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
++		await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
++		await expect(page.getByText('0 entries', { exact: true })).toBeVisible();
++		await expect(page).not.toHaveURL(/definition=/);
++		expect(mutations.at(-1)?.path).toBe(`/api/${kind}/2?force=true`);
++		await page.goto(`/${kind}?device=_global&definition=1`);
++		await page
++			.getByRole('region', { name: 'Definition details', exact: true })
++			.getByRole('button', { name: 'Delete Global definition', exact: true })
++			.click();
++		await expect(confirmation).toContainText(
++			'Links using this Global definition are retained but become unresolved.'
++		);
++		await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
++		expect(mutations.at(-1)?.path).toBe(`/api/${kind}/2?force=true`);
++	});
++	test(`${kind} dictionary Device actions protect ownership and distinguish Global overrides`, async ({
++		page
++	}) => {
++		const { rows, mutations } = await mockDictionary(page, kind);
++		const section = kind === 'parameter-definitions' ? 'parameters' : 'criteria';
++		rows.push({
++			...rows[0],
++			id: 5,
++			name: 'GLOBAL_LIMIT',
++			default_value: '77',
++			allowed_values: '{77,88}'
++		});
++		await page.route(`**/api/devices/WIFI_TEST/${section}?*`, (route) => {
++			const scoped = rows.filter((row) => row.device_name === 'WIFI_TEST');
++			const globals = rows.filter(
++				(row) =>
++					!row.device_name &&
++					['ANT', 'GLOBAL_LIMIT'].includes(row.name) &&
++					!scoped.some((item) => item.name === row.name)
++			);
++			return route.fulfill({
++				json: {
++					items: scoped,
++					total: scoped.length,
++					global_items: globals,
++					global_total: globals.length,
++					page: 1,
++					page_size: 20
++				}
++			});
++		});
++		await page.goto(`/devices/WIFI_TEST?tab=${section}`);
++		await page
++			.getByRole('button', {
++				name:
++					kind === 'parameter-definitions' ? 'Add parameter definition' : 'Add criteria definition',
++				exact: true
++			})
++			.click();
++		let dialog = page.getByRole('dialog');
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toHaveValue(
++			'WIFI_TEST'
++		);
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toBeDisabled();
++		await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('DEVICE_ONLY');
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		const details = page.getByRole('region', { name: 'Definition details', exact: true });
++		await expect(details.getByRole('heading', { name: 'DEVICE_ONLY', exact: true })).toBeVisible();
++		await page.getByRole('button', { name: 'Inspect ANT (WIFI_TEST)', exact: true }).click();
++		await expect(details).toContainText('2 Function links');
++		await details.getByRole('button', { name: 'Edit definition', exact: true }).click();
++		dialog = page.getByRole('dialog');
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toBeDisabled();
++		await dialog
++			.getByRole('textbox', { name: 'Description', exact: true })
++			.fill('Device only edit');
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		await expect(details.getByText('Device only edit', { exact: true })).toBeVisible();
++		expect(mutations.at(-1)?.body?.device_name).toBe('WIFI_TEST');
++		await page.getByRole('button', { name: 'Inspect GLOBAL_LIMIT (Global)', exact: true }).click();
++		await expect(
++			details.getByText('Global - shared across Devices', { exact: true })
++		).toBeVisible();
++		await details.getByRole('button', { name: 'Edit Global definition', exact: true }).click();
++		dialog = page.getByRole('dialog');
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toHaveValue('');
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toBeDisabled();
++		await expect(dialog.getByText('Global - shared across Devices', { exact: true })).toBeVisible();
++		await dialog.getByRole('textbox', { name: 'Default value', exact: true }).fill('88');
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		expect(mutations.at(-1)?.path).toBe(`/api/${kind}/5`);
++		expect(mutations.at(-1)?.body?.device_name).toBe('');
++		await details.getByRole('button', { name: 'Create Device override', exact: true }).click();
++		dialog = page.getByRole('dialog');
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toHaveValue(
++			'WIFI_TEST'
++		);
++		await expect(dialog.getByRole('textbox', { name: 'Device', exact: true })).toBeDisabled();
++		await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(
++			'GLOBAL_LIMIT'
++		);
++		await expect(dialog.getByRole('textbox', { name: 'Default value', exact: true })).toHaveValue(
++			'88'
++		);
++		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++		await expect(details.getByText('WIFI_TEST', { exact: true })).toBeVisible();
++		expect(mutations.at(-1)?.method).toBe('POST');
++		expect(mutations.at(-1)?.body).toMatchObject({
++			name: 'GLOBAL_LIMIT',
++			device_name: 'WIFI_TEST',
++			default_value: '88',
++			allowed_values: '{77,88}'
++		});
++		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
++		await page
++			.getByRole('alertdialog')
++			.getByRole('button', { name: 'Delete', exact: true })
++			.click();
++		await expect(page).toHaveURL(new RegExp(`/devices/WIFI_TEST\\?tab=${section}`));
++		await page.getByRole('button', { name: 'Inspect GLOBAL_LIMIT (Global)', exact: true }).click();
++		await expect(
++			details.getByText('Global - shared across Devices', { exact: true })
++		).toBeVisible();
++		await expect(details.getByText('88', { exact: true })).toBeVisible();
++		expect(mutations.at(-1)?.path).toBe(`/api/${kind}/7`);
++	});
++	test(`${kind} dictionary retries failures and requires new force confirmation for stale usage`, async ({
++		page
++	}) => {
++		const { rows, mutations } = await mockDictionary(page, kind);
++		rows[1].usage_count = 0;
++		let fail = true;
++		await page.route(new RegExp(`/api/${kind}(?:\\?.*)?$`), (route) => {
++			if (fail) {
++				fail = false;
++				return route.fulfill({
++					status: 503,
++					json: { error: 'Dictionary temporarily unavailable' }
++				});
++			}
++			return route.fallback();
++		});
++		await page.goto(`/${kind}?definition=2`);
++		await expect(page.getByRole('alert')).toContainText('Dictionary temporarily unavailable');
++		await expect(page.getByText('Count unavailable', { exact: true })).toBeVisible();
++		await page.getByRole('button', { name: 'Retry definitions', exact: true }).click();
++		const details = page.getByRole('region', { name: 'Definition details', exact: true });
++		await expect(details).toContainText('0 Function links');
++		rows[1].usage_count = 2;
++		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
++		await page
++			.getByRole('alertdialog')
++			.getByRole('button', { name: 'Delete', exact: true })
++			.click();
++		await expect(page.getByRole('alertdialog')).toContainText('Definition is in use.');
++		await expect(
++			page.getByRole('alertdialog', { name: 'Force delete ANT?', exact: true })
++		).toBeVisible();
++		expect(mutations).toHaveLength(0);
++		await page
++			.getByRole('alertdialog')
++			.getByRole('button', { name: 'Cancel', exact: true })
++			.click();
++		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
++		await page
++			.getByRole('alertdialog')
++			.getByRole('button', { name: 'Delete', exact: true })
++			.click();
++		await expect(
++			page.getByRole('alertdialog', { name: 'Force delete ANT?', exact: true })
++		).toBeVisible();
++		await page
++			.getByRole('alertdialog')
++			.getByRole('button', { name: 'Delete', exact: true })
++			.click();
++		await expect(page.getByRole('alertdialog')).not.toBeVisible();
++		expect(mutations.at(-1)?.path).toBe(`/api/${kind}/2?force=true`);
++	});
++	test(`${kind} dictionary ignores a delayed response after leaving the workspace`, async ({
++		page
++	}) => {
++		const { rows } = await mockDictionary(page, kind);
++		let release!: () => void;
++		const pending = new Promise<void>((resolve) => {
++			release = resolve;
++		});
++		await page.route(new RegExp(`/api/${kind}(?:\\?.*)?$`), async (route) => {
++			await pending;
++			return route.fulfill({ json: { items: [rows[0]], total: 1, page: 1, page_size: 20 } });
++		});
++		await page.goto(`/${kind}?definition=999`);
++		await expect(page.getByText('Loading definitions...', { exact: true })).toBeVisible();
++		await page.locator('a[href="/devices"]').first().click();
++		await expect(page).toHaveURL('/devices');
++		const response = page.waitForResponse(new RegExp(`/api/${kind}(?:\\?.*)?$`));
++		release();
++		await (await response).finished();
++		await page.waitForLoadState('networkidle');
++		await expect(page).toHaveURL('/devices');
++	});
++	test(`${kind} dictionary long content stays readable across layouts and keyboard selection`, async ({
++		page
++	}, testInfo) => {
++		const { rows } = await mockDictionary(page, kind);
++		rows[1].name = `LONG_DEFINITION_${'NAME_'.repeat(24)}`;
++		rows[1].device_name = `DEVICE_${'SCOPE_'.repeat(14)}`;
++		rows[1].value_pattern = `^${'LONG_PATTERN_'.repeat(24)}$`;
++		await page.goto(`/${kind}?definition=2`);
++		for (const width of [1440, 960, 390]) {
++			await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
++			await expect(
++				page.getByRole('region', { name: 'Definition details', exact: true })
++			).toBeVisible();
++			await page.screenshot({ path: testInfo.outputPath(`${kind}-${width}.png`), fullPage: true });
++			const sizes = await page.evaluate(() => ({
++				width: document.documentElement.clientWidth,
++				scroll: document.documentElement.scrollWidth
++			}));
++			expect(sizes.scroll).toBeLessThanOrEqual(sizes.width);
++		}
++		await page.getByRole('button', { name: 'Toggle dark mode', exact: true }).click();
++		await expect(page.locator('html')).toHaveClass(/dark/);
++		await page.screenshot({ path: testInfo.outputPath(`${kind}-390-dark.png`), fullPage: true });
++		const choice = page.getByRole('button', { name: 'Select ANT (Global)', exact: true });
++		await choice.focus();
++		await page.keyboard.press('Enter');
++		await expect(
++			page.getByRole('region', { name: 'Definition details', exact: true })
++		).toContainText('Global - shared across Devices');
++		await expect(choice).toBeFocused();
++		const section = kind === 'parameter-definitions' ? 'parameters' : 'criteria';
++		rows[1].device_name = 'WIFI_TEST';
++		await page.route(`**/api/devices/WIFI_TEST/${section}?*`, (route) =>
++			route.fulfill({
++				json: {
++					items: [rows[1]],
++					total: 1,
++					global_items: [rows[0]],
++					global_total: 1,
++					page: 1,
++					page_size: 20
++				}
++			})
++		);
++		await page.goto(`/devices/WIFI_TEST?tab=${section}&definition=2`);
++		await page.getByRole('button', { name: 'Toggle dark mode', exact: true }).click();
++		await expect(page.locator('html')).not.toHaveClass(/dark/);
++		for (const width of [1440, 390]) {
++			await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
++			await expect(
++				page
++					.getByRole('region', { name: 'Definition details', exact: true })
++					.getByRole('heading', { name: rows[1].name, exact: true })
++			).toBeVisible();
++			const sizes = await page.evaluate(() => ({
++				width: document.documentElement.clientWidth,
++				scroll: document.documentElement.scrollWidth
++			}));
++			expect(sizes.scroll).toBeLessThanOrEqual(sizes.width);
++			await page.screenshot({
++				path: testInfo.outputPath(`${kind}-device-${width}.png`),
++				fullPage: true
++			});
++		}
++		await page.getByRole('button', { name: 'Toggle dark mode', exact: true }).click();
++		await expect(page.locator('html')).toHaveClass(/dark/);
++		await page.screenshot({
++			path: testInfo.outputPath(`${kind}-device-390-dark.png`),
++			fullPage: true
++		});
++	});
++	test(`${kind} dictionary paging and sorting retain URL history and separate Device tabs`, async ({
++		page
++	}) => {
++		const { rows, requests } = await mockDictionary(page, kind);
++		for (let index = 10; index < 40; index++)
++			rows.push({ ...rows[0], id: index, name: `VALUE_${index}` });
++		await page.goto(`/${kind}`);
++		await page.getByRole('button', { name: 'Next page', exact: true }).click();
++		await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
++		await page.getByRole('button', { name: 'Select VALUE_39 (Global)', exact: true }).click();
++		await expect(
++			page
++				.getByRole('region', { name: 'Definition details', exact: true })
++				.getByRole('heading', { name: 'VALUE_39', exact: true })
++		).toBeVisible();
++		await page.getByRole('button', { name: 'Sort direction', exact: true }).click();
++		await page.getByRole('option', { name: 'Descending', exact: true }).click();
++		await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();
++		await expect(
++			page
++				.getByRole('complementary', { name: 'Definitions list', exact: true })
++				.getByRole('button')
++				.first()
++		).toHaveAccessibleName('Select VALUE_39 (Global)');
++		expect(requests.at(-1)?.get('order')).toBe('desc');
++		await page.goBack();
++		await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
++		await expect(page).toHaveURL(new RegExp('page=2&definition=39$'));
++		const section = kind === 'parameter-definitions' ? 'parameters' : 'criteria';
++		const other = section === 'parameters' ? 'Criteria' : 'Parameters';
++		const otherName = section === 'parameters' ? 'POWER' : 'ANT';
++		await page.goto(
++			`/devices/WIFI_TEST?tab=${section}&definition=${section === 'parameters' ? 11 : 23}`
++		);
++		await page.getByRole('tab', { name: other, exact: true }).click();
++		await expect(
++			page
++				.getByRole('region', { name: 'Definition details', exact: true })
++				.getByRole('heading', { name: otherName, exact: true })
++		).toBeVisible();
++		await expect(page).not.toHaveURL(/definition=/);
++	});
++	test(`${kind} dictionary Device deletion clamps a emptied final page`, async ({ page }) => {
++		const { rows } = await mockDictionary(page, kind);
++		const section = kind === 'parameter-definitions' ? 'parameters' : 'criteria';
++		const seed = rows[1];
++		rows.splice(
++			0,
++			rows.length,
++			...Array.from({ length: 21 }, (_, index) => ({
++				...seed,
++				id: 100 + index,
++				name: `FIELD_${index}`,
++				usage_count: 0,
++				orphan_usage_count: 0
++			}))
++		);
++		await page.route(`**/api/devices/WIFI_TEST/${section}?*`, (route) => {
++			const query = new URL(route.request().url()).searchParams;
++			const number = Number(query.get('page') ?? 1);
++			const size = Number(query.get('page_size') ?? 20);
++			return route.fulfill({
++				json: {
++					items: rows.slice((number - 1) * size, number * size),
++					total: rows.length,
++					global_items: [],
++					global_total: 0,
++					page: number,
++					page_size: size
++				}
++			});
++		});
++		await page.goto(`/devices/WIFI_TEST?tab=${section}`);
++		await page.getByRole('button', { name: 'Next page', exact: true }).click();
++		await page.getByRole('button', { name: 'Inspect FIELD_20 (WIFI_TEST)', exact: true }).click();
++		const details = page.getByRole('region', { name: 'Definition details', exact: true });
++		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
++		await page
++			.getByRole('alertdialog')
++			.getByRole('button', { name: 'Delete', exact: true })
++			.click();
++		await expect(
++			page.getByRole('button', { name: 'Inspect FIELD_0 (WIFI_TEST)', exact: true })
++		).toBeVisible();
++		await expect(details.getByRole('heading', { name: 'FIELD_0', exact: true })).toBeVisible();
++		await expect(page.getByText('Page 2 of 1', { exact: true })).not.toBeVisible();
++	});
++}
++
+ test.beforeEach(async ({ page }) => {
+ 	await page.route('**/api/**', async (route) => {
+ 		await route.fulfill({ json: { items: [], total: 0 } });
+@@ -1204,7 +1799,11 @@ test('late definitions cannot replace the newly selected device', async ({ page
+ 	await pending;
+ 	await switchDevice(page, 'GOLDENKV');
+ 	await page.getByRole('tab', { name: 'Parameters', exact: true }).click();
+-	const defaultCell = page.getByRole('row', { name: /^ANT/ }).getByRole('cell').nth(4);
++	const defaultCell = page
++		.getByRole('row')
++		.filter({ has: page.getByRole('button', { name: 'Inspect ANT (GOLDENKV)', exact: true }) })
++		.getByRole('cell')
++		.nth(4);
+ 	await expect(defaultCell).toHaveText('2');
+ 	const response = page.waitForResponse('**/api/devices/WIFI_TEST/parameters?*');
+ 	release();

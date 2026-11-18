@@ -1,0 +1,32 @@
+# Local reference data and AI working state
+
+# AI tool state
+
+.vscode/*
+
+# Local secrets; keep example configuration publishable
+
+# Go
+*.db
+*.db-wal
+*.db-shm
+*.db.bak*
+/backend/*.exe
+/dist/
+/backend/vendor/
+/native-release
+/deploy/.dev
+
+# Node
+node_modules/
+frontend/build/
+frontend/.svelte-kit/
+
+# OS / editors
+.idea/
+Thumbs.db
+.DS_Store
+
+# E2E smoke state
+frontend/test-results/
+frontend/playwright-report/

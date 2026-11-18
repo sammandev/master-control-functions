@@ -1,0 +1,752 @@
+{
+  "nodes": [
+    {
+      "id": "readme_master_control_functions",
+      "label": "Master-Control-Functions",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_go_fiber_backend",
+      "label": "Go Fiber Backend",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_svelte5_sveltekit_frontend",
+      "label": "Svelte 5/SvelteKit Frontend",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_postgresql",
+      "label": "PostgreSQL",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_pnpm",
+      "label": "pnpm (canonical package manager)",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_bun",
+      "label": "Bun (optional script runner)",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_vite",
+      "label": "Vite",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_nginx",
+      "label": "Nginx",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_playwright",
+      "label": "Playwright",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_sqlc",
+      "label": "sqlc",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_adr0007",
+      "label": "ADR-0007: Bun as optional script runner",
+      "file_type": "document",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_adr0012",
+      "label": "ADR-0012: PostgreSQL cutover decision",
+      "file_type": "document",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_deploy_runbook",
+      "label": "Deployment Runbook (deploy/README.md)",
+      "file_type": "document",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_context_md",
+      "label": "CONTEXT.md (domain vocabulary)",
+      "file_type": "document",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_postgres_migrations",
+      "label": "PostgreSQL migrations (backend/internal/db/postgres_migrations)",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_health_endpoint",
+      "label": "GET /health endpoint",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_testfulldatasetlistlatency",
+      "label": "TestFullDatasetListLatency",
+      "file_type": "code",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_api_import_reset",
+      "label": "POST /api/import/reset",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_adapter_static",
+      "label": "adapter-static",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_sveltekit_app",
+      "label": "SvelteKit Browser Application",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_device_workspace",
+      "label": "Device Workspace",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_vite_config",
+      "label": "vite.config.ts",
+      "file_type": "code",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_nginx_conf",
+      "label": "nginx.conf (frontend)",
+      "file_type": "code",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_polish_spec",
+      "label": "polish.spec.ts (UI test suite)",
+      "file_type": "code",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_playwright_ui_config",
+      "label": "playwright.ui.config.ts",
+      "file_type": "code",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_e2e_suite",
+      "label": "Full E2E Test Suite",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_env_example",
+      "label": ".env.example",
+      "file_type": "code",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_vite_proxy",
+      "label": "Vite API Proxy (/api → 127.0.0.1:8080)",
+      "file_type": "concept",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "frontend_readme_same_origin_api",
+      "label": "Same-origin /api pattern",
+      "file_type": "rationale",
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "readme_master_control_functions",
+      "target": "readme_go_fiber_backend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_master_control_functions",
+      "target": "readme_svelte5_sveltekit_frontend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_master_control_functions",
+      "target": "readme_postgresql",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_master_control_functions",
+      "target": "readme_deploy_runbook",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_master_control_functions",
+      "target": "readme_context_md",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_go_fiber_backend",
+      "target": "readme_postgresql",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_go_fiber_backend",
+      "target": "readme_sqlc",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_go_fiber_backend",
+      "target": "readme_postgres_migrations",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_go_fiber_backend",
+      "target": "readme_health_endpoint",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_go_fiber_backend",
+      "target": "readme_testfulldatasetlistlatency",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_svelte5_sveltekit_frontend",
+      "target": "readme_vite",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_svelte5_sveltekit_frontend",
+      "target": "readme_pnpm",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_svelte5_sveltekit_frontend",
+      "target": "readme_bun",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_svelte5_sveltekit_frontend",
+      "target": "readme_adapter_static",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_bun",
+      "target": "readme_adr0007",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_postgres_migrations",
+      "target": "readme_adr0012",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_playwright",
+      "target": "readme_postgresql",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_playwright",
+      "target": "readme_api_import_reset",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "readme_sqlc",
+      "target": "readme_postgresql",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_sveltekit_app",
+      "target": "frontend_readme_vite_config",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_sveltekit_app",
+      "target": "readme_adapter_static",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_sveltekit_app",
+      "target": "readme_nginx",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_sveltekit_app",
+      "target": "frontend_readme_device_workspace",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_sveltekit_app",
+      "target": "frontend_readme_vite_proxy",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_sveltekit_app",
+      "target": "frontend_readme_same_origin_api",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_nginx_conf",
+      "target": "readme_nginx",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_nginx_conf",
+      "target": "readme_go_fiber_backend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_nginx_conf",
+      "target": "readme_health_endpoint",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_polish_spec",
+      "target": "frontend_readme_device_workspace",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_polish_spec",
+      "target": "readme_playwright",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_playwright_ui_config",
+      "target": "frontend_readme_polish_spec",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_e2e_suite",
+      "target": "readme_postgresql",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_e2e_suite",
+      "target": "readme_playwright",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_env_example",
+      "target": "frontend_readme_e2e_suite",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_sveltekit_app",
+      "target": "readme_svelte5_sveltekit_frontend",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_e2e_suite",
+      "target": "readme_playwright",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_vite_proxy",
+      "target": "frontend_readme_nginx_conf",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_readme_device_workspace",
+      "target": "readme_master_control_functions",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "frontend_deployment_stack",
+      "label": "Frontend Deployment Stack (Nginx + adapter-static + Go API)",
+      "nodes": [
+        "frontend_readme_nginx_conf",
+        "readme_adapter_static",
+        "readme_go_fiber_backend",
+        "readme_nginx"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\frontend\\README.md"
+    },
+    {
+      "id": "e2e_testing_pipeline",
+      "label": "E2E Testing Pipeline (Playwright + PostgreSQL + Go Server)",
+      "nodes": [
+        "readme_playwright",
+        "readme_postgresql",
+        "readme_go_fiber_backend",
+        "frontend_readme_e2e_suite",
+        "readme_api_import_reset"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md"
+    },
+    {
+      "id": "postgres_cutover_decision",
+      "label": "PostgreSQL Cutover (ADR-0012 + migrations + sqlc + SQLite baseline)",
+      "nodes": [
+        "readme_adr0012",
+        "readme_postgres_migrations",
+        "readme_sqlc",
+        "readme_postgresql"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "C:\\Users\\Samuel_Halomoan\\Desktop\\opencode_project\\Web_Program_Functions_Database\\README.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

@@ -1,0 +1,2384 @@
+diff --git a/frontend/src/app.css b/frontend/src/app.css
+index e7332d1..a615bba 100644
+--- a/frontend/src/app.css
++++ b/frontend/src/app.css
+@@ -23,8 +23,8 @@
+    The two collided names now carry their shadcn semantics everywhere:
+    `muted` is a subtle background (same value as secondary, matching the
+    shadcn default theme) and `accent` is the hover/highlight background
+-   (the app's blue-tinted hover, formerly surface-hover — the extension
+-   variable was folded into accent). Brand blue is `primary`; muted text is
++	(formerly surface-hover — the extension variable was folded into
++	accent). The brand accent is `primary`; muted text is
+    `muted-foreground`.
+ 
+    App-specific extensions (ok, warn, crit-soft, mono) stay in the same
+@@ -43,19 +43,19 @@
+ 	--card-foreground: #1a2027;
+ 	--popover: #fbfcfd;
+ 	--popover-foreground: #1a2027;
+-	--primary: #1f5eff;
++	--primary: var(--device-accent);
+ 	--primary-foreground: #ffffff;
+ 	--secondary: #f1f3f6;
+ 	--secondary-foreground: #1a2027;
+ 	--muted: #f1f3f6;
+ 	--muted-foreground: #5b6672;
+-	--accent: #f2f6ff;
++	--accent: var(--device-soft);
+ 	--accent-foreground: #1a2027;
+ 	--destructive: #c62828;
+ 	--destructive-foreground: #ffffff;
+ 	--border: #d8dde3;
+ 	--input: #d8dde3;
+-	--ring: #1f5eff;
++	--ring: var(--device-accent);
+ 	--radius: 0.5rem;
+ 
+ 	/* App-specific extensions */
+@@ -76,19 +76,19 @@
+ 	--card-foreground: #e6eaf0;
+ 	--popover: #232a33;
+ 	--popover-foreground: #e6eaf0;
+-	--primary: #5b8cff;
++	--primary: var(--device-accent);
+ 	--primary-foreground: #10151d;
+ 	--secondary: #171c22;
+ 	--secondary-foreground: #e6eaf0;
+ 	--muted: #171c22;
+ 	--muted-foreground: #98a2ae;
+-	--accent: #26303c;
++	--accent: var(--device-soft);
+ 	--accent-foreground: #e6eaf0;
+ 	--destructive: #ef5350;
+ 	--destructive-foreground: #ffffff;
+ 	--border: #2c343e;
+ 	--input: #2c343e;
+-	--ring: #5b8cff;
++	--ring: var(--device-accent);
+ 	--radius: 0.5rem;
+ 
+ 	/* App-specific extensions */
+diff --git a/frontend/src/lib/components/DeviceFunctionDetail.svelte b/frontend/src/lib/components/DeviceFunctionDetail.svelte
+index 65b4fa0..3e02341 100644
+--- a/frontend/src/lib/components/DeviceFunctionDetail.svelte
++++ b/frontend/src/lib/components/DeviceFunctionDetail.svelte
+@@ -7,7 +7,9 @@
+ 		RefreshCw,
+ 		SlidersHorizontal,
+ 		ListChecks,
+-		Code
++		Code,
++		Pencil,
++		Trash2
+ 	} from '@lucide/svelte';
+ 	import { listLinks, type LinkRow } from '$lib/links';
+ 	import {
+@@ -20,8 +22,20 @@
+ 	import { listExamples, type ExampleListResult } from '$lib/examples';
+ 	import Button from '$lib/components/ui/button.svelte';
+ 	import Pagination from '$lib/components/ui/pagination.svelte';
++	import FunctionDialog from '$lib/components/FunctionDialog.svelte';
++	import ComposeDialog from '$lib/components/ComposeDialog.svelte';
+ 
+-	let { fn, device }: { fn: DeviceFunctionRow; device: string } = $props();
++	let {
++		fn,
++		device,
++		onChanged
++	}: {
++		fn: DeviceFunctionRow;
++		device: string;
++		onChanged?: (deletedId?: number) => void | Promise<void>;
++	} = $props();
++	let dialogMode = $state<'edit' | 'delete' | null>(null);
++	let composeOpen = $state(false);
+ 	let examplePage = $state(1);
+ 	let globalPage = $state(1);
+ 	let examplePageSize = $state(20);
+@@ -132,6 +146,7 @@
+ 
+ <section class="function-detail" aria-label="Function details">
+ 	<header>
++		<p class="metadata">Shared across Devices</p>
+ 		<p class="metadata">{fn.source} / {fn.interface}</p>
+ 		<h2>{fn.name}</h2>
+ 		{#if fn.description}<p>{fn.description}</p>{/if}
+@@ -141,6 +156,15 @@
+ 				><ExternalLink size={14} /> Manage function</a
+ 			>
+ 		</div>
++		<div class="function-actions">
++			<Button variant="outline" onclick={() => (dialogMode = 'edit')}
++				><Pencil size={16} /> Edit function</Button
++			>
++			<Button variant="outline" onclick={() => (dialogMode = 'delete')}
++				><Trash2 size={16} /> Delete function</Button
++			>
++			<Button onclick={() => (composeOpen = true)}><Code size={16} /> Compose script</Button>
++		</div>
+ 	</header>
+ 	{#await content}
+ 		<p role="status" class="banner-empty">Loading function details...</p>
+@@ -203,6 +227,17 @@
+ 	<p role="status" class="copy-status">{copyStatus}</p>
+ </section>
+ 
++{#if dialogMode}<FunctionDialog
++		mode={dialogMode}
++		{fn}
++		onClose={() => (dialogMode = null)}
++		onSaved={async (row) => {
++			await onChanged?.(row === null ? fn.id : undefined);
++			retry++;
++		}}
++	/>{/if}
++{#if composeOpen}<ComposeDialog fnId={fn.id} onClose={() => (composeOpen = false)} />{/if}
++
+ {#snippet fieldsTable(title: string, fields: DetailField[], shared = false)}
+ 	<section class="field-group" aria-label={title}>
+ 		<h4><span class="scope-badge" class:shared>{title}</span> <span>{fields.length}</span></h4>
+@@ -251,6 +286,12 @@
+ {/snippet}
+ 
+ <style>
++	.function-actions {
++		display: flex;
++		flex-wrap: wrap;
++		gap: 8px;
++		margin-top: 16px;
++	}
+ 	.function-detail {
+ 		min-width: 0;
+ 		padding: 26px;
+diff --git a/frontend/src/lib/components/FunctionDetail.svelte b/frontend/src/lib/components/FunctionDetail.svelte
+new file mode 100644
+index 0000000..837391a
+--- /dev/null
++++ b/frontend/src/lib/components/FunctionDetail.svelte
+@@ -0,0 +1,165 @@
++<script lang="ts">
++	import type { FunctionRow } from '$lib/api';
++	import { resolve } from '$app/paths';
++	import { Pencil, Trash2, Code, ExternalLink } from '@lucide/svelte';
++	import LinksPanel from '$lib/components/LinksPanel.svelte';
++	import ExamplesPanel from '$lib/components/ExamplesPanel.svelte';
++	import ComposeDialog from '$lib/components/ComposeDialog.svelte';
++	import Button from '$lib/components/ui/button.svelte';
++	import Badge from '$lib/components/ui/badge.svelte';
++	import * as Tabs from '$lib/components/ui/tabs/index';
++
++	let {
++		fn,
++		onEdit,
++		onDelete,
++		standalone = false
++	}: {
++		fn: FunctionRow;
++		onEdit?: (fn: FunctionRow) => void;
++		onDelete?: (fn: FunctionRow) => void;
++		standalone?: boolean;
++	} = $props();
++	let tab = $state('parameters');
++	let composeOpen = $state(false);
++</script>
++
++<section class="function-detail" aria-label="Function details">
++	<header>
++		<p class="ownership">Shared across Devices</p>
++		<svelte:element this={standalone ? 'h1' : 'h2'}>{fn.name}</svelte:element>
++		<div class="identity">
++			<Badge>{fn.source}</Badge><Badge class="max-w-full break-all whitespace-normal"
++				>{fn.interface}</Badge
++			>
++		</div>
++		{#if fn.description}<p class="description">{fn.description}</p>{/if}
++		<dl>
++			<div>
++				<dt>Category</dt>
++				<dd>{fn.category || '-'}</dd>
++			</div>
++			<div>
++				<dt>Execution role</dt>
++				<dd>{fn.execution_role || '-'}</dd>
++			</div>
++			<div>
++				<dt>Execution phase</dt>
++				<dd>{fn.execution_phase || '-'}</dd>
++			</div>
++			<div>
++				<dt>Convention</dt>
++				<dd>{fn.convention ?? '-'}</dd>
++			</div>
++			<div>
++				<dt>Updated</dt>
++				<dd>{fn.updated_at.slice(0, 10)}</dd>
++			</div>
++		</dl>
++		<div class="actions">
++			{#if onEdit}<Button variant="outline" onclick={() => onEdit?.(fn)}
++					><Pencil size={16} /> Edit function</Button
++				>{/if}
++			{#if onDelete}<Button variant="outline" onclick={() => onDelete?.(fn)}
++					><Trash2 size={16} /> Delete function</Button
++				>{/if}
++			<Button onclick={() => (composeOpen = true)}><Code size={16} /> Compose script</Button>
++			{#if !standalone}<a href={resolve('/functions/[id]', { id: String(fn.id) })}
++					><ExternalLink size={16} /> Manage function</a
++				>{/if}
++		</div>
++	</header>
++	<Tabs.Root bind:value={tab}>
++		<Tabs.List aria-label="Function sections">
++			<Tabs.Trigger value="parameters">Parameters</Tabs.Trigger>
++			<Tabs.Trigger value="criteria">Criteria</Tabs.Trigger>
++			<Tabs.Trigger value="examples">Examples</Tabs.Trigger>
++		</Tabs.List>
++		<Tabs.Content value="parameters" class="panel-scroll"
++			><LinksPanel
++				fnId={fn.id}
++				kind="parameter-links"
++				defKind="parameter-definitions"
++				noun="parameter"
++			/></Tabs.Content
++		>
++		<Tabs.Content value="criteria" class="panel-scroll"
++			><LinksPanel
++				fnId={fn.id}
++				kind="criteria-links"
++				defKind="criteria-definitions"
++				noun="criteria"
++			/></Tabs.Content
++		>
++		<Tabs.Content value="examples" class="panel-scroll"
++			><ExamplesPanel fixed={{ source: fn.source, name: fn.name }} /></Tabs.Content
++		>
++	</Tabs.Root>
++</section>
++
++{#if composeOpen}<ComposeDialog fnId={fn.id} onClose={() => (composeOpen = false)} />{/if}
++
++<style>
++	.function-detail {
++		min-width: 0;
++		padding: 24px;
++	}
++	.function-detail :global(.panel-scroll) {
++		max-width: 100%;
++		overflow-x: auto;
++	}
++	header {
++		margin-bottom: 24px;
++	}
++	header :global(h1),
++	header :global(h2) {
++		font-family: var(--mono);
++		font-size: 22px;
++		font-weight: 650;
++		overflow-wrap: anywhere;
++		margin: 8px 0;
++	}
++	.ownership,
++	dt {
++		color: var(--muted-foreground);
++		font-size: 12px;
++	}
++	.identity,
++	.actions {
++		display: flex;
++		align-items: center;
++		flex-wrap: wrap;
++		gap: 8px;
++	}
++	.description {
++		margin: 12px 0;
++		max-width: 65ch;
++		overflow-wrap: anywhere;
++	}
++	dl {
++		display: flex;
++		flex-wrap: wrap;
++		gap: 20px;
++		margin: 16px 0;
++	}
++	dd {
++		font-size: 13px;
++		overflow-wrap: anywhere;
++	}
++	.actions a {
++		display: inline-flex;
++		align-items: center;
++		gap: 6px;
++		color: var(--primary);
++		min-height: 32px;
++	}
++	.actions a:focus-visible {
++		outline: 2px solid var(--ring);
++		outline-offset: 3px;
++	}
++	@media (max-width: 600px) {
++		.function-detail {
++			padding: 20px 0;
++		}
++	}
++</style>
+diff --git a/frontend/src/lib/components/FunctionDialog.svelte b/frontend/src/lib/components/FunctionDialog.svelte
+new file mode 100644
+index 0000000..4d97cee
+--- /dev/null
++++ b/frontend/src/lib/components/FunctionDialog.svelte
+@@ -0,0 +1,196 @@
++<script lang="ts">
++	import { onMount } from 'svelte';
++	import {
++		createFunction,
++		updateFunction,
++		deleteFunction,
++		ApiError,
++		type FunctionInput,
++		type FunctionRow
++	} from '$lib/api';
++	import type { DeviceFunctionRow } from '$lib/devices';
++	import Dialog from '$lib/components/ui/dialog.svelte';
++	import AlertDialog from '$lib/components/ui/alert-dialog.svelte';
++	import Select from '$lib/components/ui/select.svelte';
++	import Input from '$lib/components/ui/input.svelte';
++	import Label from '$lib/components/ui/label.svelte';
++	import Button from '$lib/components/ui/button.svelte';
++	import { toast } from 'svelte-sonner';
++
++	let {
++		mode,
++		fn,
++		defaults = {},
++		onClose,
++		onSaved
++	}: {
++		mode: 'create' | 'edit' | 'delete';
++		fn?: FunctionRow | DeviceFunctionRow;
++		defaults?: Partial<FunctionInput>;
++		onClose: () => void;
++		onSaved: (row: FunctionRow | null) => void | Promise<void>;
++	} = $props();
++	let form = $state<FunctionInput>({
++		source: 'DLL',
++		interface: '',
++		name: '',
++		description: '',
++		convention: null,
++		category: '',
++		execution_role: '',
++		execution_phase: ''
++	});
++	let fieldErrors = $state<Record<string, string>>({});
++	let submitError = $state('');
++	let saving = $state(false);
++	onMount(() => {
++		form = fn
++			? {
++					source: fn.source,
++					interface: fn.interface,
++					name: fn.name,
++					description: fn.description ?? '',
++					convention: fn.convention,
++					category: fn.category ?? '',
++					execution_role: fn.execution_role ?? '',
++					execution_phase: fn.execution_phase ?? ''
++				}
++			: { ...form, ...defaults };
++	});
++	function changeOpen(open: boolean) {
++		if (!open && !saving) onClose();
++	}
++	async function save() {
++		if (saving) return;
++		saving = true;
++		fieldErrors = {};
++		submitError = '';
++		try {
++			let row: FunctionRow | null;
++			if (mode === 'delete') {
++				if (!fn) throw new Error('No Function selected.');
++				await deleteFunction(fn.id);
++				row = null;
++			} else if (mode === 'edit') {
++				if (!fn) throw new Error('No Function selected.');
++				row = await updateFunction(fn.id, form);
++			} else row = await createFunction(form);
++			toast.success(
++				mode === 'create'
++					? 'Function created'
++					: mode === 'edit'
++						? 'Function updated'
++						: 'Function deleted'
++			);
++			await onSaved(row);
++			onClose();
++		} catch (error) {
++			if (error instanceof ApiError) fieldErrors = error.fields;
++			submitError = error instanceof Error ? error.message : String(error);
++		} finally {
++			saving = false;
++		}
++	}
++</script>
++
++{#if mode === 'delete'}
++	<AlertDialog
++		open={true}
++		onOpenChange={changeOpen}
++		title="Delete function"
++		description={fn
++			? `Shared across Devices. Delete function ${fn.source}/${fn.interface}/${fn.name}? Links and examples referencing it become unresolved. This cannot be undone.`
++			: ''}
++		confirmLabel={saving ? 'Deleting...' : 'Delete'}
++		onConfirm={() => {
++			void save();
++		}}
++	>
++		{#if submitError}<div class="banner-error" role="alert">{submitError}</div>{/if}
++	</AlertDialog>
++{:else}
++	<Dialog
++		open={true}
++		onOpenChange={changeOpen}
++		title={mode === 'create' ? 'New function' : `Edit function #${fn?.id}`}
++	>
++		<p class="muted mb-4">Shared across Devices</p>
++		{#if submitError}<div class="banner-error" role="alert">{submitError}</div>{/if}
++		<form
++			onsubmit={(event) => {
++				event.preventDefault();
++				void save();
++			}}
++		>
++			<div class="field">
++				<Label for="f-source">Source</Label><Select
++					id="f-source"
++					ariaLabel="Source"
++					bind:value={form.source}
++					options={[
++						{ value: 'BUILT-IN', label: 'BUILT-IN' },
++						{ value: 'DLL', label: 'DLL' }
++					]}
++				/>{#if fieldErrors.source}<span class="field-error">{fieldErrors.source}</span>{/if}
++			</div>
++			<div class="field">
++				<Label for="f-interface">Interface</Label><Input
++					id="f-interface"
++					bind:value={form.interface}
++				/>{#if fieldErrors.interface}<span class="field-error">{fieldErrors.interface}</span>{/if}
++			</div>
++			<div class="field">
++				<Label for="f-name">Name</Label><Input
++					id="f-name"
++					bind:value={form.name}
++				/>{#if fieldErrors.name}<span class="field-error">{fieldErrors.name}</span>{/if}
++			</div>
++			<div class="field">
++				<Label for="f-description">Description</Label><Input
++					id="f-description"
++					bind:value={form.description}
++				/>{#if fieldErrors.description}<span class="field-error">{fieldErrors.description}</span
++					>{/if}
++			</div>
++			<div class="field">
++				<Label for="f-convention">Convention</Label><Input
++					id="f-convention"
++					type="number"
++					value={form.convention ?? ''}
++					oninput={(event) => {
++						const value = event.currentTarget.value;
++						form.convention = value === '' ? null : Number(value);
++					}}
++				/>{#if fieldErrors.convention}<span class="field-error">{fieldErrors.convention}</span>{/if}
++			</div>
++			<div class="field">
++				<Label for="f-category">Category</Label><Input
++					id="f-category"
++					bind:value={form.category}
++				/>{#if fieldErrors.category}<span class="field-error">{fieldErrors.category}</span>{/if}
++			</div>
++			<div class="field">
++				<Label for="f-role">Execution role</Label><Input
++					id="f-role"
++					bind:value={form.execution_role}
++				/>{#if fieldErrors.execution_role}<span class="field-error"
++						>{fieldErrors.execution_role}</span
++					>{/if}
++			</div>
++			<div class="field">
++				<Label for="f-phase">Execution phase</Label><Input
++					id="f-phase"
++					bind:value={form.execution_phase}
++				/>{#if fieldErrors.execution_phase}<span class="field-error"
++						>{fieldErrors.execution_phase}</span
++					>{/if}
++			</div>
++			<div class="mt-4 flex justify-end gap-2">
++				<Button variant="outline" disabled={saving} onclick={onClose}>Cancel</Button><Button
++					type="submit"
++					disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button
++				>
++			</div>
++		</form>
++	</Dialog>
++{/if}
+diff --git a/frontend/src/lib/components/ui/pagination.svelte b/frontend/src/lib/components/ui/pagination.svelte
+index 51c7e57..48f45b0 100644
+--- a/frontend/src/lib/components/ui/pagination.svelte
++++ b/frontend/src/lib/components/ui/pagination.svelte
+@@ -14,6 +14,8 @@
+ 		total,
+ 		pageSize = $bindable(20),
+ 		pageSizeOptions = [10, 20, 50],
++		onPageChange,
++		onPageSizeChange,
+ 		class: className
+ 	}: {
+ 		page?: number;
+@@ -21,6 +23,8 @@
+ 		total: number;
+ 		pageSize?: number;
+ 		pageSizeOptions?: number[];
++		onPageChange?: (page: number) => void;
++		onPageSizeChange?: (size: number) => void;
+ 		class?: string;
+ 	} = $props();
+ 
+@@ -31,17 +35,19 @@
+ 		'inline-flex h-8 cursor-pointer select-none items-center justify-center gap-1 whitespace-nowrap rounded-[4px] border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-default disabled:opacity-50';
+ </script>
+ 
+-<Pagination.Root bind:page count={total} perPage={Math.max(1, pageSize)} class={cn(rootBase, className)}>
++<Pagination.Root
++	bind:page
++	{onPageChange}
++	count={total}
++	perPage={Math.max(1, pageSize)}
++	class={cn(rootBase, className)}
++>
+ 	{#snippet children({ currentPage })}
+-		<span class="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</span>
++		<span class="text-muted-foreground text-xs">Page {currentPage} of {totalPages}</span>
+ 		<Pagination.PrevButton class={navBtnBase} disabled={page <= 1} aria-label="Previous page">
+ 			◀ Prev
+ 		</Pagination.PrevButton>
+-		<Pagination.NextButton
+-			class={navBtnBase}
+-			disabled={page >= totalPages}
+-			aria-label="Next page"
+-		>
++		<Pagination.NextButton class={navBtnBase} disabled={page >= totalPages} aria-label="Next page">
+ 			Next ▶
+ 		</Pagination.NextButton>
+ 		<Select
+@@ -52,6 +58,7 @@
+ 			onchange={(v) => {
+ 				pageSize = Number(v);
+ 				page = 1;
++				onPageSizeChange?.(pageSize);
+ 			}}
+ 		/>
+ 	{/snippet}
+diff --git a/frontend/src/routes/+layout.svelte b/frontend/src/routes/+layout.svelte
+index 9c99051..824bed2 100644
+--- a/frontend/src/routes/+layout.svelte
++++ b/frontend/src/routes/+layout.svelte
+@@ -13,9 +13,6 @@
+ 	import '../app.css';
+ 
+ 	let { children } = $props();
+-	const deviceWorkspace = $derived(
+-		page.route.id === '/devices' || page.route.id === '/devices/[name]'
+-	);
+ 
+ 	// Theme (ticket 01): system preference by default, manual toggle
+ 	// persists an override ('light' | 'dark') in localStorage. The
+@@ -71,13 +68,12 @@
+ <a href="#main-content" class="skip-link">Skip to main content</a>
+ 
+ <header
+-	class="border-border bg-card flex items-center gap-6 border-b px-5 py-2.5"
+-	class:device-chrome={deviceWorkspace}
++	class="app-chrome border-border bg-card flex items-center gap-6 border-b px-5 py-2.5"
+ 	inert={dev && page.route.id === '/demo/device-prototype'}
+ 	style:display={dev && page.route.id === '/demo/device-prototype' ? 'none' : undefined}
+ >
+ 	<a href={resolve('/devices')} class="brand text-foreground font-semibold no-underline">
+-		{#if deviceWorkspace}<CircuitBoard size={24} />{/if}
++		<CircuitBoard size={24} />
+ 		MasterControl Functions Database
+ 	</a>
+ 	<nav class="flex items-center gap-4 text-sm" aria-label="Main navigation">
+@@ -112,7 +108,7 @@
+ 	</Button>
+ </header>
+ 
+-<main id="main-content" tabindex="-1" class:device-workspace={deviceWorkspace}>
++<main id="main-content" tabindex="-1" class="app-workspace">
+ 	{@render children()}
+ </main>
+ 
+@@ -148,13 +144,13 @@
+ 	main {
+ 		min-width: 0;
+ 	}
+-	.device-chrome,
+-	.device-workspace {
++	.app-chrome,
++	.app-workspace {
+ 		--primary: var(--device-accent);
+ 		--accent: var(--device-soft);
+ 		--ring: var(--device-accent);
+ 	}
+-	.device-chrome {
++	.app-chrome {
+ 		min-height: 64px;
+ 		padding: 12px 32px;
+ 	}
+@@ -169,34 +165,34 @@
+ 		color: var(--device-accent);
+ 		flex-shrink: 0;
+ 	}
+-	.device-chrome nav a[aria-current='page'] {
++	.app-chrome nav a[aria-current='page'] {
+ 		color: var(--device-accent);
+ 	}
+-	.device-workspace {
++	.app-workspace {
+ 		max-width: 1560px;
+ 		padding: 28px 32px 64px;
+ 	}
+ 	@media (max-width: 1200px) {
+-		.device-chrome {
++		.app-chrome {
+ 			flex-wrap: wrap;
+ 			gap: 12px;
+ 		}
+-		.device-chrome nav {
++		.app-chrome nav {
+ 			order: 3;
+ 			flex-basis: 100%;
+ 			max-width: 100%;
+ 			overflow-x: auto;
+ 			padding: 4px 0;
+ 		}
+-		.device-chrome nav a {
++		.app-chrome nav a {
+ 			flex-shrink: 0;
+ 		}
+ 	}
+ 	@media (max-width: 600px) {
+-		.device-chrome {
++		.app-chrome {
+ 			padding: 12px 16px;
+ 		}
+-		.device-workspace {
++		.app-workspace {
+ 			padding: 24px 16px 48px;
+ 		}
+ 	}
+diff --git a/frontend/src/routes/devices/[name]/+page.svelte b/frontend/src/routes/devices/[name]/+page.svelte
+index 5d2c399..696c001 100644
+--- a/frontend/src/routes/devices/[name]/+page.svelte
++++ b/frontend/src/routes/devices/[name]/+page.svelte
+@@ -4,7 +4,7 @@
+ 	import { page } from '$app/state';
+ 	import { goto } from '$app/navigation';
+ 	import { resolve } from '$app/paths';
+-	import { CircuitBoard, Search, ChevronRight, RefreshCw, Copy, Check } from '@lucide/svelte';
++	import { CircuitBoard, Search, ChevronRight, RefreshCw, Copy, Check, Plus } from '@lucide/svelte';
+ 	import {
+ 		GLOBAL_DEVICE_SEGMENT,
+ 		devicePath,
+@@ -24,6 +24,7 @@
+ 	import DevicePicker from '$lib/components/DevicePicker.svelte';
+ 	import DeviceFunctionDetail from '$lib/components/DeviceFunctionDetail.svelte';
+ 	import DefinitionDialog from '$lib/components/DefinitionDialog.svelte';
++	import FunctionDialog from '$lib/components/FunctionDialog.svelte';
+ 	import * as Tabs from '$lib/components/ui/tabs/index';
+ 	import Pagination from '$lib/components/ui/pagination.svelte';
+ 	import SortHead from '$lib/components/SortHead.svelte';
+@@ -84,6 +85,8 @@
+ 	let fnLoaded = $state(false);
+ 	let fnLoading = $state(false);
+ 	let fnError = $state('');
++	let fnRevision = 0;
++	let newFunctionOpen = $state(false);
+ 	let fnSearch = $state('');
+ 	const selectedFunction = $derived(
+ 		fnItems.find((fn) => fn.id === Number(page.url.searchParams.get('function'))) ??
+@@ -304,28 +307,54 @@
+ 	async function loadFunctions() {
+ 		const scope = device;
+ 		const revision = deviceRevision;
++		const attempt = ++fnRevision;
++		const current = () => revision === deviceRevision && attempt === fnRevision;
+ 		fnLoading = true;
+ 		fnError = '';
+ 		try {
+ 			const res = await listDeviceFunctions(scope, 1, 100);
+ 			const items = [...res.items];
+ 			for (let next = 2; items.length < res.total; next++) {
+-				if (revision !== deviceRevision) return;
++				if (!current()) return;
+ 				const more = await listDeviceFunctions(scope, next, 100);
+ 				if (!more.items.length) throw new Error('The function list changed. Please retry.');
+ 				items.push(...more.items);
+ 			}
+-			if (revision !== deviceRevision) return;
++			if (!current()) return;
+ 			fnItems = items;
+ 			fnTotal = res.total;
+ 			fnLoaded = true;
+ 		} catch (e) {
+-			if (revision !== deviceRevision) return;
++			if (!current()) return;
+ 			fnItems = [];
+ 			fnTotal = 0;
+ 			fnError = e instanceof Error ? e.message : String(e);
+ 		} finally {
+-			if (revision === deviceRevision) fnLoading = false;
++			if (current()) fnLoading = false;
++		}
++	}
++
++	async function refreshFunctions(deletedId?: number) {
++		const scope = device;
++		if (deletedId !== undefined) {
++			fnItems = fnItems.filter((row) => row.id !== deletedId);
++			if (Number(page.url.searchParams.get('function')) === deletedId) {
++				const query = new SvelteURLSearchParams(page.url.searchParams);
++				query.delete('function');
++				await goto(resolve(`/devices/[name]?${query.toString()}`, { name: devicePath(scope) }), {
++					keepFocus: true,
++					noScroll: true,
++					replaceState: true
++				});
++			}
++		}
++		await loadFunctions();
++		if (scope !== device) return;
++		fnPage = Math.min(fnPage, Math.max(1, Math.ceil(fnFiltered.length / fnPageSize)));
++		try {
++			summaries = (await listDevices()).items;
++		} catch (error) {
++			summaryError = error instanceof Error ? error.message : String(error);
+ 		}
+ 	}
+ 
+@@ -477,6 +506,12 @@
+ 	</Tabs.List>
+ 
+ 	<Tabs.Content value="functions">
++		<div class="catalog-actions">
++			<a href={resolve('/functions')}>All-Device discovery</a><Button
++				variant="outline"
++				onclick={() => (newFunctionOpen = true)}><Plus size={16} /> New function</Button
++			>
++		</div>
+ 		{#if fnError}
+ 			<div class="banner-error" role="alert">
+ 				{fnError}<Button size="sm" variant="outline" onclick={loadFunctions}
+@@ -537,6 +572,7 @@
+ 				{#if selectedFunction}{#key `${device}/${selectedFunction.id}`}<DeviceFunctionDetail
+ 							fn={selectedFunction}
+ 							{device}
++							onChanged={refreshFunctions}
+ 						/>{/key}{:else if !fnLoading && fnItems.length}<p class="banner-empty" role="status">
+ 						This function is not linked to this device. Select a function from the list.
+ 					</p>{/if}
+@@ -946,6 +982,14 @@
+ 	</Tabs.Content>
+ </Tabs.Root>
+ 
++{#if newFunctionOpen}<FunctionDialog
++		mode="create"
++		onClose={() => (newFunctionOpen = false)}
++		onSaved={async (row) => {
++			if (row) await goto(resolve('/functions/[id]', { id: String(row.id) }));
++		}}
++	/>{/if}
++
+ <DefinitionDialog
+ 	bind:open={defDialogOpen}
+ 	kind={DEF_KIND[defTab]}
+@@ -956,6 +1000,16 @@
+ />
+ 
+ <style>
++	.catalog-actions {
++		display: flex;
++		justify-content: flex-end;
++		align-items: center;
++		gap: 16px;
++		margin-bottom: 16px;
++	}
++	.catalog-actions a {
++		color: var(--primary);
++	}
+ 	.device-heading {
+ 		display: flex;
+ 		align-items: center;
+diff --git a/frontend/src/routes/functions/+page.svelte b/frontend/src/routes/functions/+page.svelte
+index 7667b8a..ae7dcfb 100644
+--- a/frontend/src/routes/functions/+page.svelte
++++ b/frontend/src/routes/functions/+page.svelte
+@@ -1,453 +1,456 @@
+ <script lang="ts">
++	import { onMount, onDestroy } from 'svelte';
++	import { page as routePage } from '$app/state';
++	import { goto, afterNavigate } from '$app/navigation';
++	import { resolve } from '$app/paths';
++	import { SvelteURLSearchParams } from 'svelte/reactivity';
++	import { Plus, RefreshCw } from '@lucide/svelte';
++	import { listDevices, listDeviceFunctions, devicePath, type DeviceSummary } from '$lib/devices';
++	import FunctionDetail from '$lib/components/FunctionDetail.svelte';
++	import FunctionDialog from '$lib/components/FunctionDialog.svelte';
+ 	import {
+ 		listFunctions,
+ 		getFunctionFacets,
+-		createFunction,
+-		updateFunction,
+-		deleteFunction,
+-		ApiError,
+ 		type FunctionRow,
+-		type FunctionInput,
+ 		type FunctionFacets,
+ 		type ListParams
+ 	} from '$lib/api';
+-	import Dialog from '$lib/components/ui/dialog.svelte';
+-	import AlertDialog from '$lib/components/ui/alert-dialog.svelte';
+ 	import Select from '$lib/components/ui/select.svelte';
+ 	import Button from '$lib/components/ui/button.svelte';
+ 	import Input from '$lib/components/ui/input.svelte';
+-	import Label from '$lib/components/ui/label.svelte';
+ 	import Badge from '$lib/components/ui/badge.svelte';
+ 	import Pagination from '$lib/components/ui/pagination.svelte';
+-	import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '$lib/components/ui/table';
+-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+-	import { Card, CardContent } from '$lib/components/ui/card';
+-	import SortHead from '$lib/components/SortHead.svelte';
+-	import { nextSort } from '$lib/table-sort';
+-	import { EllipsisVertical } from '@lucide/svelte';
+-	import { toast } from 'svelte-sonner';
++	import { sortRows } from '$lib/table-sort';
+ 
+-	// ---- list state -------------------------------------------------------
+-	let search = $state('');
+-	let searchDebounced = $state('');
+-	let source = $state('');
+-	let iface = $state('');
+-	let category = $state('');
+-	let executionRole = $state('');
+-	let executionPhase = $state('');
+-	let sort = $state('name');
+-	let order = $state<'asc' | 'desc'>('asc');
+-	let page = $state(1);
+-	let pageSize = $state(20);
+-
+-	// Enum filter values come from the database (ticket 09), so the bar
+-	// reflects what is actually in the dataset.
+-	let facets = $state<FunctionFacets | null>(null);
+-
+-	let items = $state<FunctionRow[]>([]);
+-	let total = $state(0);
+-	let loading = $state(false);
+-	let loadError = $state('');
+-
+-	// Debounce search-as-you-type; any new term resets to page 1.
+-	$effect(() => {
+-		const term = search;
+-		const t = setTimeout(() => {
+-			searchDebounced = term;
+-			page = 1;
+-		}, 250);
+-		return () => clearTimeout(t);
+-	});
+-
+-	// Reload whenever any list parameter changes.
+-	$effect(() => {
+-		load(currentParams());
+-	});
+-
+-	// Single source of truth for list request parameters, shared by the
+-	// reactive reload, the dialog save, and the delete flow.
+-	function currentParams(): ListParams {
++	let search = $derived(routePage.url.searchParams.get('search') ?? '');
++	const params = $derived.by((): ListParams => {
++		const query = routePage.url.searchParams;
+ 		return {
+-			search: searchDebounced || undefined,
+-			source: source || undefined,
+-			interface: iface || undefined,
+-			category: category || undefined,
+-			execution_role: executionRole || undefined,
+-			execution_phase: executionPhase || undefined,
+-			sort,
+-			order,
+-			page,
+-			page_size: pageSize
++			search: query.get('search') || undefined,
++			source: query.get('source') || undefined,
++			interface: query.get('interface') || undefined,
++			category: query.get('category') || undefined,
++			execution_role: query.get('execution_role') || undefined,
++			execution_phase: query.get('execution_phase') || undefined,
++			sort: ['name', 'interface', 'updated_at'].includes(query.get('sort') ?? '')
++				? query.get('sort')!
++				: 'name',
++			order: query.get('order') === 'desc' ? 'desc' : 'asc',
++			page: Math.max(1, Math.floor(Number(query.get('page')) || 1)),
++			page_size: [10, 20, 50].includes(Number(query.get('page_size')))
++				? Number(query.get('page_size'))
++				: 20
+ 		};
++	});
++	const deviceFilter = $derived(routePage.url.searchParams.get('device'));
++	let retry = $state(0);
++	const requestKey = $derived(JSON.stringify({ params, scope: deviceFilter, retry }));
++	let revision = 0;
++	let facets = $state<FunctionFacets | null>(null);
++	let devices = $state<DeviceSummary[]>([]);
++	let metadataError = $state('');
++	const content = $derived.by(() => {
++		const request: { params: ListParams; scope: string | null } = JSON.parse(requestKey);
++		return load(request.params, request.scope);
++	});
++	function setQuery(key: string, value: string, reset = true, replaceState = false) {
++		const query = new SvelteURLSearchParams(routePage.url.searchParams);
++		if (value) query.set(key, value);
++		else query.delete(key);
++		if (reset) {
++			query.delete('page');
++			query.delete('function');
++		}
++		return goto(resolve(`/functions?${query.toString()}`), {
++			keepFocus: true,
++			noScroll: true,
++			replaceState
++		});
+ 	}
+-
+-	// Changing any enum filter resets to page 1 (the reactive effect
+-	// reloads on the parameter change).
+-	function resetToFirstPage() {
+-		page = 1;
++	function selectFunction(id: number) {
++		void setQuery('function', String(id), false);
+ 	}
+-
+-	// Load the facet values once; empty error keeps the hardcoded
+-	// fallbacks out — the bar simply shows "All …" if the call fails.
+-	getFunctionFacets()
+-		.then((f) => (facets = f))
+-		.catch(() => {});
+-
+-	async function load(params: ListParams) {
+-		loading = true;
+-		loadError = '';
++	let searchTimer: ReturnType<typeof setTimeout> | undefined;
++	function scheduleSearch(term: string) {
++		clearTimeout(searchTimer);
++		searchTimer = setTimeout(() => {
++			if (term !== (routePage.url.searchParams.get('search') ?? '')) void setQuery('search', term);
++		}, 250);
++	}
++	afterNavigate(() => clearTimeout(searchTimer));
++	onDestroy(() => clearTimeout(searchTimer));
++	async function loadMetadata() {
++		metadataError = '';
+ 		try {
+-			const res = await listFunctions(params);
+-			items = res.items;
+-			total = res.total;
+-			// Clamp a stale page: deleting the last row of the final page
+-			// would otherwise leave an empty "page N of fewer" view.
+-			if (page > 1) {
+-				const pages = Math.max(1, Math.ceil(total / pageSize));
+-				if (page > pages) {
+-					page = pages;
+-					return; // the parameter change re-triggers the effect
+-				}
+-			}
+-		} catch (e) {
+-			items = [];
+-			total = 0;
+-			loadError = e instanceof Error ? e.message : String(e);
+-		} finally {
+-			loading = false;
++			const [values, result] = await Promise.all([getFunctionFacets(), listDevices()]);
++			facets = values;
++			devices = result.items;
++		} catch (error) {
++			metadataError = error instanceof Error ? error.message : String(error);
+ 		}
+ 	}
+-
+-	// ---- dialog state -----------------------------------------------------
+-	let dialogOpen = $state(false);
+-	let editingId = $state<number | null>(null);
+-	let form = $state<FunctionInput>(emptyForm());
+-	let fieldErrors = $state<Record<string, string>>({});
+-	let submitError = $state('');
+-	let saving = $state(false);
+-	let deleting = $state(false);
+-
+-	function emptyForm(): FunctionInput {
+-		return {
+-			source: 'DLL',
+-			interface: '',
+-			name: '',
+-			description: '',
+-			convention: null,
+-			category: '',
+-			execution_role: '',
+-			execution_phase: ''
+-		};
++	onMount(() => {
++		void loadMetadata();
++	});
++	async function load(query: ListParams, scope = deviceFilter) {
++		const attempt = ++revision;
++		let res;
++		if (scope === null) {
++			res = await listFunctions(query);
++		} else {
++			const device = scope === '_global' ? '' : scope;
++			const first = await listDeviceFunctions(device, 1, 100);
++			const rows = [...first.items];
++			for (let next = 2; rows.length < first.total; next++) {
++				if (attempt !== revision) return { items: [], total: 0 };
++				const more = await listDeviceFunctions(device, next, 100);
++				if (!more.items.length) throw new Error('The function list changed. Please retry.');
++				rows.push(...more.items);
++			}
++			const matches = rows.filter(
++				(row) =>
++					(!query.search ||
++						`${row.name} ${row.description ?? ''}`
++							.toLowerCase()
++							.includes(query.search.trim().toLowerCase())) &&
++					(!query.source || row.source === query.source) &&
++					(!query.interface || row.interface === query.interface) &&
++					(!query.category || row.category === query.category) &&
++					(!query.execution_role || row.execution_role === query.execution_role) &&
++					(!query.execution_phase || row.execution_phase === query.execution_phase)
++			);
++			const sorted = sortRows(
++				matches,
++				(row) =>
++					query.sort === 'interface'
++						? row.interface
++						: query.sort === 'updated_at'
++							? row.updated_at
++							: row.name,
++				query.order ?? 'asc'
++			);
++			const start = ((query.page ?? 1) - 1) * (query.page_size ?? 20);
++			res = {
++				total: matches.length,
++				items: sorted.slice(start, start + (query.page_size ?? 20)).map((row): FunctionRow => ({
++					...row,
++					description: row.description ?? '',
++					category: row.category ?? '',
++					execution_role: row.execution_role ?? '',
++					execution_phase: row.execution_phase ?? '',
++					created_at: ''
++				}))
++			};
++		}
++		if (attempt !== revision) return res;
++		const last = Math.max(1, Math.ceil(res.total / (query.page_size ?? 20)));
++		if ((query.page ?? 1) > last) {
++			await setQuery('page', String(last), false, true);
++			return res;
++		}
++		if (
++			routePage.url.searchParams.has('function') &&
++			!res.items.some((row) => row.id === Number(routePage.url.searchParams.get('function')))
++		)
++			await setQuery('function', res.items[0] ? String(res.items[0].id) : '', false, true);
++		return res;
+ 	}
+ 
++	let dialogMode = $state<'create' | 'edit' | 'delete' | null>(null);
++	let editingFunction = $state<FunctionRow | undefined>();
+ 	function openCreate() {
+-		editingId = null;
+-		form = emptyForm();
+-		fieldErrors = {};
+-		submitError = '';
+-		dialogOpen = true;
++		editingFunction = undefined;
++		dialogMode = 'create';
+ 	}
+-
+ 	function openEdit(row: FunctionRow) {
+-		editingId = row.id;
+-		form = {
+-			source: row.source,
+-			interface: row.interface,
+-			name: row.name,
+-			description: row.description,
+-			convention: row.convention,
+-			category: row.category,
+-			execution_role: row.execution_role,
+-			execution_phase: row.execution_phase
+-		};
+-		fieldErrors = {};
+-		submitError = '';
+-		dialogOpen = true;
+-	}
+-
+-	async function save() {
+-		saving = true;
+-		fieldErrors = {};
+-		submitError = '';
+-		try {
+-			if (editingId === null) {
+-				await createFunction(form);
+-			} else {
+-				await updateFunction(editingId, form);
+-			}
+-			dialogOpen = false;
+-			toast.success(editingId === null ? 'Function created' : 'Function updated');
+-			await load(currentParams());
+-		} catch (e) {
+-			if (e instanceof ApiError) {
+-				fieldErrors = e.fields;
+-				submitError = e.message;
+-			} else {
+-				submitError = e instanceof Error ? e.message : String(e);
+-			}
+-		} finally {
+-			saving = false;
+-		}
++		editingFunction = row;
++		dialogMode = 'edit';
+ 	}
+-
+-	// ---- delete confirm state ----------------------------------------------
+-	// The row awaiting confirmation; kept after the dialog closes so the
+-	// description stays stable until the next confirm opens.
+-	let confirmRow = $state<FunctionRow | null>(null);
+-	let confirmOpen = $state(false);
+-
+ 	function requestRemove(row: FunctionRow) {
+-		confirmRow = row;
+-		confirmOpen = true;
+-	}
+-
+-	async function confirmRemove() {
+-		if (!confirmRow) return;
+-		deleting = true;
+-		try {
+-			await deleteFunction(confirmRow.id);
+-			toast.success('Function deleted');
+-			await load(currentParams());
+-		} catch (e) {
+-			loadError = e instanceof Error ? e.message : String(e);
+-		} finally {
+-			deleting = false;
+-		}
+-	}
+-
+-	// Sort state flip through the shared transition (ticket 09): clicking
+-	// the active column flips direction, another column sorts ascending.
+-	// The state lives in sort/order, drives the server-side list params,
+-	// and is exposed through aria-sort by the shared SortHead headers.
+-	function toggleSort(col: string) {
+-		({ key: sort, dir: order } = nextSort(sort, order, col));
+-		page = 1;
++		editingFunction = row;
++		dialogMode = 'delete';
+ 	}
+ </script>
+ 
+ <h1 class="mt-2 mb-4 text-xl font-semibold">Functions</h1>
+ 
+-<Card class="mb-4 py-4">
+-	<CardContent class="flex flex-wrap items-center gap-2">
+-		<Input
+-			class="min-w-60"
+-			placeholder="Search name or description…"
+-			aria-label="Search functions"
+-			bind:value={search}
+-		/>
+-		<Select
+-			class="w-32"
+-			ariaLabel="Filter by source"
+-			placeholder="All sources"
+-			bind:value={source}
+-			options={[{ value: '', label: 'All sources' }, ...(facets?.sources ?? []).map((v) => ({ value: v, label: v }))]}
+-			onchange={resetToFirstPage}
+-		/>
+-		<Select
+-			class="w-36"
+-			ariaLabel="Filter by interface"
+-			placeholder="All interfaces"
+-			bind:value={iface}
+-			options={[{ value: '', label: 'All interfaces' }, ...(facets?.interfaces ?? []).map((v) => ({ value: v, label: v }))]}
+-			onchange={resetToFirstPage}
+-		/>
+-		<Select
+-			class="w-32"
+-			ariaLabel="Filter by category"
+-			placeholder="All categories"
+-			bind:value={category}
+-			options={[{ value: '', label: 'All categories' }, ...(facets?.categories ?? []).map((v) => ({ value: v, label: v }))]}
+-			onchange={resetToFirstPage}
+-		/>
+-		<Select
+-			class="w-32"
+-			ariaLabel="Filter by execution role"
+-			placeholder="All roles"
+-			bind:value={executionRole}
+-			options={[{ value: '', label: 'All roles' }, ...(facets?.execution_roles ?? []).map((v) => ({ value: v, label: v }))]}
+-			onchange={resetToFirstPage}
+-		/>
+-		<Select
+-			class="w-32"
+-			ariaLabel="Filter by execution phase"
+-			placeholder="All phases"
+-			bind:value={executionPhase}
+-			options={[{ value: '', label: 'All phases' }, ...(facets?.execution_phases ?? []).map((v) => ({ value: v, label: v }))]}
+-			onchange={resetToFirstPage}
+-		/>
+-		<span class="spacer"></span>
+-		<span class="muted">{loading ? 'Loading…' : `${total} functions`}</span>
+-		<Button onclick={openCreate}>New function</Button>
+-	</CardContent>
+-</Card>
+-
+-{#if loadError}
+-	<div class="banner-error" role="alert">{loadError}</div>
+-{/if}
+-
+-<Card>
+-	<CardContent class="p-0">
+-		<Table class="border-0">
+-			<TableHeader>
+-				<TableRow>
+-					<SortHead label="Name" col="name" active={sort} dir={order} onclick={() => toggleSort('name')} />
+-					<TableHead>Source</TableHead>
+-					<SortHead
+-						label="Interface"
+-						col="interface"
+-						active={sort}
+-						dir={order}
+-						onclick={() => toggleSort('interface')}
+-					/>
+-					<TableHead>Category</TableHead>
+-					<TableHead>Role</TableHead>
+-					<TableHead>Phase</TableHead>
+-					<SortHead
+-						label="Updated"
+-						col="updated_at"
+-						active={sort}
+-						dir={order}
+-						onclick={() => toggleSort('updated_at')}
+-					/>
+-					<TableHead></TableHead>
+-				</TableRow>
+-			</TableHeader>
+-			<TableBody>
+-				{#each items as row (row.id)}
+-					<TableRow>
+-						<TableCell>
+-							<a class="text-primary hover:underline" href="/functions/{row.id}" title={row.description}>
+-								{row.name}
+-							</a>
+-						</TableCell>
+-						<TableCell><Badge>{row.source}</Badge></TableCell>
+-						<TableCell>{row.interface}</TableCell>
+-						<TableCell>{row.category}</TableCell>
+-						<TableCell>{row.execution_role}</TableCell>
+-						<TableCell>{row.execution_phase}</TableCell>
+-						<TableCell class="text-xs text-muted-foreground">{row.updated_at.slice(0, 10)}</TableCell>
+-						<TableCell class="text-right">
+-							<DropdownMenu.Root>
+-								<DropdownMenu.Trigger>
+-									{#snippet child({ props })}
+-										<Button
+-											{...props}
+-											variant="ghost"
+-											size="icon"
+-											aria-label={`Actions for ${row.name}`}
+-										>
+-											<EllipsisVertical class="size-4" />
+-										</Button>
+-									{/snippet}
+-								</DropdownMenu.Trigger>
+-								<DropdownMenu.Content align="end" class="w-36">
+-									<DropdownMenu.Item onclick={() => openEdit(row)}>Edit</DropdownMenu.Item>
+-									<DropdownMenu.Separator />
+-									<DropdownMenu.Item
+-										variant="destructive"
+-										disabled={deleting}
+-										onclick={() => requestRemove(row)}
+-									>
+-										Delete
+-									</DropdownMenu.Item>
+-								</DropdownMenu.Content>
+-							</DropdownMenu.Root>
+-						</TableCell>
+-					</TableRow>
+-				{:else}
+-					<TableRow>
+-						<TableCell colspan={8} class="banner-empty text-center" aria-live="polite">
+-							{loading ? 'Loading…' : 'No functions match. Adjust the search or create one.'}
+-						</TableCell>
+-					</TableRow>
+-				{/each}
+-			</TableBody>
+-	</Table>
+-		<Pagination bind:page {total} bind:pageSize class="mt-0 border-t px-4 pb-3 pt-2" />
+-	</CardContent>
+-</Card>
+-
+-<Dialog
+-	open={dialogOpen}
+-	onOpenChange={(o) => (dialogOpen = o)}
+-	title={editingId === null ? 'New function' : `Edit function #${editingId}`}
+->
+-	{#if submitError}
+-		<div class="banner-error">{submitError}</div>
+-	{/if}
+-	<form
+-		onsubmit={(e) => {
+-			e.preventDefault();
+-			save();
++<div class="filters" role="region" aria-label="Function filters">
++	<Input
++		class="search-input"
++		placeholder="Search name or description…"
++		aria-label="Search functions"
++		bind:value={search}
++		oninput={(event) => scheduleSearch(event.currentTarget.value)}
++	/>
++	<Select
++		class="w-32"
++		ariaLabel="Filter by source"
++		placeholder="All sources"
++		value={params.source ?? ''}
++		options={[
++			{ value: '', label: 'All sources' },
++			...(facets?.sources ?? []).map((v) => ({ value: v, label: v }))
++		]}
++		onchange={(value) => {
++			void setQuery('source', value);
++		}}
++	/>
++	<Select
++		class="w-36"
++		ariaLabel="Filter by interface"
++		placeholder="All interfaces"
++		value={params.interface ?? ''}
++		options={[
++			{ value: '', label: 'All interfaces' },
++			...(facets?.interfaces ?? []).map((v) => ({ value: v, label: v }))
++		]}
++		onchange={(value) => {
++			void setQuery('interface', value);
++		}}
++	/>
++	<Select
++		class="w-32"
++		ariaLabel="Filter by category"
++		placeholder="All categories"
++		value={params.category ?? ''}
++		options={[
++			{ value: '', label: 'All categories' },
++			...(facets?.categories ?? []).map((v) => ({ value: v, label: v }))
++		]}
++		onchange={(value) => {
++			void setQuery('category', value);
++		}}
++	/>
++	<Select
++		class="w-32"
++		ariaLabel="Filter by execution role"
++		placeholder="All roles"
++		value={params.execution_role ?? ''}
++		options={[
++			{ value: '', label: 'All roles' },
++			...(facets?.execution_roles ?? []).map((v) => ({ value: v, label: v }))
++		]}
++		onchange={(value) => {
++			void setQuery('execution_role', value);
++		}}
++	/>
++	<Select
++		class="w-32"
++		ariaLabel="Filter by execution phase"
++		placeholder="All phases"
++		value={params.execution_phase ?? ''}
++		options={[
++			{ value: '', label: 'All phases' },
++			...(facets?.execution_phases ?? []).map((v) => ({ value: v, label: v }))
++		]}
++		onchange={(value) => {
++			void setQuery('execution_phase', value);
++		}}
++	/>
++	<Select
++		class="w-48"
++		ariaLabel="Filter by Device"
++		placeholder="All Devices"
++		value={deviceFilter ?? ''}
++		options={[
++			{ value: '', label: 'All Devices' },
++			{ value: '_global', label: 'Global definitions' },
++			...devices
++				.filter((row) => row.device_name !== '')
++				.map((row) => ({ value: row.device_name, label: row.device_name })),
++			...(deviceFilter &&
++			deviceFilter !== '_global' &&
++			!devices.some((row) => row.device_name === deviceFilter)
++				? [{ value: deviceFilter, label: deviceFilter }]
++				: [])
++		]}
++		onchange={(value) => {
++			void setQuery('device', value);
+ 		}}
++	/>
++	<Select
++		class="w-36"
++		ariaLabel="Sort functions"
++		value={params.sort ?? 'name'}
++		options={[
++			{ value: 'name', label: 'Name' },
++			{ value: 'interface', label: 'Interface' },
++			{ value: 'updated_at', label: 'Updated' }
++		]}
++		onchange={(value) => {
++			void setQuery('sort', value);
++		}}
++	/>
++	<Select
++		class="w-36"
++		ariaLabel="Sort direction"
++		value={params.order ?? 'asc'}
++		options={[
++			{ value: 'asc', label: 'Ascending' },
++			{ value: 'desc', label: 'Descending' }
++		]}
++		onchange={(value) => {
++			void setQuery('order', value);
++		}}
++	/>
++</div>
++<div class="catalog-toolbar">
++	<span role="status" class="muted"
++		>{#await content}Loading functions...{:then result}{result.total} functions{:catch}0 functions{/await}</span
+ 	>
+-		<div class="field">
+-			<Label for="f-source">Source</Label>
+-			<Select
+-				id="f-source"
+-				ariaLabel="Source"
+-				bind:value={form.source}
+-				options={[
+-					{ value: 'BUILT-IN', label: 'BUILT-IN' },
+-					{ value: 'DLL', label: 'DLL' }
+-				]}
+-			/>
+-			{#if fieldErrors.source}<span class="field-error">{fieldErrors.source}</span>{/if}
+-		</div>
+-		<div class="field">
+-			<Label for="f-interface">Interface</Label>
+-			<Input id="f-interface" bind:value={form.interface} />
+-			{#if fieldErrors.interface}<span class="field-error">{fieldErrors.interface}</span>{/if}
+-		</div>
+-		<div class="field">
+-			<Label for="f-name">Name</Label>
+-			<Input id="f-name" bind:value={form.name} />
+-			{#if fieldErrors.name}<span class="field-error">{fieldErrors.name}</span>{/if}
+-		</div>
+-		<div class="field">
+-			<Label for="f-description">Description</Label>
+-			<Input id="f-description" bind:value={form.description} />
+-		</div>
+-		<div class="field">
+-			<Label for="f-convention">Convention</Label>
+-			<Input
+-				id="f-convention"
+-				type="number"
+-				value={form.convention ?? ''}
+-				oninput={(e) => {
+-					const v = e.currentTarget.value;
+-					form.convention = v === '' ? null : Number(v);
++	{#if deviceFilter !== null}<a
++			href={resolve('/devices/[name]?tab=functions', {
++				name: devicePath(deviceFilter === '_global' ? '' : deviceFilter)
++			})}>Open Device workspace</a
++		>{:else}<span class="muted">All-Device discovery</span>{/if}
++	<span class="spacer"></span><Button onclick={openCreate}><Plus size={16} /> New function</Button>
++</div>
++{#if metadataError}<div class="banner-error" role="alert">
++		{metadataError}<Button
++			variant="outline"
++			onclick={() => {
++				void loadMetadata();
++			}}><RefreshCw size={16} /> Retry filters</Button
++		>
++	</div>{/if}
++
++{#await content}<p class="banner-empty" role="status">Loading function details...</p>
++{:then result}
++	{@const selectedFunction =
++		result.items.find((row) => row.id === Number(routePage.url.searchParams.get('function'))) ??
++		result.items[0]}
++	<div class="functions-workspace">
++		<aside class="function-list" aria-label="Functions list">
++			{#each result.items as row (row.id)}
++				<button
++					class:chosen={selectedFunction?.id === row.id}
++					aria-pressed={selectedFunction?.id === row.id}
++					aria-label={`Select ${row.name}`}
++					onclick={() => selectFunction(row.id)}
++				>
++					<strong>{row.name}</strong><span><Badge>{row.source}</Badge> {row.interface}</span>
++					{#if row.description}<small>{row.description}</small>{/if}
++				</button>
++			{:else}<p role="status" class="banner-empty">
++					No functions match. Adjust the search or create one.
++				</p>{/each}
++			<Pagination
++				page={params.page}
++				total={result.total}
++				pageSize={params.page_size}
++				onPageChange={(value) => {
++					void setQuery('page', String(value), false);
++				}}
++				onPageSizeChange={(value) => {
++					void setQuery('page_size', String(value));
+ 				}}
+ 			/>
++		</aside>
++		<div class="detail-pane">
++			{#if selectedFunction}{#key selectedFunction}<FunctionDetail
++						fn={selectedFunction}
++						onEdit={openEdit}
++						onDelete={requestRemove}
++					/>{/key}
++			{:else}<p role="status" class="banner-empty">No Function selected.</p>{/if}
+ 		</div>
+-		<div class="field">
+-			<Label for="f-category">Category</Label>
+-			<Input id="f-category" bind:value={form.category} />
+-		</div>
+-		<div class="field">
+-			<Label for="f-role">Execution role</Label>
+-			<Input id="f-role" bind:value={form.execution_role} />
+-		</div>
+-		<div class="field">
+-			<Label for="f-phase">Execution phase</Label>
+-			<Input id="f-phase" bind:value={form.execution_phase} />
+-		</div>
+-		<div class="mt-4 flex justify-end gap-2">
+-			<Button variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>
+-			<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+-		</div>
+-	</form>
+-</Dialog>
++	</div>
++{:catch error}<div class="banner-error" role="alert">
++		{error instanceof Error ? error.message : String(error)}<Button
++			variant="outline"
++			onclick={() => retry++}><RefreshCw size={16} /> Retry functions</Button
++		>
++	</div>
++{/await}
++
++{#if dialogMode}<FunctionDialog
++		mode={dialogMode}
++		fn={editingFunction}
++		defaults={{
++			source: params.source ?? 'DLL',
++			interface: params.interface ?? '',
++			category: params.category ?? '',
++			execution_role: params.execution_role ?? '',
++			execution_phase: params.execution_phase ?? ''
++		}}
++		onClose={() => (dialogMode = null)}
++		onSaved={async (row) => {
++			await setQuery('function', row ? String(row.id) : '', false);
++			retry++;
++		}}
++	/>{/if}
+ 
+-<AlertDialog
+-	open={confirmOpen}
+-	onOpenChange={(o) => (confirmOpen = o)}
+-	title="Delete function"
+-	description={
+-		confirmRow
+-			? `Delete function ${confirmRow.source}/${confirmRow.interface}/${confirmRow.name}? Links and examples referencing it become unresolved. This cannot be undone.`
+-			: ''
++<style>
++	.filters,
++	.catalog-toolbar {
++		display: flex;
++		flex-wrap: wrap;
++		align-items: center;
++		gap: 8px;
++		margin-bottom: 16px;
++	}
++	.filters :global(.search-input) {
++		flex: 1 1 220px;
++		min-width: 0;
++	}
++	.catalog-toolbar a {
++		color: var(--primary);
++	}
++	.functions-workspace {
++		display: grid;
++		grid-template-columns: 300px minmax(0, 1fr);
++		border-top: 1px solid var(--border);
++	}
++	.function-list {
++		min-width: 0;
++		border-right: 1px solid var(--border);
++		padding: 16px 16px 16px 0;
++	}
++	.function-list > button {
++		display: flex;
++		flex-direction: column;
++		gap: 8px;
++		width: 100%;
++		min-width: 0;
++		text-align: left;
++		padding: 14px 12px;
++		border-left: 3px solid transparent;
++		border-bottom: 1px solid var(--border);
++	}
++	.function-list strong {
++		font-family: var(--mono);
++		font-size: 14px;
++		overflow-wrap: anywhere;
++	}
++	.function-list span,
++	small {
++		font-size: 12px;
++		color: var(--muted-foreground);
++		overflow-wrap: anywhere;
++	}
++	.function-list button:hover,
++	.function-list button.chosen {
++		background: var(--device-soft);
++	}
++	.function-list button.chosen {
++		border-left-color: var(--device-accent);
++	}
++	.function-list button:focus-visible {
++		outline: 2px solid var(--ring);
++		outline-offset: -2px;
++	}
++	.detail-pane {
++		min-width: 0;
++	}
++	@media (max-width: 850px) {
++		.functions-workspace {
++			grid-template-columns: minmax(0, 1fr);
++		}
++		.function-list {
++			border-right: 0;
++			padding-right: 0;
++			max-height: 360px;
++			overflow-y: auto;
++		}
+ 	}
+-	confirmLabel="Delete"
+-	onConfirm={confirmRemove}
+-/>
++</style>
+diff --git a/frontend/src/routes/functions/[id]/+page.svelte b/frontend/src/routes/functions/[id]/+page.svelte
+index d9a6bc7..f2e5001 100644
+--- a/frontend/src/routes/functions/[id]/+page.svelte
++++ b/frontend/src/routes/functions/[id]/+page.svelte
+@@ -1,109 +1,55 @@
+ <script lang="ts">
+ 	import { page } from '$app/state';
+-	import { getFunction, ApiError, type FunctionRow } from '$lib/api';
+-	import LinksPanel from '$lib/components/LinksPanel.svelte';
+-	import ExamplesPanel from '$lib/components/ExamplesPanel.svelte';
+-	import ComposeDialog from '$lib/components/ComposeDialog.svelte';
++	import { goto } from '$app/navigation';
++	import { resolve } from '$app/paths';
++	import { getFunction, ApiError } from '$lib/api';
++	import FunctionDetail from '$lib/components/FunctionDetail.svelte';
++	import FunctionDialog from '$lib/components/FunctionDialog.svelte';
+ 	import Button from '$lib/components/ui/button.svelte';
+-	import Badge from '$lib/components/ui/badge.svelte';
+ 	import Breadcrumb from '$lib/components/ui/breadcrumb.svelte';
+-	import Card from '$lib/components/ui/card/card.svelte';
+-	import CardContent from '$lib/components/ui/card/card-content.svelte';
+-	import * as Tabs from '$lib/components/ui/tabs/index';
++	import { RefreshCw } from '@lucide/svelte';
++	const fnId = $derived(Number(page.params.id));
+ 
+-	// Function detail page (ticket 04 + 06): the function's definition on
+-	// top; its Parameter links, Criteria links and Examples as tabs below.
+-	let fnId = $derived(Number(page.params.id));
+-
+-	let fn = $state<FunctionRow | null>(null);
+-	let loading = $state(true);
+-	let loadError = $state('');
+-
+-	let tab = $state<'parameters' | 'criteria' | 'examples'>('parameters');
+-
+-	// Script composer dialog (ticket 07).
+-	let composeOpen = $state(false);
+-
+-	$effect(() => {
+-		// fnId is read synchronously so the effect re-runs when the route
+-		// param changes under a reused component instance.
+-		const id = fnId;
+-		load(id);
++	let retry = $state(0);
++	const content = $derived.by(() => {
++		void retry;
++		return getFunction(fnId);
++	});
++	let dialogMode: 'edit' | 'delete' | null = $derived.by(() => {
++		void fnId;
++		return null;
+ 	});
+-
+-	async function load(id: number) {
+-		loading = true;
+-		loadError = '';
+-		fn = null;
+-		try {
+-			fn = await getFunction(id);
+-		} catch (e) {
+-			loadError =
+-				e instanceof ApiError && e.status === 404
+-					? 'This function does not exist.'
+-					: e instanceof Error
+-						? e.message
+-						: String(e);
+-		} finally {
+-			loading = false;
+-		}
+-	}
+ </script>
+ 
+-{#if loading}
+-	<p class="muted">Loading…</p>
+-{:else if loadError || !fn}
+-	<div class="banner-error">{loadError || 'Unknown error.'}</div>
+-	<a href="/functions">Back to functions</a>
+-{:else}
+-	<Breadcrumb
+-		items={[{ label: 'Functions', href: '/functions' }, { label: fn.name }]}
+-	/>
+-
+-	<!-- Card(1): the function's definition header. -->
+-	<Card class="mt-2">
+-		<CardContent>
+-			<h1 class="flex items-center gap-2 text-xl font-semibold">
+-				{fn.name}
+-				<Badge>{fn.source}</Badge>
+-				<Badge>{fn.interface}</Badge>
+-			</h1>
+-			{#if fn.description}<p class="mt-1 text-sm">{fn.description}</p>{/if}
+-			<dl class="mt-3 flex flex-wrap gap-6">
+-				<div><dt class="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">Category</dt><dd class="text-sm">{fn.category || '—'}</dd></div>
+-				<div><dt class="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">Execution role</dt><dd class="text-sm">{fn.execution_role || '—'}</dd></div>
+-				<div><dt class="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">Execution phase</dt><dd class="text-sm">{fn.execution_phase || '—'}</dd></div>
+-				<div><dt class="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">Convention</dt><dd class="text-sm">{fn.convention ?? '—'}</dd></div>
+-				<div><dt class="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">Updated</dt><dd class="text-sm text-muted-foreground">{fn.updated_at.slice(0, 10)}</dd></div>
+-			</dl>
+-			<Button class="mt-4" onclick={() => (composeOpen = true)}>Compose script</Button>
+-		</CardContent>
+-	</Card>
+-
+-	{#if composeOpen}
+-		<ComposeDialog fnId={fn.id} onClose={() => (composeOpen = false)} />
+-	{/if}
+-
+-	<!-- Card(2): the section tabs; panels mount flush (p-0 content) and
+-	     bring their own toolbar/table so the card frames them. -->
+-	<Card class="mt-4">
+-		<CardContent class="p-0">
+-			<Tabs.Root bind:value={tab}>
+-				<Tabs.List class="px-4" aria-label="Function sections">
+-					<Tabs.Trigger value="parameters">Parameters</Tabs.Trigger>
+-					<Tabs.Trigger value="criteria">Criteria</Tabs.Trigger>
+-					<Tabs.Trigger value="examples">Examples</Tabs.Trigger>
+-				</Tabs.List>
+-				<Tabs.Content value="parameters">
+-					<LinksPanel fnId={fn.id} kind="parameter-links" defKind="parameter-definitions" noun="parameter" />
+-				</Tabs.Content>
+-				<Tabs.Content value="criteria">
+-					<LinksPanel fnId={fn.id} kind="criteria-links" defKind="criteria-definitions" noun="criteria" />
+-				</Tabs.Content>
+-				<Tabs.Content value="examples">
+-					<ExamplesPanel fixed={{ source: fn.source, name: fn.name }} />
+-				</Tabs.Content>
+-			</Tabs.Root>
+-		</CardContent>
+-	</Card>
+-{/if}
++{#await content}
++	<p class="muted" role="status">Loading function...</p>
++{:then fn}
++	<Breadcrumb items={[{ label: 'Functions', href: resolve('/functions') }, { label: fn.name }]} />
++	{#key fn}<FunctionDetail
++			{fn}
++			standalone={true}
++			onEdit={() => (dialogMode = 'edit')}
++			onDelete={() => (dialogMode = 'delete')}
++		/>{/key}
++	{#if dialogMode}<FunctionDialog
++			mode={dialogMode}
++			{fn}
++			onClose={() => (dialogMode = null)}
++			onSaved={async (row) => {
++				dialogMode = null;
++				if (row) retry++;
++				else await goto(resolve('/functions'));
++			}}
++		/>{/if}
++{:catch error}
++	<div class="banner-error" role="alert">
++		{error instanceof ApiError && error.status === 404
++			? 'This function does not exist.'
++			: error instanceof Error
++				? error.message
++				: String(error)}<Button variant="outline" onclick={() => retry++}
++			><RefreshCw size={16} /> Retry function</Button
++		>
++	</div>
++	<a href={resolve('/functions')}>Back to functions</a>
++{/await}
+diff --git a/frontend/tests/e2e/polish.spec.ts b/frontend/tests/e2e/polish.spec.ts
+index 6f75b49..6f796d1 100644
+--- a/frontend/tests/e2e/polish.spec.ts
++++ b/frontend/tests/e2e/polish.spec.ts
+@@ -183,6 +183,120 @@ async function mockDeviceHub(page: Page, functionName = 'TX_MULTI_VERIFICATION')
+ 	});
+ }
+ 
++async function mockFunctionCatalog(page: Page) {
++	await mockDeviceHub(page);
++	const functions = [
++		{
++			id: 1,
++			name: 'TX_MULTI_VERIFICATION',
++			source: 'DLL',
++			interface: 'WIFI_TEST',
++			description: 'Verify transmit power.',
++			category: 'Transmit',
++			convention: 1,
++			execution_role: 'TEST',
++			execution_phase: 'RUN',
++			created_at: '2026-10-06',
++			updated_at: '2026-10-06'
++		},
++		{
++			id: 2,
++			name: 'RX_PER',
++			source: 'BUILT-IN',
++			interface: 'GPIB',
++			description: 'Verify packet error rate.',
++			category: 'Receive',
++			convention: null,
++			execution_role: 'CHECK',
++			execution_phase: 'VERIFY',
++			created_at: '2026-10-06',
++			updated_at: '2026-10-06'
++		}
++	];
++	const requests: URLSearchParams[] = [];
++	const mutations: { method: string; path: string; body: Record<string, unknown> | null }[] = [];
++	await page.route('**/api/functions/facets', (route) =>
++		route.fulfill({
++			json: {
++				sources: ['DLL', 'BUILT-IN'],
++				interfaces: ['WIFI_TEST', 'GPIB'],
++				categories: ['Transmit', 'Receive'],
++				execution_roles: ['TEST', 'CHECK'],
++				execution_phases: ['RUN', 'VERIFY']
++			}
++		})
++	);
++	await page.route(/\/api\/functions(?:\?.*)?$/, (route) => {
++		if (route.request().method() === 'POST') {
++			const body = route.request().postDataJSON();
++			if (!body.name)
++				return route.fulfill({
++					status: 422,
++					json: { error: 'Invalid function', fields: { name: 'Name is required.' } }
++				});
++			mutations.push({ method: 'POST', path: '/api/functions', body });
++			const row = {
++				...functions[0],
++				...body,
++				id: Math.max(...functions.map((fn) => fn.id), 2) + 1
++			};
++			functions.push(row);
++			return route.fulfill({ status: 201, json: row });
++		}
++		const query = new URL(route.request().url()).searchParams;
++		requests.push(query);
++		const matches = functions.filter(
++			(fn) =>
++				(!query.get('search') ||
++					`${fn.name} ${fn.description}`
++						.toLowerCase()
++						.includes(query.get('search')!.toLowerCase())) &&
++				['source', 'interface', 'category', 'execution_role', 'execution_phase'].every(
++					(key) => !query.get(key) || fn[key as keyof typeof fn] === query.get(key)
++				)
++		);
++		const number = Number(query.get('page') ?? 1);
++		const size = Number(query.get('page_size') ?? 20);
++		return route.fulfill({
++			json: {
++				items: matches.slice((number - 1) * size, number * size),
++				total: matches.length,
++				page: number,
++				page_size: size
++			}
++		});
++	});
++	await page.route(/\/api\/functions\/\d+$/, (route) => {
++		const path = new URL(route.request().url()).pathname;
++		const id = Number(path.split('/').pop());
++		const index = functions.findIndex((fn) => fn.id === id);
++		if (index < 0) return route.fulfill({ status: 404, json: { error: 'Function not found' } });
++		const method = route.request().method();
++		if (method === 'DELETE') {
++			mutations.push({ method, path, body: null });
++			functions.splice(index, 1);
++			return route.fulfill({ status: 204 });
++		}
++		if (method === 'PUT') {
++			const body = route.request().postDataJSON();
++			mutations.push({ method, path, body });
++			Object.assign(functions[index], body);
++		}
++		return route.fulfill({ json: functions[index] });
++	});
++	await page.route(/\/api\/devices\/(?:WIFI_TEST|GOLDENKV)\/functions\?/, (route) =>
++		route.fulfill({
++			json: {
++				items: functions.filter((fn) => fn.id <= 2),
++				total: functions.filter((fn) => fn.id <= 2).length,
++				page: 1,
++				page_size: 100
++			}
++		})
++	);
++	return { functions, requests, mutations };
++}
++
+ async function switchDevice(page: Page, device: string) {
+ 	await page.getByRole('button', { name: /^Device: / }).click();
+ 	const popup = page.getByRole('dialog', { name: 'Choose Device', exact: true });
+@@ -196,6 +310,400 @@ test.beforeEach(async ({ page }) => {
+ 	});
+ });
+ 
++test('Functions catalog selects shared details beside the list and retains URLs', async ({
++	page
++}) => {
++	await mockFunctionCatalog(page);
++	await page.setViewportSize({ width: 1440, height: 900 });
++	await page.goto('/functions?function=1');
++	const list = page.getByRole('complementary', { name: 'Functions list', exact: true });
++	const details = page.getByRole('region', { name: 'Function details', exact: true });
++	await expect(list).toBeVisible();
++	await expect(
++		details.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toBeVisible();
++	await expect(details.getByText('Shared across Devices', { exact: true })).toBeVisible();
++	await expect(details.getByRole('button', { name: 'Edit function', exact: true })).toBeVisible();
++	await expect(details.getByRole('button', { name: 'Compose script', exact: true })).toBeVisible();
++	const listBounds = await list.boundingBox();
++	const detailBounds = await details.boundingBox();
++	expect(detailBounds!.x).toBeGreaterThanOrEqual(listBounds!.x + listBounds!.width);
++	await list.getByRole('button', { name: 'Select RX_PER', exact: true }).click();
++	await expect(page).toHaveURL(/function=2/);
++	await expect(details.getByRole('heading', { name: 'RX_PER', exact: true })).toBeVisible();
++	await page.goBack();
++	await expect(
++		details.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toBeVisible();
++	await page.goto('/functions/1');
++	await expect(page.getByRole('heading', { name: /^TX_MULTI_VERIFICATION/ })).toBeVisible();
++	await expect(page.getByRole('button', { name: 'Compose script', exact: true })).toBeVisible();
++});
++
++test('Functions filters use server parameters and restore history', async ({ page }) => {
++	const { requests } = await mockFunctionCatalog(page);
++	await page.goto(
++		'/functions?search=transmit&source=DLL&interface=WIFI_TEST&category=Transmit&execution_role=TEST&execution_phase=RUN&function=1'
++	);
++	await expect(
++		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toBeVisible();
++	await expect
++		.poll(() => Object.fromEntries(requests.at(-1) ?? []))
++		.toMatchObject({
++			search: 'transmit',
++			source: 'DLL',
++			interface: 'WIFI_TEST',
++			category: 'Transmit',
++			execution_role: 'TEST',
++			execution_phase: 'RUN',
++			page: '1',
++			page_size: '20',
++			sort: 'name',
++			order: 'asc'
++		});
++	await page.getByRole('textbox', { name: 'Search functions', exact: true }).fill('unmatched');
++	await expect(page).toHaveURL(/search=unmatched/);
++	await expect(page.getByText('0 functions', { exact: true })).toBeVisible();
++	await page.goBack();
++	await expect(page.getByRole('textbox', { name: 'Search functions', exact: true })).toHaveValue(
++		'transmit'
++	);
++	await expect(
++		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toBeVisible();
++});
++
++test('Functions Device discovery filters complete pages and separates Global', async ({ page }) => {
++	const { functions } = await mockFunctionCatalog(page);
++	const rows = Array.from({ length: 100 }, (_, index) => ({
++		...functions[0],
++		id: index + 10,
++		name: `EARLY_${index}`
++	}));
++	const pages: number[] = [];
++	await page.route('**/api/devices/WIFI_TEST/functions?*', (route) => {
++		const number = Number(new URL(route.request().url()).searchParams.get('page'));
++		pages.push(number);
++		return route.fulfill({
++			json: {
++				items: number === 1 ? rows : [functions[1]],
++				total: 101,
++				page: number,
++				page_size: 100
++			}
++		});
++	});
++	await page.goto('/functions?device=WIFI_TEST&search=packet&category=Receive&function=2');
++	await expect(page.getByText('1 functions', { exact: true })).toBeVisible();
++	await expect(page.getByRole('heading', { name: 'RX_PER', exact: true })).toBeVisible();
++	expect(pages).toEqual([1, 2]);
++	await expect(
++		page.getByRole('link', { name: 'Open Device workspace', exact: true })
++	).toHaveAttribute('href', '/devices/WIFI_TEST?tab=functions');
++	await page.getByRole('button', { name: 'Filter by Device', exact: true }).click();
++	await page.getByRole('option', { name: 'Global definitions', exact: true }).click();
++	await expect(page).toHaveURL(/device=_global/);
++	await expect(
++		page.getByRole('link', { name: 'Open Device workspace', exact: true })
++	).toHaveAttribute('href', '/devices/_global?tab=functions');
++});
++
++test('Functions shared CRUD preserves context validation cancellation and confirmed deletion', async ({
++	page
++}) => {
++	const { mutations } = await mockFunctionCatalog(page);
++	await page.goto('/functions?source=DLL&function=1');
++	await page.getByRole('button', { name: 'New function', exact: true }).click();
++	let dialog = page.getByRole('dialog', { name: 'New function', exact: true });
++	await expect(dialog.getByText('Shared across Devices', { exact: true })).toBeVisible();
++	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++	await expect(dialog.getByText('Name is required.', { exact: true })).toBeVisible();
++	await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('NEW_SHARED_FN');
++	await dialog.getByRole('textbox', { name: 'Interface', exact: true }).fill('WIFI_TEST');
++	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++	await expect(dialog).toHaveCount(0);
++	await expect(page).toHaveURL(/source=DLL/);
++	await expect(
++		page.getByRole('button', { name: 'Select NEW_SHARED_FN', exact: true })
++	).toBeVisible();
++	await page.getByRole('button', { name: 'Select TX_MULTI_VERIFICATION', exact: true }).click();
++	await page.getByRole('button', { name: 'Edit function', exact: true }).click();
++	dialog = page.getByRole('dialog', { name: 'Edit function #1', exact: true });
++	await dialog.getByRole('textbox', { name: 'Description', exact: true }).fill('Cancelled edit');
++	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
++	expect(mutations.filter((call) => call.method === 'PUT')).toHaveLength(0);
++	await page.getByRole('button', { name: 'Edit function', exact: true }).click();
++	await dialog
++		.getByRole('textbox', { name: 'Description', exact: true })
++		.fill('Shared updated description');
++	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++	await expect(
++		page
++			.getByRole('region', { name: 'Function details', exact: true })
++			.getByText('Shared updated description', { exact: true })
++	).toBeVisible();
++	expect(mutations.find((call) => call.method === 'PUT')?.path).toBe('/api/functions/1');
++	await page.getByRole('button', { name: 'Delete function', exact: true }).click();
++	const confirmation = page.getByRole('alertdialog', { name: 'Delete function', exact: true });
++	await expect(confirmation).toContainText('Shared across Devices');
++	await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
++	expect(mutations.filter((call) => call.method === 'DELETE')).toHaveLength(0);
++	await page.getByRole('button', { name: 'Delete function', exact: true }).click();
++	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
++	await expect(
++		page.getByRole('button', { name: 'Select TX_MULTI_VERIFICATION', exact: true })
++	).toHaveCount(0);
++	await expect(page.getByRole('heading', { name: 'NEW_SHARED_FN', exact: true })).toBeVisible();
++	await expect(page).not.toHaveURL(/function=1(?:&|$)/);
++	expect(mutations.find((call) => call.method === 'DELETE')?.path).toBe('/api/functions/1');
++});
++
++test('Device Function actions edit shared identity and retain Composer and link management', async ({
++	page
++}) => {
++	const { mutations } = await mockFunctionCatalog(page);
++	await page.route('**/api/functions/1/compose', (route) =>
++		route.fulfill({ json: { script: 'SERVER_EMITTED_SCRIPT' } })
++	);
++	await page.goto('/devices/WIFI_TEST?tab=functions&function=1');
++	const details = page.getByRole('region', { name: 'Function details', exact: true });
++	await expect(details.getByText('Shared across Devices', { exact: true })).toBeVisible();
++	await details.getByRole('button', { name: 'Edit function', exact: true }).click();
++	const dialog = page.getByRole('dialog', { name: 'Edit function #1', exact: true });
++	await dialog
++		.getByRole('textbox', { name: 'Description', exact: true })
++		.fill('Updated shared Function');
++	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
++	await expect(details.getByText('Updated shared Function', { exact: true })).toBeVisible();
++	await expect(page).toHaveURL(/WIFI_TEST\?tab=functions&function=1$/);
++	expect(mutations.at(-1)?.path).toBe('/api/functions/1');
++	expect(mutations.at(-1)?.body).not.toHaveProperty('device_name');
++	await page.goto('/devices/GOLDENKV?tab=functions&function=1');
++	await expect(details.getByText('Updated shared Function', { exact: true })).toBeVisible();
++	await details.getByRole('button', { name: 'Compose script', exact: true }).click();
++	await expect(page.getByText('SERVER_EMITTED_SCRIPT', { exact: true })).toBeVisible();
++	await page.keyboard.press('Escape');
++	await details.getByRole('link', { name: 'Manage function', exact: true }).click();
++	await expect(page).toHaveURL(/\/functions\/1$/);
++	await expect(page.getByRole('button', { name: 'Attach parameter', exact: true })).toBeVisible();
++	await page.getByRole('tab', { name: 'Criteria', exact: true }).click();
++	await expect(page.getByRole('button', { name: 'Attach criteria', exact: true })).toBeVisible();
++	await page.goto('/devices/WIFI_TEST?tab=functions&function=1');
++	await details.getByRole('button', { name: 'Delete function', exact: true }).click();
++	await page
++		.getByRole('alertdialog', { name: 'Delete function', exact: true })
++		.getByRole('button', { name: 'Delete', exact: true })
++		.click();
++	await expect(page.getByRole('heading', { name: 'RX_PER', exact: true })).toBeVisible();
++	await expect(page).not.toHaveURL(/function=1(?:&|$)/);
++	await page.getByRole('button', { name: 'New function', exact: true }).click();
++	const createDialog = page.getByRole('dialog', { name: 'New function', exact: true });
++	await createDialog
++		.getByRole('textbox', { name: 'Name', exact: true })
++		.fill('NEW_DEVICE_SHARED_FN');
++	await createDialog.getByRole('textbox', { name: 'Interface', exact: true }).fill('WIFI_TEST');
++	await createDialog.getByRole('button', { name: 'Save', exact: true }).click();
++	await expect(page).toHaveURL(/\/functions\/3$/);
++	await expect(
++		page.getByRole('heading', { name: 'NEW_DEVICE_SHARED_FN', exact: true })
++	).toBeVisible();
++	expect(mutations.find((call) => call.method === 'POST')?.body).not.toHaveProperty('device_name');
++	await page.goBack();
++	await expect(page).toHaveURL(/\/devices\/WIFI_TEST\?tab=functions$/);
++	await expect(page.getByRole('heading', { name: 'RX_PER', exact: true })).toBeVisible();
++	await expect(
++		page.getByRole('heading', { name: 'NEW_DEVICE_SHARED_FN', exact: true })
++	).toHaveCount(0);
++});
++
++test('Functions catalog ignores a late response after changing filters', async ({ page }) => {
++	const { functions } = await mockFunctionCatalog(page);
++	let releaseOld!: () => void;
++	let finishOld!: () => void;
++	const blocked = new Promise<void>((resolve) => {
++		releaseOld = resolve;
++	});
++	const completed = new Promise<void>((resolve) => {
++		finishOld = resolve;
++	});
++	await page.route('**/api/functions?*', async (route) => {
++		const isOld = !new URL(route.request().url()).searchParams.has('source');
++		if (isOld) await blocked;
++		await route.fulfill({
++			json: { items: [functions[isOld ? 0 : 1]], total: 1, page: 1, page_size: 20 }
++		});
++		if (isOld) finishOld();
++	});
++	await page.goto('/functions');
++	await page.getByRole('button', { name: 'Filter by source', exact: true }).click();
++	await page.getByRole('option', { name: 'BUILT-IN', exact: true }).click();
++	await expect(page.getByRole('heading', { name: 'RX_PER', exact: true })).toBeVisible();
++	releaseOld();
++	await completed;
++	await expect(page.getByRole('heading', { name: 'RX_PER', exact: true })).toBeVisible();
++	await expect(
++		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toHaveCount(0);
++});
++
++test('Functions catalog retries failed discovery without stale details', async ({ page }) => {
++	const { functions } = await mockFunctionCatalog(page);
++	let attempts = 0;
++	await page.route('**/api/functions?*', (route) => {
++		attempts++;
++		return attempts === 1
++			? route.fulfill({ status: 503, json: { error: 'Catalog unavailable' } })
++			: route.fulfill({ json: { items: [functions[0]], total: 1, page: 1, page_size: 20 } });
++	});
++	await page.goto('/functions?function=1');
++	await expect(page.getByRole('alert')).toContainText('Catalog unavailable');
++	await expect(
++		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toHaveCount(0);
++	await page.getByRole('button', { name: 'Retry functions', exact: true }).click();
++	await expect(
++		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toBeVisible();
++	expect(attempts).toBe(2);
++});
++
++test('Functions catalog pagination uses real totals and restores URLs', async ({ page }) => {
++	const { functions, requests } = await mockFunctionCatalog(page);
++	functions.push(
++		...Array.from({ length: 30 }, (_, index) => ({
++			...functions[0],
++			id: index + 3,
++			name: `PAGED_${index}`
++		}))
++	);
++	await page.goto('/functions');
++	await expect(page.getByText('32 functions', { exact: true })).toBeVisible();
++	await page.getByRole('button', { name: 'Next page', exact: true }).click();
++	await expect(page).toHaveURL(/page=2/);
++	await expect(page.getByRole('heading', { name: 'PAGED_18', exact: true })).toBeVisible();
++	expect(requests.at(-1)?.get('page')).toBe('2');
++	await page.goBack();
++	await expect(
++		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toBeVisible();
++	await page.getByRole('button', { name: 'Page size', exact: true }).click();
++	await page.getByRole('option', { name: '50 / page', exact: true }).click();
++	await expect(page).toHaveURL(/page_size=50/);
++	await expect.poll(() => requests.at(-1)?.get('page_size')).toBe('50');
++	await expect(
++		page
++			.getByRole('complementary', { name: 'Functions list', exact: true })
++			.getByText('Page 1 of 1', { exact: true })
++	).toBeVisible();
++});
++
++test('Functions catalog preserves literal encoded Device names', async ({ page }) => {
++	const { functions } = await mockFunctionCatalog(page);
++	const paths: string[] = [];
++	await page.route('**/api/devices/*/functions?*', (route) => {
++		paths.push(new URL(route.request().url()).pathname);
++		return route.fulfill({ json: { items: [functions[0]], total: 1, page: 1, page_size: 100 } });
++	});
++	await page.goto('/functions?device=MC2+%2F+LAB%2520&function=1');
++	await expect(
++		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
++	).toBeVisible();
++	expect(paths).toEqual(['/api/devices/MC2%20%2F%20LAB%2520/functions']);
++	await expect(
++		page.getByRole('link', { name: 'Open Device workspace', exact: true })
++	).toHaveAttribute('href', '/devices/MC2%20%2F%20LAB%2520?tab=functions');
++});
++
++test('Functions catalog layout handles long content desktop mobile and dark mode', async ({
++	page
++}, testInfo) => {
++	const { functions } = await mockFunctionCatalog(page);
++	functions[0].name = `TX_${'LONG_IDENTIFIER_'.repeat(14)}`;
++	functions[0].interface = `WIFI_${'LONG_INTERFACE_'.repeat(12)}`;
++	const errors: string[] = [];
++	page.on('pageerror', (error) => errors.push(error.message));
++	for (const width of [1440, 960, 390]) {
++		await page.setViewportSize({ width, height: 900 });
++		await page.goto('/functions?function=1');
++		await expect(page.getByRole('heading', { name: functions[0].name, exact: true })).toBeVisible();
++		const geometry = await page.evaluate(() => ({
++			viewport: window.innerWidth,
++			client: document.documentElement.clientWidth,
++			scroll: document.documentElement.scrollWidth
++		}));
++		expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport);
++		const list = await page
++			.getByRole('complementary', { name: 'Functions list', exact: true })
++			.boundingBox();
++		const detail = await page
++			.getByRole('region', { name: 'Function details', exact: true })
++			.boundingBox();
++		if (width > 850) expect(detail!.x).toBeGreaterThanOrEqual(list!.x + list!.width);
++		else expect(detail!.y).toBeGreaterThanOrEqual(list!.y + list!.height);
++		await page.screenshot({ path: testInfo.outputPath(`functions-${width}.png`), fullPage: true });
++	}
++	const nav = page.getByRole('navigation', { name: 'Main navigation', exact: true });
++	for (const name of [
++		'Devices',
++		'Functions',
++		'Parameters',
++		'Criteria',
++		'Examples',
++		'Sequences',
++		'Orphans',
++		'Import'
++	])
++		await expect(nav.getByRole('link', { name, exact: true })).toHaveCount(1);
++	await page.getByRole('button', { name: 'Toggle dark mode', exact: true }).click();
++	await expect(page.locator('html')).toHaveClass(/dark/);
++	await expect(
++		page.getByRole('button', { name: 'Toggle table density', exact: true })
++	).toBeVisible();
++	await page.screenshot({ path: testInfo.outputPath('functions-mobile-dark.png'), fullPage: true });
++	await page.getByRole('button', { name: 'New function', exact: true }).click();
++	const dialog = page.getByRole('dialog', { name: 'New function', exact: true });
++	await expect(dialog).toBeVisible();
++	await dialog.getByRole('button', { name: 'Save', exact: true }).scrollIntoViewIfNeeded();
++	const bounds = await dialog.boundingBox();
++	expect(bounds!.x).toBeGreaterThanOrEqual(0);
++	expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
++	await page.screenshot({
++		path: testInfo.outputPath('function-dialog-mobile-dark.png'),
++		fullPage: true
++	});
++	await page.keyboard.press('Escape');
++	await page.setViewportSize({ width: 1440, height: 900 });
++	await page.screenshot({
++		path: testInfo.outputPath('functions-desktop-dark.png'),
++		fullPage: true
++	});
++	expect(errors).toEqual([]);
++});
++
++test('Functions deletion keeps errors retryable and handles the last selected result', async ({
++	page
++}) => {
++	await mockFunctionCatalog(page);
++	let attempts = 0;
++	await page.route('**/api/functions/1', (route) => {
++		if (route.request().method() === 'DELETE' && ++attempts === 1)
++			return route.fulfill({ status: 503, json: { error: 'Delete unavailable' } });
++		return route.fallback();
++	});
++	await page.goto('/functions?source=DLL&function=1');
++	await page.getByRole('button', { name: 'Delete function', exact: true }).click();
++	const confirmation = page.getByRole('alertdialog', { name: 'Delete function', exact: true });
++	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
++	await expect(confirmation.getByRole('alert')).toContainText('Delete unavailable');
++	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
++	await expect(confirmation).toHaveCount(0);
++	await expect(page.getByText('0 functions', { exact: true })).toBeVisible();
++	await expect(page.getByText('No Function selected.', { exact: true })).toBeVisible();
++	await expect(page).not.toHaveURL(/function=1(?:&|$)/);
++	expect(attempts).toBe(2);
++});
++
+ test('app opens all Devices rather than a last-used device', async ({ page }) => {
+ 	await page.route('**/api/devices', (route) =>
+ 		route.fulfill({

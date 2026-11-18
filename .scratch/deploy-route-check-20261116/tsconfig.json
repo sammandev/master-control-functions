@@ -1,0 +1,12 @@
+{
+	"extends": "$app/tsconfig",
+	"files": ["playwright.config.ts", "playwright.ui.config.ts"],
+	"compilerOptions": {
+		"rewriteRelativeImportExtensions": false,
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"sourceMap": true,
+		"strict": true
+	},
+	"include": ["src", "vite.config.ts", "playwright.config.ts", "playwright.ui.config.ts", "tests"]
+}

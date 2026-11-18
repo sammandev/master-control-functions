@@ -1,0 +1,245 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* Dark mode is class-driven (.dark on <html>) so the manual header toggle
+   can override the system preference. The pre-paint inline script in
+   src/app.html applies the initial class before first paint. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Theme tokens --------------------------------------------------------
+	Production colors, the radius scale, and the mono font stack are
+	declared here and mapped to Tailwind utilities by @theme inline.
+	Dark mode overrides the same semantic variables under .dark.
+
+	Vocabulary and conventions: frontend/README.md#styling-contract.
+	Canonical names follow shadcn-svelte; no migration aliases remain.
+	`muted` is a subtle background, `muted-foreground` is subdued text,
+	`accent` is the hover/highlight background, and `primary` is the brand
+	accent. App-specific status, Device, overlay, and mono tokens extend
+	that vocabulary in this layer.
+
+   All interactive chrome (buttons, inputs, dialogs, tables, badges,
+   pagination, collapsibles...) lives in the owned wrapper layer under
+	src/lib/components/ui. The layout and feedback classes in @layer base
+	still have live consumers. Preserve persistent role="alert" errors
+	and visible keyboard focus when changing those surfaces. */
+:root {
+	/* shadcn-svelte canonical vocabulary */
+	--background: #f7f8fa;
+	--foreground: #1a2027;
+	--card: #ffffff;
+	--card-foreground: #1a2027;
+	--popover: #fbfcfd;
+	--popover-foreground: #1a2027;
+	--primary: var(--device-accent);
+	--primary-foreground: #ffffff;
+	--secondary: #f1f3f6;
+	--secondary-foreground: #1a2027;
+	--muted: #f1f3f6;
+	--muted-foreground: #5b6672;
+	--accent: var(--device-soft);
+	--accent-foreground: #1a2027;
+	--destructive: #c62828;
+	--destructive-foreground: #ffffff;
+	--border: #d8dde3;
+	--input: #d8dde3;
+	--ring: var(--device-accent);
+	--radius: 0.5rem;
+
+	/* App-specific extensions */
+	--ok: #2e7d32;
+	--warn: #d97706;
+	--crit-soft: #fdecea;
+	--overlay: #000000;
+	--mono: 'Cascadia Code', Consolas, 'Courier New', monospace;
+	--device-accent: #087f70;
+	--device-badge-foreground: #066b5f;
+	--device-soft: #e8f5ef;
+}
+
+.dark {
+	/* shadcn-svelte canonical vocabulary */
+	--background: #14181d;
+	--foreground: #e6eaf0;
+	--card: #1c222a;
+	--card-foreground: #e6eaf0;
+	--popover: #232a33;
+	--popover-foreground: #e6eaf0;
+	--primary: var(--device-accent);
+	--primary-foreground: #10151d;
+	--secondary: #171c22;
+	--secondary-foreground: #e6eaf0;
+	--muted: #171c22;
+	--muted-foreground: #98a2ae;
+	--accent: var(--device-soft);
+	--accent-foreground: #e6eaf0;
+	--destructive: #ef5350;
+	--destructive-foreground: var(--background);
+	--border: #2c343e;
+	--input: #2c343e;
+	--ring: var(--device-accent);
+	--radius: 0.5rem;
+
+	/* App-specific extensions */
+	--ok: #66bb6a;
+	--warn: #fbbf24;
+	--crit-soft: #381e1e;
+	--device-accent: #77d9bc;
+	--device-badge-foreground: #77d9bc;
+	--device-soft: #183b31;
+}
+
+@theme inline {
+	/* shadcn-svelte canonical utilities */
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+
+	/* App-specific extension utilities */
+	--color-ok: var(--ok);
+	--color-warn: var(--warn);
+	--color-crit-soft: var(--crit-soft);
+	--color-overlay: var(--overlay);
+	--font-mono: var(--mono);
+}
+
+@layer base {
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: transparent transparent;
+	}
+
+	[data-combobox-viewport],
+	[data-select-viewport] {
+		scrollbar-width: thin !important;
+	}
+
+	[data-combobox-viewport]::-webkit-scrollbar,
+	[data-select-viewport]::-webkit-scrollbar {
+		display: block !important;
+	}
+
+	[data-scroll-active] {
+		scrollbar-color: var(--muted-foreground) transparent;
+	}
+
+	::-webkit-scrollbar {
+		width: 8px;
+		height: 8px;
+	}
+
+	::-webkit-scrollbar-track,
+	::-webkit-scrollbar-corner {
+		background: transparent;
+	}
+
+	::-webkit-scrollbar-thumb {
+		border: 2px solid transparent;
+		border-radius: 999px;
+		background: transparent;
+		background-clip: padding-box;
+	}
+
+	[data-scroll-active]::-webkit-scrollbar-thumb {
+		background-color: var(--muted-foreground);
+	}
+
+	[data-scroll-active]::-webkit-scrollbar-thumb:hover {
+		background-color: var(--foreground);
+	}
+
+	@media (forced-colors: active) {
+		* {
+			scrollbar-color: auto;
+		}
+
+		::-webkit-scrollbar-thumb {
+			background-color: CanvasText;
+		}
+	}
+
+	body {
+		margin: 0;
+		font-family:
+			'Segoe UI',
+			system-ui,
+			-apple-system,
+			sans-serif;
+		font-size: 14px;
+		color: var(--foreground);
+		background: var(--background);
+	}
+
+	main {
+		width: 100%;
+		max-width: none;
+		margin: 0;
+		padding: 1.25rem;
+	}
+
+	/* Shared layout vocabulary. Token-based; kept in @layer base so wrapper
+	   utilities override them where a page needs to. */
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.field-error {
+		color: var(--destructive);
+		font-size: 12px;
+	}
+
+	.banner-error {
+		background: var(--crit-soft);
+		color: var(--destructive);
+		border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
+		border-radius: var(--radius);
+		padding: 0.5rem 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.banner-empty {
+		color: var(--muted-foreground);
+		padding: 1.5rem 0;
+		text-align: center;
+	}
+
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+		margin-bottom: 0.9rem;
+	}
+
+	.spacer {
+		flex: 1;
+	}
+
+	.muted {
+		color: var(--muted-foreground);
+		font-size: 12px;
+	}
+}

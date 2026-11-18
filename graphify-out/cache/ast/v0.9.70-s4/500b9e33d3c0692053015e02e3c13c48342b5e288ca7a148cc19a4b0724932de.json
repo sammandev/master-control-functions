@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_backend_internal_store_queries_devices_functions_sql", "label": "devices_functions.sql", "file_type": "code", "source_file": "backend/internal/store/queries/devices_functions.sql", "source_location": null}], "edges": []}

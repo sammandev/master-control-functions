@@ -1,0 +1,307 @@
+{
+  "generated_at": "2026-10-07T00:42:08.005204+00:00",
+  "nodes": {
+    "backend_cmd_server_main": {
+      "code_fingerprint": "c55608e02dd5e8106e64e1ed3d750b98c5d61170abc9dace558dfce1b05b6366",
+      "label": "server/main.go",
+      "last": "2026-10-04T16:08:36.763887+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T16:08:36.763887+00:00",
+          "outcome": "useful",
+          "q": "because I will be deploying the backend and frontend to the ubuntu server and the postgresql database is hosted on that server too, please help to update the environment files to setup the database configuration if it hosted on the ubuntu server (using localhost instead of server ip address). Please also create the nginx configurations for each backend (radom port) and frontend (random port). After that please help to update the backend and frontend README.md files on how to setup and run the projects locally and deployed in on the server."
+        }
+      ],
+      "score": 0.947006531,
+      "source_file": "backend/cmd/server/main.go",
+      "status": "tentative",
+      "uses": 1
+    },
+    "backend_internal_importer_export_export": {
+      "code_fingerprint": "10455d6b327db7da4c601e8e66256c7afb32fcf26cb24c448b778fb65cf7a2e6",
+      "label": "Export()",
+      "last": "2026-10-06T17:08:06.833453+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-06T17:08:06.833453+00:00",
+          "outcome": "useful",
+          "q": "I have updated the workbook file for column ‘interface’ name to ‘device_name’ for ‘function_parameter’ sheet. Please hlep me to make the the ‘Import’, ‘Reset & import’, and ‘Export workbook’ buttons on the ‘Import’ page to implement this changes."
+        },
+        {
+          "date": "2026-10-06T17:07:30.804728+00:00",
+          "outcome": "useful",
+          "q": "I have updated the workbook file for column ‘interface’ name to ‘device_name’ for ‘function_parameter’ sheet. Please hlep me to make the the ‘Import’, ‘Reset & import’, and ‘Export workbook’ buttons on the ‘Import’ page to implement this changes. For the ‘Devices’ page, on the ‘Create device’ modal form, please add ‘Type’ field that have 2 options: ‘BUILT-IN’ and ‘DLL’. The ‘Type’ data will be the same as ‘Function Source’. Currently all devices is using the same icon which is `CircuitBoard`, please differentiate the icon for type ‘BUILT-IN’ and ‘DLL’ devices and change the text ‘Device’ to their respective type (example: ‘BUILT-IN’ or ‘DLL’)."
+        }
+      ],
+      "score": 1.985473821,
+      "source_file": "backend/internal/importer/export.go",
+      "status": "preferred",
+      "uses": 2
+    },
+    "backend_readme_backend": {
+      "code_fingerprint": "808d99f73cfbdda383149503406eded4b1af0e3bbc35efc5a189554ccb04e8fb",
+      "label": "Backend",
+      "last": "2026-10-04T18:27:04.255219+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T18:27:04.255219+00:00",
+          "outcome": "useful",
+          "q": "docker pull golang:1.27.1-alpine succeeded. What to do next?"
+        },
+        {
+          "date": "2026-10-04T18:23:31.225166+00:00",
+          "outcome": "useful",
+          "q": "These are the commands execution results on the Ubuntu server: Go proxy and checksum downloads reset before TLS, GitHub succeeds, cached Go container image is missing."
+        }
+      ],
+      "score": 1.898171358,
+      "source_file": "backend/README.md",
+      "status": "preferred",
+      "uses": 2
+    },
+    "backend_tests_support_workbook_oracle_countsfrom": {
+      "code_fingerprint": "a3ee8c7e5573e094bad237d18ee212e196de83c0d9744c615775517dbdec6b2c",
+      "label": "CountsFrom()",
+      "last": "2026-10-04T14:45:25.913833+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T14:45:25.913833+00:00",
+          "outcome": "useful",
+          "q": "Please continue to Phase 2."
+        },
+        {
+          "date": "2026-10-04T14:27:26.810359+00:00",
+          "outcome": "useful",
+          "q": "start with Phase 1"
+        },
+        {
+          "date": "2026-10-04T14:20:52.887857+00:00",
+          "outcome": "useful",
+          "q": "please create proper test folder for the backend and frontend folder and move all test related files accordingly"
+        }
+      ],
+      "score": 2.836585033,
+      "source_file": "backend/tests/support/workbook/oracle.go",
+      "status": "preferred",
+      "uses": 3
+    },
+    "deploy_blue_green": {
+      "code_fingerprint": "5150495669eb77e896a678abae0a9c77856859a489c101b9420c46410704aeb7",
+      "label": "blue-green.sh",
+      "last": "2026-10-04T18:23:31.225166+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T18:23:31.225166+00:00",
+          "outcome": "useful",
+          "q": "These are the commands execution results on the Ubuntu server: Go proxy and checksum downloads reset before TLS, GitHub succeeds, cached Go container image is missing."
+        },
+        {
+          "date": "2026-10-04T17:57:46.872914+00:00",
+          "outcome": "useful",
+          "q": "Please check why I got this issue on the server: Protect deploy/.env with chmod 600."
+        }
+      ],
+      "score": 1.897725422,
+      "source_file": "deploy/blue-green.sh",
+      "status": "preferred",
+      "uses": 2
+    },
+    "deploy_readme": {
+      "code_fingerprint": "ab78ae3e3eeea10ffdf5dfca2581c17a42b626b424c8a96ed8422f35f0d4901a",
+      "label": "deploy/README.md",
+      "last": "2026-10-04T18:27:04.255219+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T18:27:04.255219+00:00",
+          "outcome": "useful",
+          "q": "docker pull golang:1.27.1-alpine succeeded. What to do next?"
+        },
+        {
+          "date": "2026-10-04T18:23:31.225166+00:00",
+          "outcome": "useful",
+          "q": "These are the commands execution results on the Ubuntu server: Go proxy and checksum downloads reset before TLS, GitHub succeeds, cached Go container image is missing."
+        },
+        {
+          "date": "2026-10-04T17:57:46.872914+00:00",
+          "outcome": "useful",
+          "q": "Please check why I got this issue on the server: Protect deploy/.env with chmod 600."
+        }
+      ],
+      "score": 2.846838135,
+      "source_file": "deploy/README.md",
+      "status": "preferred",
+      "uses": 3
+    },
+    "frontend_package": {
+      "code_fingerprint": "27d8c79a7a42cb30a4ea8fb63875bfacff3fa34fee29b7947bc31e82c964e935",
+      "label": "package.json",
+      "last": "2026-10-04T17:38:55.158053+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T17:38:55.158053+00:00",
+          "outcome": "useful",
+          "q": "I rename the project in github repo to master-control-functions. Please help to update related files."
+        }
+      ],
+      "score": 0.948379715,
+      "source_file": "frontend/package.json",
+      "status": "tentative",
+      "uses": 1
+    },
+    "frontend_src_lib_components_definitiondialog": {
+      "code_fingerprint": "5ba1bf61ab1867ca1c1d219ee54ef0e5b3040ed1be7978960ff3ee80ed6d0e63",
+      "label": "DefinitionDialog.svelte",
+      "last": "2026-10-06T18:29:26.373957+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-06T18:29:26.373957+00:00",
+          "outcome": "useful",
+          "q": "Improve checkboxes in light/dark mode, remove Compact and its function, improve the theme button, and make main content 100% width."
+        }
+      ],
+      "score": 0.994037944,
+      "source_file": "frontend/src/lib/components/DefinitionDialog.svelte",
+      "status": "tentative",
+      "uses": 1
+    },
+    "frontend_src_lib_components_devicefunctiondetail_copy": {
+      "code_fingerprint": "fbf315e7fa71f299ccc54def9bea835ca15839c66b45d370c52f6c9a450c7766",
+      "label": "copy()",
+      "last": "2026-10-06T17:55:11.358687+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-06T17:55:11.358687+00:00",
+          "outcome": "useful",
+          "q": "for all the dropdown list options fields, is it possible to add search functionality like the \"Device\" dropdown list options? for the side-by-side layout, is it possible to add scroll function on the side on the left (sidebar, not the detail side section). The purpose is to prevent user to scroll too long. for all copy button or all sections and pages that have copy button, currently none of them is working. please help me to fix them all and after the copy button is clicled, please display toast notification that the data already copied."
+        }
+      ],
+      "score": 0.993491822,
+      "source_file": "frontend/src/lib/components/DeviceFunctionDetail.svelte",
+      "status": "tentative",
+      "uses": 1
+    },
+    "frontend_src_lib_components_devicepicker": {
+      "code_fingerprint": "5c103b0640721782ea87335e1ae48d8f1e46caa294affea7ca5c276e08532f3e",
+      "label": "DevicePicker.svelte",
+      "last": "2026-10-07T00:29:45.881140+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-07T00:29:45.881140+00:00",
+          "outcome": "useful",
+          "q": "Take a look at this image: C:\\Users\\Samuel_Halomoan\\AppData\\Roaming\\Code\\User\\workspaceStorage\\vscode-chat-images\\image-1791331619244.png, the searchable filter dropdown option list field seems to have different size than the fields that don't have searchable function (example like filter fields on the \"Functions\", \"Parameters\", \"Criteria\" pages and so on). Please help to that field."
+        }
+      ],
+      "score": 0.999801562,
+      "source_file": "frontend/src/lib/components/DevicePicker.svelte",
+      "status": "tentative",
+      "uses": 1
+    },
+    "frontend_src_lib_components_dictionarypage": {
+      "code_fingerprint": "4d621b03df7cd393defd836feb17cf4b807a746f331fd7450ce66d7ee6b07c7c",
+      "label": "DictionaryPage.svelte",
+      "last": "2026-10-07T00:29:45.881140+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-07T00:29:45.881140+00:00",
+          "outcome": "useful",
+          "q": "Take a look at this image: C:\\Users\\Samuel_Halomoan\\AppData\\Roaming\\Code\\User\\workspaceStorage\\vscode-chat-images\\image-1791331619244.png, the searchable filter dropdown option list field seems to have different size than the fields that don't have searchable function (example like filter fields on the \"Functions\", \"Parameters\", \"Criteria\" pages and so on). Please help to that field."
+        },
+        {
+          "date": "2026-10-06T17:55:11.358687+00:00",
+          "outcome": "useful",
+          "q": "for all the dropdown list options fields, is it possible to add search functionality like the \"Device\" dropdown list options? for the side-by-side layout, is it possible to add scroll function on the side on the left (sidebar, not the detail side section). The purpose is to prevent user to scroll too long. for all copy button or all sections and pages that have copy button, currently none of them is working. please help me to fix them all and after the copy button is clicled, please display toast notification that the data already copied."
+        }
+      ],
+      "score": 1.993293385,
+      "source_file": "frontend/src/lib/components/DictionaryPage.svelte",
+      "status": "preferred",
+      "uses": 2
+    },
+    "frontend_src_lib_components_linkspanel": {
+      "code_fingerprint": "225ac5a181f35651533a6e34151c3f0767800e690c5d535574b093de6ce7dd68",
+      "label": "LinksPanel.svelte",
+      "last": "2026-10-06T18:29:26.373957+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-06T18:29:26.373957+00:00",
+          "outcome": "useful",
+          "q": "Improve checkboxes in light/dark mode, remove Compact and its function, improve the theme button, and make main content 100% width."
+        }
+      ],
+      "score": 0.994037944,
+      "source_file": "frontend/src/lib/components/LinksPanel.svelte",
+      "status": "tentative",
+      "uses": 1
+    },
+    "frontend_src_lib_components_ui_checkbox": {
+      "code_fingerprint": "7a38f5aef819a259f839b8c740536a3a4362d8cd8c6879796d94bb43ec683726",
+      "label": "checkbox.svelte",
+      "last": "2026-10-06T18:29:26.373957+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-06T18:29:26.373957+00:00",
+          "outcome": "useful",
+          "q": "Improve checkboxes in light/dark mode, remove Compact and its function, improve the theme button, and make main content 100% width."
+        }
+      ],
+      "score": 0.994037944,
+      "source_file": "frontend/src/lib/components/ui/checkbox.svelte",
+      "status": "tentative",
+      "uses": 1
+    },
+    "frontend_src_lib_components_ui_select": {
+      "code_fingerprint": "c40f0c663f43ea7b523ca30c36332b5208ff42c7fa91cba9d05a923040017956",
+      "label": "select.svelte",
+      "last": "2026-10-07T00:29:45.881140+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-07T00:29:45.881140+00:00",
+          "outcome": "useful",
+          "q": "Take a look at this image: C:\\Users\\Samuel_Halomoan\\AppData\\Roaming\\Code\\User\\workspaceStorage\\vscode-chat-images\\image-1791331619244.png, the searchable filter dropdown option list field seems to have different size than the fields that don't have searchable function (example like filter fields on the \"Functions\", \"Parameters\", \"Criteria\" pages and so on). Please help to that field."
+        },
+        {
+          "date": "2026-10-06T17:55:11.358687+00:00",
+          "outcome": "useful",
+          "q": "for all the dropdown list options fields, is it possible to add search functionality like the \"Device\" dropdown list options? for the side-by-side layout, is it possible to add scroll function on the side on the left (sidebar, not the detail side section). The purpose is to prevent user to scroll too long. for all copy button or all sections and pages that have copy button, currently none of them is working. please help me to fix them all and after the copy button is clicled, please display toast notification that the data already copied."
+        }
+      ],
+      "score": 1.993293385,
+      "source_file": "frontend/src/lib/components/ui/select.svelte",
+      "status": "preferred",
+      "uses": 2
+    },
+    "frontend_tests_components_welcome_svelte_spec": {
+      "code_fingerprint": "37acdc7a9f829cf0ee1351aee13aedda988c16374a097b1e4830c31650ca1e26",
+      "label": "Welcome.svelte.spec.ts",
+      "last": "2026-10-04T15:13:31.923631+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T15:13:31.923631+00:00",
+          "outcome": "useful",
+          "q": "continue with Phase 3"
+        }
+      ],
+      "score": 0.946169962,
+      "source_file": "frontend/tests/components/Welcome.svelte.spec.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "frontend_tests_support_greet_greet": {
+      "code_fingerprint": "483a9019495aa7bd3fb9ead6f4a7902677619692dead8e17f22c887c8d0ceb92",
+      "label": "greet()",
+      "last": "2026-10-04T15:13:31.923631+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-04T15:13:31.923631+00:00",
+          "outcome": "useful",
+          "q": "continue with Phase 3"
+        }
+      ],
+      "score": 0.946169962,
+      "source_file": "frontend/tests/support/greet.ts",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}

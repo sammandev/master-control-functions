@@ -1,0 +1,2 @@
+*.sh text eol=lf
+.env.proxy.example text eol=lf

@@ -1,0 +1,84 @@
+name: master-control-functions
+
+x-app: &app
+  image: ${APP_IMAGE:-master-control-functions:bootstrap}
+  labels:
+    com.master-control-functions.project: master-control-functions
+  network_mode: host
+  env_file: .env
+  environment:
+    GOMEMLIMIT: 384MiB
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777,noexec,nosuid
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 512m
+  cpus: 1.0
+  restart: unless-stopped
+  stop_grace_period: 60s
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  app-blue:
+    <<: *app
+    container_name: webprogfndb-blue
+    profiles: [blue]
+    command: [-addr, "127.0.0.1:24993", -web, /app/web]
+    healthcheck:
+      test: [CMD, wget, -q, -T, "5", -O, /dev/null, "http://127.0.0.1:24993/health"]
+      interval: 5s
+      timeout: 6s
+      start_period: 15s
+      retries: 6
+
+  app-green:
+    <<: *app
+    container_name: webprogfndb-green
+    profiles: [green]
+    command: [-addr, "127.0.0.1:24994", -web, /app/web]
+    healthcheck:
+      test: [CMD, wget, -q, -T, "5", -O, /dev/null, "http://127.0.0.1:24994/health"]
+      interval: 5s
+      timeout: 6s
+      start_period: 15s
+      retries: 6
+
+  edge:
+    image: nginx:1.30-alpine
+    container_name: webprogfndb-edge
+    labels:
+      com.master-control-functions.project: master-control-functions
+    network_mode: host
+    user: "101:101"
+    entrypoint: [nginx]
+    command: [-g, "daemon off;"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 64m
+    cpus: 0.5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./state/upstreams:/etc/nginx/upstreams:ro
+      - ./state/assets:/srv/assets:ro
+    healthcheck:
+      test: [CMD, wget, -q, -T, "5", -O, /dev/null, "http://127.0.0.1:31627/edge-health"]
+      interval: 10s
+      timeout: 6s
+      retries: 3
