@@ -792,7 +792,7 @@
 						</div>
 					</div>
 					{#each fnView as fn (fn.id)}<button
-							class="function-choice"
+							class="function-choice focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
 							class:chosen={selectedFunction?.id === fn.id}
 							aria-label={`Select ${fn.name}`}
 							aria-pressed={selectedFunction?.id === fn.id}
@@ -906,7 +906,7 @@
 								>
 									<TableCell class="font-medium"
 										><button
-											class="definition-choice"
+											class="definition-choice focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
 											aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
 											onclick={() => {
 												void selectDefinition('parameters', d.id);
@@ -992,7 +992,7 @@
 									>
 										<TableCell class="font-medium"
 											><button
-												class="definition-choice"
+												class="definition-choice focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
 												aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
 												onclick={() => {
 													void selectDefinition('parameters', d.id);
@@ -1108,7 +1108,7 @@
 								>
 									<TableCell class="font-medium"
 										><button
-											class="definition-choice"
+											class="definition-choice focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
 											aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
 											onclick={() => {
 												void selectDefinition('criteria', d.id);
@@ -1194,7 +1194,7 @@
 									>
 										<TableCell class="font-medium"
 											><button
-												class="definition-choice"
+												class="definition-choice focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
 												aria-label={`Inspect ${d.name} (${d.device_name || 'Global'})`}
 												onclick={() => {
 													void selectDefinition('criteria', d.id);
@@ -1783,6 +1783,10 @@
 	}
 	.function-choice.chosen {
 		border-left-color: var(--device-accent);
+	}
+	.function-choice:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: -2px;
 	}
 	.detail-pane {
 		min-width: 0;

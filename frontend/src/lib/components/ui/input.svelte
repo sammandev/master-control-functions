@@ -15,4 +15,8 @@
 		'h-8 w-full rounded-[4px] border border-border bg-card px-2.5 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-50';
 </script>
 
-<input {type} bind:value class={cn(base, className)} {...rest} />
+{#if type === 'file'}
+	<input {type} class={cn(base, className)} {...rest} />
+{:else}
+	<input {type} bind:value class={cn(base, className)} {...rest} />
+{/if}

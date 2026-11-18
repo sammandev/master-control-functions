@@ -360,6 +360,7 @@
 				result.items[0]}
 			{#each result.items as row (row.id)}
 				<button
+					class="focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
 					class:chosen={selectedFunction?.id === row.id}
 					aria-pressed={selectedFunction?.id === row.id}
 					aria-label={`Select ${row.name}`}

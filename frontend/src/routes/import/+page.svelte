@@ -21,6 +21,7 @@
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import Button from '#lib/components/ui/button.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
+	import Input from '#lib/components/ui/input.svelte';
 	import Collapsible from '#lib/components/ui/collapsible.svelte';
 	import { toast } from 'svelte-sonner';
 	import SortHead from '#lib/components/SortHead.svelte';
@@ -263,11 +264,12 @@
 		</p>
 		<div class="upload-field">
 			<label for="workbook-file">Workbook file</label>
-			<input
+			<Input
 				id="workbook-file"
 				type="file"
 				accept=".xlsx"
 				disabled={importing}
+				class="text-muted-foreground file:border-border file:bg-secondary file:text-foreground h-9 px-0 file:mr-3 file:h-full file:cursor-pointer file:border-0 file:border-r file:px-3 file:font-medium"
 				onchange={(event) => {
 					selectedFile = event.currentTarget.files?.[0] ?? null;
 					actionError = '';
@@ -455,8 +457,7 @@
 		background: var(--accent);
 	}
 	.export-action:focus-visible,
-	.normalization-scroll:focus-visible,
-	input:focus-visible {
+	.normalization-scroll:focus-visible {
 		outline: 2px solid var(--ring);
 		outline-offset: 2px;
 	}
@@ -469,30 +470,6 @@
 	label {
 		font-size: 0.875rem;
 		font-weight: 500;
-	}
-	input {
-		width: 100%;
-		min-width: 0;
-		height: 2.25rem;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		background: var(--card);
-		color: var(--muted-foreground);
-		font-size: 0.875rem;
-	}
-	input::file-selector-button {
-		height: 100%;
-		margin-right: 0.75rem;
-		padding: 0 0.75rem;
-		border: 0;
-		border-right: 1px solid var(--border);
-		background: var(--secondary);
-		color: var(--foreground);
-		font-weight: 500;
-		cursor: pointer;
-	}
-	input:disabled {
-		opacity: 0.6;
 	}
 	.workbook-name {
 		min-width: 0;

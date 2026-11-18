@@ -185,6 +185,10 @@ func normalizePhase(phase string) (string, bool) {
 // execution-phase typo (text_execution → test_execution).
 func parseFunctions(data [][]string, m map[string]int, rc *record) []FunctionRow {
 	out := make([]FunctionRow, 0, len(data))
+	interfaceCol := "interface"
+	if _, exists := m[interfaceCol]; !exists {
+		interfaceCol = "device_name"
+	}
 	for i, row := range data {
 		name := cell(row, m, "name")
 		if name == "" {
@@ -193,7 +197,7 @@ func parseFunctions(data [][]string, m map[string]int, rc *record) []FunctionRow
 		}
 		r := FunctionRow{
 			Source:      cell(row, m, "source"),
-			Interface:   cell(row, m, "interface"),
+			Interface:   cell(row, m, interfaceCol),
 			Name:        name,
 			Description: cell(row, m, "description"),
 			Category:    cell(row, m, "category"),
