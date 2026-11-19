@@ -17,19 +17,6 @@ import (
 // because a problem or error code can manifest in several ways with different
 // root causes and step-by-step solutions.
 
-var validTroubleshootingCategories = map[string]bool{
-	"connection":  true,
-	"execution":   true,
-	"measurement": true,
-	"production":  true,
-}
-
-var validTroubleshootingSeverities = map[string]bool{
-	"critical": true,
-	"warning":  true,
-	"info":     true,
-}
-
 type troubleshootingStepBody struct {
 	Title         string `json:"title"`
 	Instruction   string `json:"instruction"`
@@ -63,11 +50,11 @@ func (b *troubleshootingBody) validate() map[string]string {
 	if b.Title == "" {
 		fields["title"] = "is required"
 	}
-	if !validTroubleshootingCategories[b.Category] {
-		fields["category"] = "must be one of: connection, execution, measurement, production"
+	if b.Category == "" {
+		fields["category"] = "is required"
 	}
-	if !validTroubleshootingSeverities[b.Severity] {
-		fields["severity"] = "must be one of: critical, warning, info"
+	if b.Severity == "" {
+		fields["severity"] = "is required"
 	}
 	if problem := validateDeviceName(b.DeviceName); problem != "" {
 		fields["device_name"] = problem
@@ -92,6 +79,32 @@ func (b *troubleshootingBody) validate() map[string]string {
 		}
 	}
 	return fields
+}
+
+func validateTroubleshootingRegistryKeys(c fiber.Ctx, q *store.Queries, category, severity string) (map[string]string, error) {
+	fields := map[string]string{}
+	if _, err := q.GetTroubleshootingCategory(c.Context(), category); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			fields["category"] = "does not exist"
+		} else {
+			return nil, err
+		}
+	}
+	if _, err := q.GetTroubleshootingSeverity(c.Context(), severity); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			fields["severity"] = "does not exist"
+		} else {
+			return nil, err
+		}
+	}
+	return fields, nil
+}
+
+func registryFieldError(c fiber.Ctx, fields map[string]string) error {
+	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		"error":  "validation failed",
+		"fields": fields,
+	})
 }
 
 type troubleshootingStepResponse struct {
@@ -281,10 +294,17 @@ func createTroubleshootingGuide(q *store.Queries, d *sql.DB) fiber.Handler {
 		if fields := b.validate(); len(fields) > 0 {
 			return validationError(c, fields)
 		}
+		fields, err := validateTroubleshootingRegistryKeys(c, q, b.Category, b.Severity)
+		if err != nil {
+			return serverError(c, "validate troubleshooting registry keys", err)
+		}
+		if len(fields) > 0 {
+			return registryFieldError(c, fields)
+		}
 		now := time.Now().UTC().Format(time.RFC3339)
 
 		var id int64
-		err := func() error {
+		err = func() error {
 			tx, err := d.BeginTx(c.Context(), nil)
 			if err != nil {
 				return err
@@ -352,6 +372,13 @@ func updateTroubleshootingGuide(q *store.Queries, d *sql.DB) fiber.Handler {
 		}
 		if fields := b.validate(); len(fields) > 0 {
 			return validationError(c, fields)
+		}
+		fields, err := validateTroubleshootingRegistryKeys(c, q, b.Category, b.Severity)
+		if err != nil {
+			return serverError(c, "validate troubleshooting registry keys", err)
+		}
+		if len(fields) > 0 {
+			return registryFieldError(c, fields)
 		}
 		if _, err := q.GetTroubleshootingGuide(c.Context(), id); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
