@@ -2,11 +2,17 @@
 // Multiple guides can share the same error_code, function_name, or device_name because one
 // error code or symptom can manifest in multiple ways with distinct step-by-step solutions.
 import { ApiError, request } from './client';
+import type {
+	TroubleshootingCategory as RegistryCategory,
+	TroubleshootingSeverity as RegistrySeverity
+} from './troubleshooting-registry';
 
 export { ApiError };
 
-export type TroubleshootingCategory = 'connection' | 'execution' | 'measurement' | 'production';
-export type TroubleshootingSeverity = 'critical' | 'warning' | 'info';
+// Guide payloads retain stable string keys. Registry item models are exported by
+// troubleshooting-registry.ts; these aliases keep existing form imports compatible.
+export type TroubleshootingCategory = string;
+export type TroubleshootingSeverity = string;
 
 export interface TroubleshootingStep {
 	id: number;
@@ -110,11 +116,28 @@ export const TROUBLESHOOTING_SEVERITIES: {
 	{ value: 'info', label: 'Info (Best Practice)' }
 ];
 
-export function categoryLabel(category: string): string {
-	return TROUBLESHOOTING_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+function humanizeRegistryKey(key: string): string {
+	if (!key) return '';
+	return key
+		.split(/[-_\s]+/)
+		.filter(Boolean)
+		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+		.join(' ');
 }
 
-export function severityLabel(severity: string): string {
+export function categoryLabel(category: string, categories: RegistryCategory[] = []): string {
+	const metadata = categories.find((item) => item.key === category);
+	return (
+		metadata?.label ??
+		TROUBLESHOOTING_CATEGORIES.find((item) => item.value === category)?.label ??
+		humanizeRegistryKey(category)
+	);
+}
+
+export function severityLabel(severity: string, severities: RegistrySeverity[] = []): string {
+	const metadata = severities.find((item) => item.key === severity);
+	if (metadata) return metadata.label;
+
 	switch (severity) {
 		case 'critical':
 			return 'Critical';
@@ -123,8 +146,12 @@ export function severityLabel(severity: string): string {
 		case 'info':
 			return 'Info';
 		default:
-			return severity;
+			return humanizeRegistryKey(severity);
 	}
+}
+
+export function severityTone(severity: string, severities: RegistrySeverity[] = []): string {
+	return severities.find((item) => item.key === severity)?.tone || 'outline';
 }
 
 export interface ListTroubleshootingQuery {
