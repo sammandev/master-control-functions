@@ -5213,6 +5213,18 @@
     "ast_hash": "0f86d903d248f34d5f423b6a561fd375",
     "semantic_hash": ""
   },
+  "frontend/src/lib/components/TroubleshootingRegistryPicker.svelte": {
+    "mtime": 1795091038.538621,
+    "seen": 1795091163.6457305,
+    "ast_hash": "152246a9e70dcaf695aa8313ad5f4e51",
+    "semantic_hash": ""
+  },
+  "frontend/tests/components/TroubleshootingRegistryPicker.svelte.spec.ts": {
+    "mtime": 1795091015.4770195,
+    "seen": 1795091163.679282,
+    "ast_hash": "3525a49e6e5ee15fc3df08b6e07bc803",
+    "semantic_hash": ""
+  },
   ".scratch/deploy-route-check-20261116/pnpm-lock.yaml": {
     "mtime": 1795086556.5507295,
     "seen": 1795088517.1843882,

@@ -5184,21 +5184,21 @@
     "semantic_hash": ""
   },
   "backend/internal/api/troubleshooting_registry.go": {
-    "mtime": 1795089787.0157242,
-    "seen": 1795089847.3150635,
-    "ast_hash": "904914249e859cdfb458a73c879ae4af",
+    "mtime": 1795091606.8078694,
+    "seen": 1795091664.0314524,
+    "ast_hash": "6c6a75c46ce2761d78fc79e0fd1a9690",
     "semantic_hash": ""
   },
   "backend/internal/api/troubleshooting_registry_test.go": {
-    "mtime": 1795089605.1017764,
-    "seen": 1795089847.3150663,
-    "ast_hash": "6aae3d1df6263c28537991cc0529bc01",
+    "mtime": 1795091589.240932,
+    "seen": 1795091664.031455,
+    "ast_hash": "24c99f84ae9df41c89927b3b64191e14",
     "semantic_hash": ""
   },
   "backend/tests/api/troubleshooting_registry_test.go": {
-    "mtime": 1795089675.3925712,
-    "seen": 1795089847.3193526,
-    "ast_hash": "67aa98fa26c607114f95e6de4c910feb",
+    "mtime": 1795091482.547023,
+    "seen": 1795091664.0350177,
+    "ast_hash": "3cf8c7a32af06332d3acfd708f4a5b7e",
     "semantic_hash": ""
   },
   "frontend/src/lib/troubleshooting-registry.ts": {
@@ -5220,9 +5220,9 @@
     "semantic_hash": ""
   },
   "frontend/tests/components/TroubleshootingRegistryPicker.svelte.spec.ts": {
-    "mtime": 1795091015.4770195,
-    "seen": 1795091163.679282,
-    "ast_hash": "3525a49e6e5ee15fc3df08b6e07bc803",
+    "mtime": 1795091499.856724,
+    "seen": 1795091664.0453818,
+    "ast_hash": "2e0288fb4f51912e360062844ebe3e75",
     "semantic_hash": ""
   },
   ".scratch/deploy-route-check-20261116/pnpm-lock.yaml": {

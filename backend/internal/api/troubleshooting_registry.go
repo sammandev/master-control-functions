@@ -199,7 +199,7 @@ func severityValues(body troubleshootingRegistryBody, existing *store.Troublesho
 			fields["sort_order"] = "must be greater than zero"
 		}
 	}
-	tone := "default"
+	tone := "outline"
 	if existing != nil {
 		tone = existing.Tone
 	}

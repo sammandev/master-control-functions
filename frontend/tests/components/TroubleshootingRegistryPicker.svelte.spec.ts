@@ -86,6 +86,44 @@ describe('TroubleshootingRegistryPicker', () => {
 		expect(onCreate).toHaveBeenCalledWith('Production');
 	});
 
+	it('creates a severity from its label only and selects the returned outline severity', async () => {
+		const onCreate = vi.fn(async (label: string) => ({
+			key: 'major',
+			label,
+			description: '',
+			sort_order: 30,
+			built_in: false,
+			guide_count: 0,
+			tone: 'outline'
+		}));
+		render(TroubleshootingRegistryPicker, {
+			items: [
+				{
+					key: 'critical',
+					label: 'Critical',
+					description: 'Blocks the flow',
+					sort_order: 10,
+					built_in: true,
+					guide_count: 1,
+					tone: 'destructive'
+				}
+			],
+			value: 'critical',
+			kind: 'severity',
+			onCreate
+		});
+
+		await page.getByRole('button', { name: 'Severity: Critical' }).click();
+		await page.getByRole('combobox', { name: 'Search severities' }).fill('Major');
+		await expect.element(page.getByRole('button', { name: 'Create “Major”' })).toBeVisible();
+		await expect.element(page.getByText(/tone/i)).not.toBeInTheDocument();
+		await page.getByRole('button', { name: 'Create “Major”' }).click();
+
+		expect(onCreate).toHaveBeenCalledOnce();
+		expect(onCreate).toHaveBeenCalledWith('Major');
+		await expect.element(page.getByRole('button', { name: 'Severity: Major' })).toBeVisible();
+	});
+
 	it('keeps the typed term visible when creation fails', async () => {
 		const onCreate = vi.fn(async () => {
 			throw new Error('Category creation failed');

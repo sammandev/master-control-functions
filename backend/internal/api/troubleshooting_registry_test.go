@@ -70,6 +70,17 @@ func TestTroubleshootingKeysStayWithinDatabaseBoundary(t *testing.T) {
 	}
 }
 
+func TestNewTroubleshootingSeverityDefaultsToOutlineTone(t *testing.T) {
+	label := "New Severity"
+	_, _, _, tone, fields := severityValues(troubleshootingRegistryBody{Label: &label}, nil)
+	if len(fields) != 0 {
+		t.Fatalf("severity fields rejected: %v", fields)
+	}
+	if tone != "outline" {
+		t.Fatalf("new severity tone = %q, want outline", tone)
+	}
+}
+
 func TestTroubleshootingSortOrderMustBePositiveOnUpdate(t *testing.T) {
 	zero := int64(0)
 	_, _, _, categoryFields := categoryValues(troubleshootingRegistryBody{SortOrder: &zero}, &store.TroubleshootingCategory{SortOrder: 1})

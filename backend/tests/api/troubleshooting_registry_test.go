@@ -70,6 +70,14 @@ func TestTroubleshootingRegistryValidationAndKeyGeneration(t *testing.T) {
 		t.Fatalf("create with optional description: %d (%s)", resp.StatusCode, emptyDescriptionBody)
 	}
 
+	resp, defaultToneBody := postJSON(t, app, "/api/troubleshooting/severities", `{"label":"Default Tone Severity"}`)
+	if resp.StatusCode != 201 {
+		t.Fatalf("create severity with default tone: %d (%s)", resp.StatusCode, defaultToneBody)
+	}
+	if !strings.Contains(defaultToneBody, `"tone":"outline"`) {
+		t.Fatalf("new severity tone = %s, want outline", defaultToneBody)
+	}
+
 	resp, firstBody := postJSON(t, app, "/api/troubleshooting/categories", `{"label":"Foo Bar"}`)
 	if resp.StatusCode != 201 {
 		t.Fatalf("create first colliding key: %d (%s)", resp.StatusCode, firstBody)

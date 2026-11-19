@@ -1,17 +1,17 @@
 # Graph Report - troubleshooting-registry  (2026-11-19)
 
 ## Corpus Check
-- 839 files · ~466,737 words
+- 841 files · ~467,655 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 47 file(s) not represented in the graph (top: .css 12, (none) 12, .ini 6)
 
 ## Summary
-- 6299 nodes · 11509 edges · 534 communities (367 shown, 167 thin omitted)
+- 6318 nodes · 11533 edges · 525 communities (354 shown, 171 thin omitted)
 - Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 555 edges (avg confidence: 0.86)
 - Token cost: 31,800 input · 26,400 output
 
 ## Graph Freshness
-- Built from commit: `e85e8be1`
+- Built from commit: `bc9a385f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -20,7 +20,7 @@
 - frontend/src/routes/devices/[name]/+page.svelte
 - mcp_readiness.go
 - frontend/.opencode/svelte.json
-- testing.T
+- postJSON
 - Export API Tests
 - Svelte Best Practices Skill
 - frontend/src/lib/components/DictionaryPage.svelte
@@ -30,19 +30,19 @@
 - context.Context
 - frontend/eslint.config.js
 - deploy-route-check-20261116/src/routes/devices/+page.svelte
-- Function
-- @lucide/svelte
-- Queries
+- listQuery
+- import_test.go
+- frontend/src/lib/components/ExamplesWorkspace.svelte
 - frontend/src/lib/utils.ts
 - SvelteKit Browser Application
 - deploy-route-check-20261116/src/routes/devices/[name]/+page.svelte
 - workbook.go
 - frontend/src/routes/devices/+page.svelte
-- parseListQuery
+- newDictionaryTestApp
 - Export
-- deploy-route-check-20261116/src/lib/components/DeviceFunctionDetail.svelte
+- deploy-route-check-20261116/src/lib/components/ExamplesPanel.svelte
 - deploy-route-check-20261116/src/lib/components/ComposeDialog.svelte
-- normalizeDeviceName
+- Queries
 - deploy-route-check-20261116/src/routes/orphans/+page.svelte
 - #lib
 - deploy-route-check-20261116/src/routes/import/+page.svelte
@@ -54,25 +54,25 @@
 - compilerOptions
 - toolbar
 - Task 1: PostgreSQL Taxonomy Schema and Store Queries
-- frontend/src/lib/components/DictionaryPage.svelte
+- TroubleshootingRegistryPicker.svelte
 - frontend/src/routes/functions/+page.svelte
 - Component Aliases Config
 - Storybook Figma Plugin
 - Function
 - select
-- frontend/src/lib/components/ui/dropdown-menu/index.ts
+- Review Focus
 - deploy-route-check-20261116/src/routes/functions/+page.svelte
-- deploy-route-check-20261116/src/lib/components/ExamplesPanel.svelte
+- mcp_readiness_test.go
 - createSequence
 - frontend/src/routes/sequences/[id]/+page.svelte
 - Ubuntu Blue-Green Deployment
 - Paraglide i18n Hooks
-- frontend/src/routes/import/+page.svelte
+- Review Focus
 - frontend/src/lib/components/LinksPanel.svelte
 - Filters API Tests
 - troubleshooting/+page.svelte
 - Backend README Ops
-- server_test.go
+- testing.T
 - frontend/src/lib/components/McpReadinessPanel.svelte
 - Issue tracker: GitHub
 - Deploy Host Prep
@@ -84,7 +84,7 @@
 - ADRs & Devices E2E
 - ref_playwright_test
 - Inlang Settings
-- color-pair.tsx
+- The Design System Page
 - createTroubleshootingGuide
 - frontend/src/routes/orphans/+page.svelte
 - Vitest Unit Tests
@@ -146,7 +146,7 @@
 - Triage
 - template.sh
 - Per-component notes
-- TroubleshootingDialog.svelte
+- deploy-route-check-20261116/README.md
 - caveman-compress/README.md
 - Codebase Design
 - Rules
@@ -155,7 +155,7 @@
 - HTML Report Format
 - PrimeVue + Tailwind CSS Integration
 - Creation Log: Systematic Debugging Skill
-- validationError
+- frontend/tests/support/Welcome.svelte
 - PrimeVue Styled Mode Theming
 - edge
 - devDependencies
@@ -174,7 +174,7 @@
 - Ask Matt
 - Root Cause Tracing
 - Systematic Debugging
-- troubleshooting.ts
+- ImportRun
 - frontend/package.json
 - svelte-core-bestpractices/SKILL.md
 - detect.py
@@ -190,7 +190,7 @@
 - Customization & Theming
 - Customization & Theming
 - Component Composition
-- TroubleshootingDetail.svelte
+- CountCriteriaUsageScopedParams
 - Tailwind CSS
 - Steps
 - Component Composition
@@ -214,7 +214,7 @@
 - Styling & Customization
 - Defense-in-Depth Validation
 - wayfinder/SKILL.md
-- deploy-route-check-20261116/src/lib/components/DictionaryPage.svelte
+- deploy-route-check-20261116/src/lib/components/DefinitionDialog.svelte
 - Sample Test Script Deep Dive: Items, Functions, Parameters, Criteria, Control Flow
 - Backend Dependency Audit
 - Workflow
@@ -236,8 +236,8 @@
 - dialog
 - Target wrapper shapes (golden-derived specifics)
 - Migrate to Shoehorn
-- serverError
-- The Design System Page
+- ListDeviceScopesRow
+- .ReassignTroubleshootingGuideSeverities
 - Troubleshooting Playbook & AI Knowledge Base Design
 - PostgreSQL Cutover
 - re
@@ -320,8 +320,7 @@
 - writing-beats/SKILL.md
 - interface
 - interface
-- deploy-route-check-20261116/src/lib/components/ExamplesWorkspace.svelte
-- New
+- .UpdateTroubleshootingGuideMeta
 - Available Svelte MCP Tools:
 - CLI tools
 - deploy-route-check-20261116/tests/e2e/polish.spec.ts
@@ -356,7 +355,7 @@
 - Q: Improve checkboxes in light/dark mode, remove Compact and its function, improve the theme button, and make main content 100% width.
 - Q: Take a look at this image: C:\Users\Samuel_Halomoan\AppData\Roaming\Code\User\workspaceStorage\vscode-chat-images\image-1791331619244.png, the searchable filter dropdown option list field seems to have different size than the fields that don't have searchable function (example like filter fields on the "Functions", "Parameters", "Criteria" pages and so on). Please help to that field.
 - Q: continue with the following: - because other filter fields don't have label, for good UI/UX, can we remove the label for the divice picker searchable fields? - can we also improve the UI/UX of all scrollbar/scroll area in the page to be better? for example we can make the scrollbar to be thinner, change the color based on the light/dark mode, and hide the scrollbar when user don't perform any scrolling. Just like how it is implemented on the "Bits-UI - Scroll Area".
-- Import
+- CriteriaDefinition
 - deploy-route-check-20261116/tests/e2e/combobox.spec.ts
 - deploy-route-check-20261116/tests/e2e/smoke.spec.ts
 - deploy-route-check-20261116/tests/e2e/tabs.spec.ts
@@ -510,23 +509,15 @@
 - TroubleshootingSeverity
 - orphanReport
 - functions_test.go
-- deploy-route-check-20261116/src/lib/components/ui/select.svelte
-- database/sql.NullInt64
-- importHandler
+- deploy-route-check-20261116/src/lib/components/DictionaryPage.svelte
+- links.go
 - tests/api/troubleshooting_registry_test.go
-- $app
-- Foundations
-- ref_lib
+- @lucide/svelte
+- frontend/src/routes/+layout.svelte
 - .InsertSequence
 - .InsertSequenceStep
 - DBTX
-- nextTroubleshootingKey
-- ParseWorkbook
 - ScriptKeyAudit
-- Findings
-- Deployment Clarification And Update Status
-- Workbook
-- frontend/src/lib/components/ui/tabs/index.ts
 - InsertDeviceParams
 
 ## God Nodes (most connected - your core abstractions)
@@ -535,8 +526,8 @@
 3. `doRequest()` - 78 edges
 4. `serverError()` - 64 edges
 5. `request()` - 57 edges
-6. `request()` - 45 edges
-7. `newLinksTestApp()` - 45 edges
+6. `newLinksTestApp()` - 45 edges
+7. `request()` - 45 edges
 8. `cn()` - 43 edges
 9. `cn()` - 43 edges
 10. `newDictionaryTestApp()` - 41 edges
@@ -548,9 +539,9 @@
   docs/superpowers/plans/2026-11-19-troubleshooting-registry.md → backend/internal/api/functions.go
 - `05: Definition and example checks` --references--> `validateDefinition()`  [INFERRED]
   .scratch/mcp-catalog-readiness/issues/05-definition-example-checks.md → backend/internal/api/dictionary.go
+- `Files involved` --references--> `ParseWorkbook()`  [INFERRED]
+  .scratch/dev-docs/workbook-conventions.md → backend/internal/importer/workbook.go
 - `Task 3: Frontend Troubleshooting Client, Multi-Solution Helper, and Unit Tests` --references--> `TroubleshootingListResult`  [INFERRED]
-  docs/superpowers/plans/2026-11-19-troubleshooting-guide.md → frontend/src/lib/troubleshooting.ts
-- `Task 3: Frontend Troubleshooting Client, Multi-Solution Helper, and Unit Tests` --references--> `formatTroubleshootingAiContext()`  [INFERRED]
   docs/superpowers/plans/2026-11-19-troubleshooting-guide.md → frontend/src/lib/troubleshooting.ts
 
 ## Import Cycles
@@ -583,43 +574,49 @@
 - **Storybook Theming Demonstration (Light vs Dark)** — frontend_src_stories_assets_theming_theming_screenshot, frontend_src_stories_assets_theming_storybook_ui, frontend_src_stories_assets_theming_button_story, frontend_src_stories_assets_theming_dark_theme [INFERRED 0.85]
 - **YouTube Play Button Glyph** — frontend_src_stories_assets_youtube_icon, frontend_src_stories_assets_youtube_youtube_brand, frontend_src_stories_assets_youtube_play_symbol [INFERRED 0.85]
 
-## Communities (534 total, 167 thin omitted)
+## Communities (525 total, 171 thin omitted)
 
 ### Community 0 - "import_test.go"
-Cohesion: 0.07
-Nodes (45): main(), main(), run(), main(), exportWorkbook(), registerExportRoutes(), CurrentVersion(), MigratePostgres() (+37 more)
+Cohesion: 0.08
+Nodes (43): main(), main(), run(), main(), exportWorkbook(), registerExportRoutes(), New(), RegisterStatic() (+35 more)
 
 ### Community 1 - "frontend/src/routes/devices/[name]/+page.svelte"
 Cohesion: 0.02
-Nodes (89): current, copiedExample, critError, critGlobal, critGlobalTotal, critGlobalView, critLoaded, critLoading (+81 more)
+Nodes (90): current, listDeviceDefinitions(), copiedExample, critError, critGlobal, critGlobalTotal, critGlobalView, critLoaded (+82 more)
 
 ### Community 2 - "mcp_readiness.go"
-Cohesion: 0.19
-Nodes (16): composeSegments, exampleBody, exampleUpdateBody, fieldValidationError, grammarBody, orphanGroup, scriptKeyBody, troubleshootingListItem (+8 more)
+Cohesion: 0.29
+Nodes (6): exampleBody, exampleUpdateBody, fieldValidationError, grammarBody, orphanGroup, scriptKeyBody
 
-### Community 4 - "testing.T"
-Cohesion: 0.08
-Nodes (89): deviceFunctionRow, deviceSummary, readinessBody, registryDevice, compose1(), decodeScript(), seedComposeFunction(), TestComposeFieldsEndpoint() (+81 more)
+### Community 4 - "postJSON"
+Cohesion: 0.13
+Nodes (39): TestCreateParameterDefinitionRoundTrip(), TestDictionaryListPaginationAndSearch(), TestDictionarySortUnknownColumnDoesNotPanic(), TestDictionaryUsageCountAndDeleteGuard(), TestParameterDefinitionDuplicateNameRejected(), TestScopeAwareUsageCount(), validParameterDefinitionJSON(), seedTwoFunctionsWithExamples() (+31 more)
 
 ### Community 5 - "Export API Tests"
-Cohesion: 0.09
-Nodes (43): TestImportRegistersDeviceScopes(), TestResetLeavesDevicesRegistered(), compareRows(), exportWorkbookBytes(), importFixture(), TestExportEmptyDatabase(), TestExportIncludesOrphans(), TestExportReimportIdempotent() (+35 more)
+Cohesion: 0.11
+Nodes (38): indexHeader(), ParseWorkbook(), TestImportRegistersDeviceScopes(), TestResetLeavesDevicesRegistered(), exportWorkbookBytes(), importFixture(), TestExportEmptyDatabase(), TestExportIncludesOrphans() (+30 more)
 
 ### Community 6 - "Svelte Best Practices Skill"
 Cohesion: 0.09
 Nodes (27): Actions (use:action), Attachments ({@attach}), createAttachmentKey, fromAction, Await expressions, $effect.pending(), experimental.async option, fork() API (+19 more)
 
 ### Community 7 - "frontend/src/lib/components/DictionaryPage.svelte"
-Cohesion: 0.09
-Nodes (18): confirmRow, content, deviceError, deviceFilter, devices, dialogOpen, editTarget, { kind, title } (+10 more)
+Cohesion: 0.08
+Nodes (23): {
+		row,
+		onEdit,
+		onDelete,
+		onOverride,
+		ownershipLabel
+	}, confirmRow, content, deviceError, deviceFilter, devices, dialogOpen, editTarget (+15 more)
 
 ### Community 8 - "composeField"
 Cohesion: 0.13
-Nodes (21): composeField, composeRequest, checkAllowed(), checkType(), composeFieldFromCriteriaRow(), composeFieldFromRow(), dedupeCriteriaRows(), dedupeParameterRows() (+13 more)
+Nodes (27): composeField, composeRequest, composeSegments, checkAllowed(), checkType(), composeFieldFromCriteriaRow(), composeFieldFromRow(), composeFieldsFor() (+19 more)
 
 ### Community 9 - "deploy-route-check-20261116/src/lib/components/LinksPanel.svelte"
 Cohesion: 0.05
-Nodes (55): ApiError, request(), remove(), save(), addDevice, addMode, addOpen, addPosition (+47 more)
+Nodes (48): remove(), addDevice, addMode, addOpen, addPosition, addRequired, attach(), attaching (+40 more)
 
 ### Community 10 - "devDependencies"
 Cohesion: 0.12
@@ -627,48 +624,54 @@ Nodes (17): devDependencies, eslint-plugin-svelte@^3.24.1, playwright@^1.65.1, p
 
 ### Community 11 - "context.Context"
 Cohesion: 0.03
-Nodes (17): ListSequenceStepsRow, CountCriteriaUsageScopedParams, CountFunctionsSharingNaturalNameParams, CountParameterUsageScopedParams, DeleteFunctionGrammarParams, DeleteScriptKeyAuditParams, FunctionNaturalKeyExistsParams, GetExampleRow (+9 more)
+Nodes (12): ListSequenceStepsRow, CountFunctionsSharingNaturalNameParams, CountParameterUsageScopedParams, DeleteFunctionGrammarParams, DeleteScriptKeyAuditParams, FunctionNaturalKeyExistsParams, GetExampleRow, InsertImportNormalizationParams (+4 more)
 
 ### Community 13 - "deploy-route-check-20261116/src/routes/devices/+page.svelte"
 Cohesion: 0.04
-Nodes (52): createDevice(), deleteDevice(), deviceCountLinkClass, DeviceDefinitionKind, DeviceDefinitionsResult, deviceHref(), deviceLinkClass, DeviceListPage (+44 more)
+Nodes (68): currentLabel, {
+		device,
+		summaries,
+		id,
+		label = 'Device',
+		blankLabel = 'Global definitions',
+		allowAll = false,
+		disabled = false,
+		fullWidth = false,
+		compact = false,
+		onValueChange
+	}, error, input, loaded, loading, loadOptions(), names (+60 more)
 
-### Community 14 - "Function"
-Cohesion: 0.08
-Nodes (11): listQuery, cmpBy(), CountFunctionsParams, ListFunctionsParams, Function, GetFunctionByNaturalKeyParams, InsertFunctionParams, ListFunctionsByNaturalNameParams (+3 more)
+### Community 14 - "listQuery"
+Cohesion: 0.29
+Nodes (3): listQuery, CountFunctionsParams, ListFunctionsParams
 
-### Community 15 - "@lucide/svelte"
-Cohesion: 0.07
-Nodes (20): {
-		ref = $bindable(null),
-		checked = $bindable(false),
-		indeterminate = $bindable(false),
-		class: className,
-		...rest
-	}, {
-		ref = $bindable(null),
-		class: className,
-		inset,
-		children,
-		...restProps
-	}, {
-		page = $bindable(1),
-		total,
-		pageSize = $bindable(20),
-		pageSizeOptions = [10, 20, 50],
-		onPageChange,
-		onPageSizeChange,
-		variant = 'default',
-		class: className
-	}, rail, sizeOptions, totalPages, filtered, input (+12 more)
+### Community 15 - "import_test.go"
+Cohesion: 0.11
+Nodes (5): fingerprint(), transferTable(), validateSource(), report, table
 
-### Community 16 - "Queries"
-Cohesion: 0.21
-Nodes (17): composeFieldsFor(), composeScript(), getComposeFields(), loadFunctionOr404(), registerComposeRoutes(), deleteGrammar(), deleteScriptKey(), functionFromParam() (+9 more)
+### Community 16 - "frontend/src/lib/components/ExamplesWorkspace.svelte"
+Cohesion: 0.06
+Nodes (31): copied, copyScript(), copyStatus, {
+		row,
+		onEdit,
+		onDelete
+	}, fieldErrors, form, {
+		open = $bindable(false),
+		editRow = null,
+		fixedFunction = null,
+		prefillDevice = '',
+		lockDevice = false,
+		onsaved
+	}, save() (+23 more)
 
 ### Community 17 - "frontend/src/lib/utils.ts"
 Cohesion: 0.05
-Nodes (34): {
+Nodes (48): {
+		rows,
+		states = ["default", "hover", "focus", "active", "disabled"],
+		render,
+		class: className,
+	}, {
 		ref = $bindable(null),
 		class: className,
 		children,
@@ -704,7 +707,7 @@ Nodes (34): {
 		class: className,
 		children,
 		...restProps
-	}, open (+26 more)
+	} (+40 more)
 
 ### Community 18 - "SvelteKit Browser Application"
 Cohesion: 0.10
@@ -715,113 +718,86 @@ Cohesion: 0.03
 Nodes (85): current, listDeviceFunctions(), copiedExample, critError, critGlobal, critGlobalTotal, critGlobalView, critLoaded (+77 more)
 
 ### Community 20 - "workbook.go"
-Cohesion: 0.26
-Nodes (16): cell(), normalizePhase(), parseBool(), parseDefinitions(), parseExamples(), parseFunctions(), parseLinks(), parseNullableInt() (+8 more)
+Cohesion: 0.13
+Nodes (23): boolInt(), criteriaDefinitionParams(), Import(), nullInt64(), nullString(), parameterDefinitionParams(), cell(), Workbook (+15 more)
 
 ### Community 21 - "frontend/src/routes/devices/+page.svelte"
-Cohesion: 0.05
-Nodes (44): assignmentKeys(), matchingFields(), {
-		script,
-		parameters = [],
-		criteria = [],
-		loading = false,
-		unavailable = false
-	}, usage, Variant, {
-		variant = 'default',
-		class: className,
-		children,
-		...rest
-	}, variants, createDevice() (+36 more)
+Cohesion: 0.03
+Nodes (72): currentLabel, {
+		device,
+		summaries,
+		id,
+		label = 'Device',
+		blankLabel = 'Global definitions',
+		allowAll = false,
+		disabled = false,
+		fullWidth = false,
+		compact = false,
+		comfortable = false,
+		heading = false,
+		onValueChange
+	}, error, input, loaded, loading, loadOptions(), names (+64 more)
 
-### Community 22 - "parseListQuery"
-Cohesion: 0.16
-Nodes (17): exampleResponse, createExample(), deleteExample(), exampleFilters(), exampleItem(), exampleScriptIssues(), getExample(), listExampleItem() (+9 more)
+### Community 22 - "newDictionaryTestApp"
+Cohesion: 0.17
+Nodes (28): deviceFunctionRow, deviceSummary, registryDevice, TestDeviceDeleteCascadesAndPreservesSharedData(), TestDeviceDeleteRollsBackOnFailure(), registerDevice(), seedDeviceData(), TestDeviceDetailDefinitions() (+20 more)
 
 ### Community 23 - "Export"
 Cohesion: 0.23
 Nodes (11): boolCell(), criteriaDefinitionCells(), criteriaLinkCells(), definitionRow(), Export(), functionCells(), linkRow(), nullableIntCell() (+3 more)
 
-### Community 24 - "deploy-route-check-20261116/src/lib/components/DeviceFunctionDetail.svelte"
-Cohesion: 0.05
-Nodes (45): saveAsExample(), composeOpen, content, copied, copyStatus, definitions(), deleteSelectedExample(), deletingExample (+37 more)
+### Community 24 - "deploy-route-check-20261116/src/lib/components/ExamplesPanel.svelte"
+Cohesion: 0.03
+Nodes (68): copySelection(), copyText(), copyScript(), composeOpen, content, copied, copy(), copyStatus (+60 more)
 
 ### Community 25 - "deploy-route-check-20261116/src/lib/components/ComposeDialog.svelte"
-Cohesion: 0.05
-Nodes (47): copySelection(), copyText(), copyScript(), criteriaValues, currentRequest(), fieldErrors, flow, {
+Cohesion: 0.06
+Nodes (43): formatApiError(), addToSequence(), criteriaValues, currentRequest(), fieldErrors, flow, {
 		fnId,
 		onClose
-	} (+39 more)
+	}, loadError (+35 more)
 
-### Community 26 - "normalizeDeviceName"
-Cohesion: 0.09
-Nodes (28): definitionItem, functionBody, createDevice(), criteriaItem(), deleteDevice(), deviceCriteria(), deviceFromSegment(), deviceParameters() (+20 more)
+### Community 26 - "Queries"
+Cohesion: 0.06
+Nodes (67): exampleResponse, functionBody, TestCreateDeviceSourceValidation(), TestDeleteDeviceConfirmationValidation(), TestFunctionDeviceValidation(), TestRenameDeviceValidation(), TestSequenceBlankDeviceValidation(), createDevice() (+59 more)
 
 ### Community 27 - "deploy-route-check-20261116/src/routes/orphans/+page.svelte"
-Cohesion: 0.08
-Nodes (34): createFunction(), listOrphans(), OrphanExampleRow, OrphanGroup, OrphanKind, OrphanLinkRow, OrphanReport, closeRepair() (+26 more)
+Cohesion: 0.04
+Nodes (65): reloadSequences(), applySort(), applySort(), {
+		label,
+		col,
+		active,
+		dir,
+		onclick
+	}, listOrphans(), OrphanExampleRow, OrphanGroup, OrphanKind (+57 more)
 
 ### Community 28 - "#lib"
-Cohesion: 0.05
-Nodes (56): {
-		rows,
-		states = ["default", "hover", "focus", "active", "disabled"],
-		render,
+Cohesion: 0.04
+Nodes (57): open, Opt, results, searching, settledTerm, typed, {
+		value = $bindable(''),
+		search,
+		ariaLabel,
+		id,
+		placeholder = 'Type to search…',
+		emptyLabel = 'No matching definitions.',
+		emptyActionLabel,
+		onEmptyAction,
+		debounceMs = 250,
 		class: className,
-	}, {
-		open,
-		onOpenChange = () => {},
-		title,
-		description = '',
-		confirmLabel = 'Confirm',
-		cancelLabel = 'Cancel',
-		destructive = true,
-		onConfirm = () => {},
-		children
-	}, {
-		open = $bindable(false),
-		onOpenChange,
-		title,
-		children,
-		class: className
-	}, {
-		open,
-		onOpenChange = () => {},
-		title,
-		description = '',
-		class: className = '',
-		children
+		onValueChange
 	}, {
 		ref = $bindable(null),
-		class: className,
-		inset,
+		value = $bindable([]),
 		...restProps
-	}, {
-		ref = $bindable(null),
-		class: className,
-		align = 'start',
-		alignOffset = -3,
-		portalProps,
-		...restProps
-	}, {
-		class: className,
-		children,
-		...rest
-	}, {
-		class: className,
-		children,
-		...rest
-	} (+48 more)
+	} (+49 more)
 
 ### Community 29 - "deploy-route-check-20261116/src/routes/import/+page.svelte"
 Cohesion: 0.08
 Nodes (28): getImportRun(), ImportNormalization, importReset(), ImportResult, ImportRun, importWorkbook(), listImportRuns(), upload() (+20 more)
 
 ### Community 30 - "frontend/src/lib/components/ComposeDialog.svelte"
-Cohesion: 0.06
-Nodes (40): ApiError, criteriaValues, currentRequest(), fieldErrors, flow, {
-		fnId,
-		onClose
-	}, loadError, loading (+32 more)
+Cohesion: 0.05
+Nodes (59): ApiError, formatApiError(), request(), addToSequence(), criteriaValues, currentRequest(), fieldErrors, flow (+51 more)
 
 ### Community 31 - "dropdown-menu (Radix `DropdownMenu` → Base UI `Menu`)"
 Cohesion: 0.04
@@ -829,7 +805,7 @@ Nodes (48): Arrow / Item / Group / Label / CheckboxItem / RadioGroup / RadioItem
 
 ### Community 32 - "deploy-route-check-20261116/src/routes/sequences/[id]/+page.svelte"
 Cohesion: 0.06
-Nodes (50): addToSequence(), stepFromForm(), createSequence(), deleteSequence(), EmitResult, emitSequence(), getSequence(), SequenceDetail (+42 more)
+Nodes (46): deleteSequence(), EmitResult, emitSequence(), getSequence(), SequenceDetail, SequenceInput, SequenceListItem, SequenceListResult (+38 more)
 
 ### Community 33 - "Blue-Green Deploy Scripts"
 Cohesion: 0.26
@@ -848,27 +824,21 @@ Cohesion: 0.04
 Nodes (46): accordion, Accordion.Content → Accordion.Panel, Accordion.Header → Accordion.Header, Accordion.Item → Accordion.Item, Accordion.Root → Accordion.Root, Accordion.Trigger → Accordion.Trigger, Base UI only props worth knowing, Base UI only props worth knowing (+38 more)
 
 ### Community 37 - "Task 1: PostgreSQL Taxonomy Schema and Store Queries"
-Cohesion: 0.09
-Nodes (15): Global Constraints, Review Focus, Task 1: PostgreSQL Taxonomy Schema and Store Queries, Task 2: Key Generation and Registry Transaction API, Task 3: Frontend Taxonomy Client and Unit Tests, Task 4: Reusable Inline-Create Registry Picker, Task 5: Manage Lists Dialog and Reassignment UX, Task 6: Integrate Registries and Fix Troubleshooting Page Defects (+7 more)
+Cohesion: 0.24
+Nodes (4): Task 1: PostgreSQL Taxonomy Schema and Store Queries, InsertTroubleshootingCategoryParams, ReassignTroubleshootingGuideCategoriesParams, UpdateTroubleshootingCategoryParams
 
-### Community 38 - "frontend/src/lib/components/DictionaryPage.svelte"
-Cohesion: 0.06
-Nodes (36): deleting, error, force, impact, {
+### Community 38 - "TroubleshootingRegistryPicker.svelte"
+Cohesion: 0.12
+Nodes (14): canCreate, createdItem, creating, error, filteredItems, hasExactMatch, input, {
+		items,
+		value = $bindable(''),
 		kind,
-		row,
-		onClose,
-		onDeleted
-	}, {
-		row,
-		onEdit,
-		onDelete,
-		onOverride,
-		ownershipLabel
-	}, DefinitionForm, fieldErrors (+28 more)
+		onCreate
+	} (+6 more)
 
 ### Community 39 - "frontend/src/routes/functions/+page.svelte"
 Cohesion: 0.03
-Nodes (76): deleteFunction(), FunctionFacets, FunctionInput, FunctionRow, getFunction(), getFunctionFacets(), listFunctions(), ListParams (+68 more)
+Nodes (68): deleteFunction(), FunctionFacets, FunctionInput, FunctionRow, getFunction(), getFunctionFacets(), listFunctions(), ListParams (+60 more)
 
 ### Community 40 - "Component Aliases Config"
 Cohesion: 0.15
@@ -879,93 +849,77 @@ Cohesion: 0.19
 Nodes (12): Design-to-Code Handoff Workflow, Figma Design Tool, Figma Plugin Screenshot (Storybook Connect), Price Range Histogram Component Preview, Storybook Connect Figma Plugin Panel, Storybook accessibility testing, Storybook Autodocs, Configure your project (Storybook docs page) (+4 more)
 
 ### Community 42 - "Function"
-Cohesion: 0.09
-Nodes (29): allowedRule, catalogDefinition, catalogLink, exampleTarget, grammarView, mcpCatalog, naturalKey, readinessField (+21 more)
+Cohesion: 0.05
+Nodes (37): allowedRule, catalogDefinition, catalogLink, exampleTarget, grammarView, mcpCatalog, naturalKey, readinessField (+29 more)
 
 ### Community 43 - "select"
 Cohesion: 0.04
 Nodes (44): Base UI only props worth knowing (checkbox), Base UI only props worth knowing (radio-group), Base UI only props worth knowing (select), Base UI only props worth knowing (slider), Base UI only props worth knowing (switch), checkbox, Checkbox.Indicator → Checkbox.Indicator, Checkbox.Root → Checkbox.Root (+36 more)
 
-### Community 44 - "frontend/src/lib/components/ui/dropdown-menu/index.ts"
-Cohesion: 0.11
-Nodes (10): {
-		ref = $bindable(null),
-		value = $bindable([]),
-		...restProps
-	}, {
-		ref = $bindable(null),
-		checked = $bindable(false),
-		indeterminate = $bindable(false),
-		class: className,
-		children: childrenProp,
-		closeOnSelect = false,
-		...restProps
-	}, {
-		ref = $bindable(null),
-		sideOffset = 4,
-		align = 'start',
-		portalProps,
-		class: className,
-		...restProps
-	}, { ref = $bindable(null), ...restProps }, { open = $bindable(false), ...restProps }, { ...restProps }, {
-		ref = $bindable(null),
-		value = $bindable(),
-		...restProps
-	}, { open = $bindable(false), ...restProps } (+2 more)
+### Community 44 - "Review Focus"
+Cohesion: 0.18
+Nodes (7): Review Focus, Task 1: Database Schema, Seed Data, and Store Queries, Task 4: Troubleshooting UI Components & Route (`/troubleshooting`), Troubleshooting Playbook & AI Knowledge Base Implementation Plan, InsertTroubleshootingGuideParams, TroubleshootingGuide, TroubleshootingStep
 
 ### Community 45 - "deploy-route-check-20261116/src/routes/functions/+page.svelte"
-Cohesion: 0.05
-Nodes (48): deleteFunction(), FunctionFacets, FunctionInput, FunctionRow, getFunction(), getFunctionFacets(), listFunctions(), ListParams (+40 more)
+Cohesion: 0.08
+Nodes (29): createFunction(), deleteFunction(), FunctionFacets, FunctionInput, getFunctionFacets(), listFunctions(), ListParams, ListResult (+21 more)
 
-### Community 46 - "deploy-route-check-20261116/src/lib/components/ExamplesPanel.svelte"
-Cohesion: 0.04
-Nodes (55): applySort(), confirmOpen, confirmRemove(), confirmRow, copied, copyStatus, currentFilters(), deleting (+47 more)
+### Community 46 - "mcp_readiness_test.go"
+Cohesion: 0.40
+Nodes (8): readinessBody, createFunctionID(), readiness(), TestDefinitionValuePatternAndConstraintRules(), TestDeviceRenameCarriesGrammarAndKeyAudits(), TestMCPReadinessUsesSeededGrammar(), TestMCPReadinessWarnsAboutExamplesAndAmbiguousKeys(), TestMCPViewsInferInterfaceOnlyWhenUnambiguous()
 
 ### Community 47 - "createSequence"
-Cohesion: 0.18
-Nodes (14): sequenceBody, sequenceResponse, sequenceStepBody, sequenceStepResponse, createSequence(), deleteSequence(), getSequence(), marshalStoredMap() (+6 more)
+Cohesion: 0.24
+Nodes (16): sequenceBody, sequenceResponse, sequenceStepBody, sequenceStepResponse, createSequence(), deleteSequence(), emitSequence(), getSequence() (+8 more)
 
 ### Community 48 - "frontend/src/routes/sequences/[id]/+page.svelte"
-Cohesion: 0.06
-Nodes (50): addToSequence(), stepFromForm(), createSequence(), deleteSequence(), EmitResult, emitSequence(), getSequence(), SequenceDetail (+42 more)
+Cohesion: 0.04
+Nodes (59): deleteSequence(), EmitResult, emitSequence(), getSequence(), SequenceDetail, SequenceInput, SequenceListItem, SequenceListResult (+51 more)
 
 ### Community 49 - "Ubuntu Blue-Green Deployment"
 Cohesion: 0.11
 Nodes (21): 2. Configure Credentials, 3. Transfer and Verify SQLite First, 4. Deploy the First Release, Blue Release Slot (127.0.0.1:24993), deploy/.env (credentials), deploy/.env.proxy (build proxy settings), Go 1.27.1 Toolchain (golang:1.27.1-alpine), Green Release Slot (127.0.0.1:24994) (+13 more)
 
-### Community 51 - "frontend/src/routes/import/+page.svelte"
-Cohesion: 0.05
-Nodes (45): getImportRun(), ImportNormalization, importReset(), ImportResult, ImportRun, importWorkbook(), listImportRuns(), upload() (+37 more)
+### Community 51 - "Review Focus"
+Cohesion: 0.20
+Nodes (9): Global Constraints, Review Focus, Task 2: Key Generation and Registry Transaction API, Task 3: Frontend Taxonomy Client and Unit Tests, Task 4: Reusable Inline-Create Registry Picker, Task 5: Manage Lists Dialog and Reassignment UX, Task 6: Integrate Registries and Fix Troubleshooting Page Defects, Task 7: Full Verification and Browser UX Audit (+1 more)
 
 ### Community 52 - "frontend/src/lib/components/LinksPanel.svelte"
-Cohesion: 0.04
-Nodes (58): remove(), composeOpen, countSource, criteriaOverride, {
-		fn,
-		onEdit,
-		onDelete,
-		standalone = false,
-		heading
-	}, parameterOverride, tab, addDevice (+50 more)
+Cohesion: 0.03
+Nodes (80): deleting, error, force, impact, {
+		kind,
+		row,
+		onClose,
+		onDeleted
+	}, remove(), DefinitionForm, fieldErrors (+72 more)
 
 ### Community 53 - "Filters API Tests"
-Cohesion: 0.53
-Nodes (7): listBody, itoa(), listBodyAt(), seedFilterFunctions(), TestFunctionEnumFilters(), TestFunctionFilterComposesWithSearchSortPaging(), wantNames()
+Cohesion: 0.47
+Nodes (8): listBody, itoa(), listBodyAt(), seedFilterFunctions(), TestFunctionEnumFilters(), TestFunctionFacets(), TestFunctionFilterComposesWithSearchSortPaging(), wantNames()
 
 ### Community 54 - "troubleshooting/+page.svelte"
-Cohesion: 0.07
-Nodes (33): deleteTroubleshootingGuide(), getTroubleshootingGuide(), listTroubleshootingGuides(), allGuidesCatalog, category, clearFilters(), confirmDelete(), debouncedSearch (+25 more)
+Cohesion: 0.03
+Nodes (83): Task 3: Frontend Troubleshooting Client, Multi-Solution Helper, and Unit Tests, completedCount, completedKeys, copyAiContext(), {
+		guide,
+		relatedGuides = [],
+		onSelectGuide,
+		onFilterErrorCode,
+		onAddAlternate,
+		onEdit,
+		onDelete
+	}, isStepChecked(), resetProgress(), stepKey() (+75 more)
 
 ### Community 55 - "Backend README Ops"
 Cohesion: 0.20
 Nodes (10): Backend, Backend Nginx, Backend Service, Build And Secrets, Database Configuration, Local Build And Development, Requirements, Tests (+2 more)
 
-### Community 56 - "server_test.go"
-Cohesion: 0.10
-Nodes (18): TestCreateDeviceSourceValidation(), TestDeleteDeviceConfirmationValidation(), TestFunctionDeviceValidation(), TestRenameDeviceValidation(), TestSequenceBlankDeviceValidation(), RegisterStatic(), Serve(), TestTroubleshootingBodyValidation() (+10 more)
+### Community 56 - "testing.T"
+Cohesion: 0.12
+Nodes (30): compose1(), decodeScript(), seedComposeFunction(), TestComposeFieldsEndpoint(), TestComposeKnownFunctionScript(), TestComposeNoLinksFunction(), TestComposeSaveAsExample(), TestComposeValidationRejections() (+22 more)
 
 ### Community 57 - "frontend/src/lib/components/McpReadinessPanel.svelte"
-Cohesion: 0.07
-Nodes (45): formatApiError(), request(), auditKey(), auditor, device, encoding, error, fieldKeys (+37 more)
+Cohesion: 0.09
+Nodes (33): auditKey(), auditor, device, encoding, error, fieldKeys, fieldSort, { fnId, defaultDevice = '' } (+25 more)
 
 ### Community 58 - "Issue tracker: GitHub"
 Cohesion: 0.06
@@ -985,7 +939,13 @@ Nodes (8): svelte-file-editor agent, svelte-code-writer skill, @sveltejs/mcp CLI
 
 ### Community 62 - "frontend/src/lib/components/ExamplesPanel.svelte"
 Cohesion: 0.04
-Nodes (57): sortFields(), applySort(), confirmOpen, confirmRemove(), confirmRow, copied, copyStatus, currentFilters() (+49 more)
+Nodes (62): sortFields(), applySort(), applySort(), sortFields(), {
+		label,
+		col,
+		active,
+		dir,
+		onclick
+	}, getImportRun(), ImportNormalization, importReset() (+54 more)
 
 ### Community 63 - "Project READMEs"
 Cohesion: 0.20
@@ -1007,33 +967,33 @@ Nodes (4): E2E_DIR, FIXTURE, E2E_DIR, FIXTURE
 Cohesion: 0.29
 Nodes (6): baseLocale, locales, modules, plugin.inlang.messageFormat, pathPattern, $schema
 
-### Community 68 - "color-pair.tsx"
-Cohesion: 0.24
-Nodes (8): ColorPair(), contrast(), luminance(), toHex(), toRgb(), defaultStates, StateMatrix(), Helpers
+### Community 68 - "The Design System Page"
+Cohesion: 0.07
+Nodes (28): ColorPair(), contrast(), luminance(), toHex(), toRgb(), defaultStates, StateMatrix(), Block anatomy (+20 more)
 
 ### Community 69 - "createTroubleshootingGuide"
-Cohesion: 0.20
-Nodes (13): troubleshootingBody, troubleshootingGuideResponse, troubleshootingStepBody, troubleshootingStepResponse, createTroubleshootingGuide(), deleteTroubleshootingGuide(), getTroubleshootingGuide(), registerTroubleshootingRoutes() (+5 more)
+Cohesion: 0.24
+Nodes (15): troubleshootingBody, troubleshootingGuideResponse, troubleshootingListItem, troubleshootingStepBody, troubleshootingStepResponse, createTroubleshootingGuide(), deleteTroubleshootingGuide(), getTroubleshootingGuide() (+7 more)
 
 ### Community 70 - "frontend/src/routes/orphans/+page.svelte"
 Cohesion: 0.07
 Nodes (35): createFunction(), listOrphans(), OrphanExampleRow, OrphanGroup, OrphanKind, OrphanLinkRow, OrphanReport, closeRepair() (+27 more)
 
 ### Community 71 - "Vitest Unit Tests"
-Cohesion: 0.20
-Nodes (4): greet(), { host = 'SvelteKit', guest = 'Vitest' }, greet(), { host = 'SvelteKit', guest = 'Vitest' }
+Cohesion: 0.22
+Nodes (3): items, greet(), { host = 'SvelteKit', guest = 'Vitest' }
 
 ### Community 73 - "Agent Skills Docs"
 Cohesion: 0.33
 Nodes (5): Agent skills, Domain docs, Issue tracker, Triage labels, Web_Program_Functions_Database
 
 ### Community 74 - "frontend/vite.config.ts"
-Cohesion: 0.18
-Nodes (6): ADR-0001, overrides, minimatch@>=10.0.0 <11.0.1, postcss-selector-parser@<6.1.5, runed@0.35.1, ADR-0001
+Cohesion: 0.23
+Nodes (3): ADR-0001, handle, ADR-0001
 
 ### Community 75 - "frontend/src/lib/components/DeviceFunctionDetail.svelte"
 Cohesion: 0.03
-Nodes (78): copySelection(), copyText(), copyScript(), saveAsExample(), composeOpen, content, copied, copy() (+70 more)
+Nodes (73): copySelection(), copyText(), copyScript(), composeOpen, content, copied, copy(), copyStatus (+65 more)
 
 ### Community 76 - "Storybook Accessibility Assets"
 Cohesion: 0.47
@@ -1148,8 +1108,8 @@ Cohesion: 0.67
 Nodes (4): YouTube Icon (SVG), Play Button Symbol, Storybook Story Asset, YouTube Brand Logo
 
 ### Community 107 - "deploy-route-check-20261116/src/lib/components/DeviceDirectoryPrototype.svelte"
-Cohesion: 0.07
-Nodes (22): collapsed, dark, Device, devices, DialogMode, error, message, metrics (+14 more)
+Cohesion: 0.05
+Nodes (30): collapsed, dark, Device, devices, DialogMode, error, message, metrics (+22 more)
 
 ### Community 108 - "sqlc Config"
 Cohesion: 0.67
@@ -1199,9 +1159,9 @@ Nodes (23): 1. Scope the procedure, 2. Map each stage's journey, 3. Author the w
 Cohesion: 0.08
 Nodes (24): accordion, asChild -> render, breadcrumb / marker (Slot users), Coverage matrix, CSS custom properties, Data attributes / class hooks, dialog / alert-dialog / sheet, Doc-validation TODOs (before specs are final) (+16 more)
 
-### Community 130 - "TroubleshootingDialog.svelte"
-Cohesion: 0.09
-Nodes (20): busy, category, deviceName, dialogDescription, dialogTitle, errorCode, fieldErrors, functionName (+12 more)
+### Community 130 - "deploy-route-check-20261116/README.md"
+Cohesion: 0.33
+Nodes (4): overrides, minimatch@>=10.0.0 <11.0.1, postcss-selector-parser@<6.1.5, runed@0.35.1
 
 ### Community 131 - "caveman-compress/README.md"
 Cohesion: 0.08
@@ -1234,10 +1194,6 @@ Nodes (19): Animation Utilities, Composable animation modifiers, CSS Layer Order
 ### Community 138 - "Creation Log: Systematic Debugging Skill"
 Cohesion: 0.10
 Nodes (19): Bulletproofing Elements, Creation Log: Systematic Debugging Skill, Enhancement 1: TDD Reference, Extraction Decisions, Final Outcome, Initial Version, Iterations, Key Insight (+11 more)
-
-### Community 139 - "validationError"
-Cohesion: 0.23
-Nodes (12): deviceFunctions(), conflict(), createFunction(), deleteFunction(), functionFacets(), functionResponse(), getFunction(), listFunctions() (+4 more)
 
 ### Community 142 - "PrimeVue Styled Mode Theming"
 Cohesion: 0.11
@@ -1294,10 +1250,6 @@ Nodes (15): 1. Observe the Symptom, 2. Find Immediate Cause, 3. Ask: What Called
 ### Community 160 - "Systematic Debugging"
 Cohesion: 0.12
 Nodes (15): Common Rationalizations, Overview, Phase 1: Root Cause Investigation, Phase 2: Pattern Analysis, Phase 3: Hypothesis and Testing, Phase 4: Implementation, Quick Reference, Red Flags - STOP and Follow Process (+7 more)
-
-### Community 161 - "troubleshooting.ts"
-Cohesion: 0.17
-Nodes (17): Task 3: Frontend Troubleshooting Client, Multi-Solution Helper, and Unit Tests, findRelatedGuides(), ListTroubleshootingQuery, TroubleshootingCategory, TroubleshootingSeverity, severityTone(), TROUBLESHOOTING_CATEGORIES, TROUBLESHOOTING_SEVERITIES (+9 more)
 
 ### Community 162 - "frontend/package.json"
 Cohesion: 0.12
@@ -1359,18 +1311,6 @@ Nodes (14): 1. Built-in variants, 2. Tailwind classes via `class`, 3. Add a new 
 Cohesion: 0.14
 Nodes (13): Avatar always needs Avatar.Fallback, Button has no isPending or isLoading prop, Callouts use Alert, Card structure, Choosing between overlay components, Component Composition, Contents, Dialog, Sheet, and Drawer always need a Title (+5 more)
 
-### Community 177 - "TroubleshootingDetail.svelte"
-Cohesion: 0.21
-Nodes (13): completedCount, completedKeys, copyAiContext(), {
-		guide,
-		relatedGuides = [],
-		onSelectGuide,
-		onFilterErrorCode,
-		onAddAlternate,
-		onEdit,
-		onDelete
-	}, isStepChecked(), resetProgress(), stepKey(), toggleStep() (+5 more)
-
 ### Community 178 - "Tailwind CSS"
 Cohesion: 0.15
 Nodes (12): Animations, Color Palette, Dark Mode, Extensions, Form, Headless, Override, Overview (+4 more)
@@ -1416,8 +1356,8 @@ Cohesion: 0.15
 Nodes (12): go, emit_json_tags, emit_prepared_queries, out, package, sql_package, sql, engine (+4 more)
 
 ### Community 189 - "database/sql.NullString"
-Cohesion: 0.05
-Nodes (20): deviceBody, criteriaDefinitionResponse(), definitionResponseMap(), parameterDefinitionResponse(), CriteriaDefinition, ParameterDefinition, CountExamplesParams, CountTroubleshootingGuidesParams (+12 more)
+Cohesion: 0.06
+Nodes (18): definitionItem, deviceBody, criteriaItem(), nullStringValue(), parameterItem(), UpsertParameterDefinitionParams, ParameterDefinition, CountExamplesParams (+10 more)
 
 ### Community 190 - "aliases"
 Cohesion: 0.15
@@ -1463,28 +1403,22 @@ Nodes (11): Applying the Pattern, Defense-in-Depth Validation, Example from Sess
 Cohesion: 0.17
 Nodes (11): Chart the map, Fog of war, Invocation, Out of scope, Plan, don't do, Refer by name, The Map, The map body (+3 more)
 
-### Community 201 - "deploy-route-check-20261116/src/lib/components/DictionaryPage.svelte"
-Cohesion: 0.04
-Nodes (44): deleting, error, force, impact, {
+### Community 201 - "deploy-route-check-20261116/src/lib/components/DefinitionDialog.svelte"
+Cohesion: 0.08
+Nodes (28): deleting, error, force, impact, {
 		kind,
 		row,
 		onClose,
 		onDeleted
-	}, {
-		row,
-		onEdit,
-		onDelete,
-		onOverride,
-		ownershipLabel
-	}, DefinitionForm, fieldErrors (+36 more)
+	}, DefinitionForm, fieldErrors, form (+20 more)
 
 ### Community 202 - "Sample Test Script Deep Dive: Items, Functions, Parameters, Criteria, Control Flow"
 Cohesion: 0.17
 Nodes (12): Bundle header, versions, packaging, Bundle-specific lint expectations, Criteria field (row field 4) semantics by function, Device catalog (row field 1) and functions (row field 2), Effective limits from TEST_SPEC.ini (Sample: HH5K values), Flows in the bundle, Ordered item list: `Wireless_Test_2_5G` (active rows only), PARAM field idioms (row field 3) (+4 more)
 
 ### Community 203 - "Backend Dependency Audit"
-Cohesion: 0.17
-Nodes (11): Backend Dependency Audit, Checks and Limitations, Deprecation and Breaking Changes, Direct dependencies and toolchain, Fiber v2 -> v3: migration completed, Indirect dependencies with newer versions, Original Audit Record, Other update risks (+3 more)
+Cohesion: 0.09
+Nodes (23): 1. Excelize: prioritize workbook import, 2. Go standard-library TLS verification, 3-4. pgx: two conditional advisories, 5. klauspost/compress, 6. Brotli, Applied Security Updates, Backend Dependency Audit, Checks and Limitations (+15 more)
 
 ### Community 204 - "Workflow"
 Cohesion: 0.17
@@ -1535,8 +1469,8 @@ Cohesion: 0.18
 Nodes (10): compilerOptions, allowImportingTsExtensions, noEmit, rewriteRelativeImportExtensions, sourceMap, strict, extends, files (+2 more)
 
 ### Community 217 - "Workbook conventions"
-Cohesion: 0.18
-Nodes (10): Append-script pattern, Evidence hierarchy, Example rows, Orphan semantics (reconciliation), Parameter and criteria definitions, Registry growth log, Script-line layouts, Source taxonomy (+2 more)
+Cohesion: 0.17
+Nodes (11): Append-script pattern, Evidence hierarchy, Example rows, Files involved, Orphan semantics (reconciliation), Parameter and criteria definitions, Registry growth log, Script-line layouts (+3 more)
 
 ### Community 218 - "caveman-explore/package.json"
 Cohesion: 0.20
@@ -1561,14 +1495,6 @@ Nodes (9): Accordion animation placement, Button, Conventions, DropdownMenu / Co
 ### Community 223 - "Migrate to Shoehorn"
 Cohesion: 0.20
 Nodes (9): `as Type` → `fromPartial()`, `as unknown as Type` → `fromAny()`, Install, Large objects with few needed properties, Migrate to Shoehorn, Migration patterns, When to use each, Why shoehorn? (+1 more)
-
-### Community 224 - "serverError"
-Cohesion: 0.32
-Nodes (8): definitionBody, dictionaryRoutes, definitionWriteError(), parseDefinitionBody(), registerDictionary(), validateDefinition(), valueParsesAs(), serverError()
-
-### Community 225 - "The Design System Page"
-Cohesion: 0.17
-Nodes (12): Block anatomy, Checklist, Components: Tiers and Block Anatomy, Contents, Do and Don't, Edge Cases, Page Outline, Principles (+4 more)
 
 ### Community 226 - "Troubleshooting Playbook & AI Knowledge Base Design"
 Cohesion: 0.20
@@ -1720,8 +1646,8 @@ Cohesion: 0.25
 Nodes (7): Conversational feel, Format arguments to actually have, Grounding, Out of scope, Pulling from the pile, The loop, Writing rhythm
 
 ### Community 259 - "database/sql.DB"
-Cohesion: 0.13
-Nodes (29): troubleshootingRegistryBody, troubleshootingRegistryResponse, bindTroubleshootingRegistryBody(), categoryLabelExists(), categoryRegistryResponse(), categoryValues(), createTroubleshootingCategory(), createTroubleshootingSeverity() (+21 more)
+Cohesion: 0.12
+Nodes (38): troubleshootingRegistryBody, troubleshootingRegistryResponse, validationError(), bindTroubleshootingRegistryBody(), capTroubleshootingKey(), categoryLabelExists(), categoryRegistryResponse(), categoryValues() (+30 more)
 
 ### Community 260 - "healthcheck"
 Cohesion: 0.50
@@ -1777,7 +1703,7 @@ Nodes (7): CLI, Component Structure → [composition.md](./rules/composition.md)
 
 ### Community 273 - "deploy-route-check-20261116/src/lib/components/McpReadinessPanel.svelte"
 Cohesion: 0.10
-Nodes (31): formatApiError(), auditKey(), auditor, device, encoding, error, { fnId, defaultDevice = '' }, load() (+23 more)
+Nodes (30): auditKey(), auditor, device, encoding, error, { fnId, defaultDevice = '' }, load(), loading (+22 more)
 
 ### Community 274 - "Language"
 Cohesion: 0.29
@@ -1915,25 +1841,6 @@ Nodes (5): interface, display_name, short_description, policy, allow_implicit_in
 Cohesion: 0.33
 Nodes (5): interface, display_name, short_description, policy, allow_implicit_invocation
 
-### Community 308 - "deploy-route-check-20261116/src/lib/components/ExamplesWorkspace.svelte"
-Cohesion: 0.07
-Nodes (33): currentLabel, {
-		device,
-		summaries,
-		id,
-		label = 'Device',
-		blankLabel = 'Global definitions',
-		allowAll = false,
-		disabled = false,
-		fullWidth = false,
-		compact = false,
-		onValueChange
-	}, error, input, loaded, loading, loadOptions(), names (+25 more)
-
-### Community 309 - "New"
-Cohesion: 0.14
-Nodes (22): httpError, linkBody, linkStore, linkView, boolToInt64(), nullStrPtr(), registerCriteriaDictionary(), registerParameterDictionary() (+14 more)
-
 ### Community 310 - "Available Svelte MCP Tools:"
 Cohesion: 0.33
 Nodes (5): 1. list-sections, 2. get-documentation, 3. svelte-autofixer, 4. playground-link, Available Svelte MCP Tools:
@@ -2066,9 +1973,9 @@ Nodes (4): Answer, Outcome, Q: Take a look at this image: C:\Users\Samuel_Halomo
 Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: continue with the following: - because other filter fields don't have label, for good UI/UX, can we remove the label for the divice picker searchable fields? - can we also improve the UI/UX of all scrollbar/scroll area in the page to be better? for example we can make the scrollbar to be thinner, change the color based on the light/dark mode, and hide the scrollbar when user don't perform any scrolling. Just like how it is implemented on the "Bits-UI - Scroll Area"., Source Nodes
 
-### Community 344 - "Import"
-Cohesion: 0.25
-Nodes (8): boolInt(), criteriaDefinitionParams(), Import(), nullInt64(), nullString(), parameterDefinitionParams(), UpsertCriteriaDefinitionParams, UpsertParameterDefinitionParams
+### Community 344 - "CriteriaDefinition"
+Cohesion: 0.12
+Nodes (8): criteriaDefinitionResponse(), definitionResponseMap(), parameterDefinitionResponse(), UpsertCriteriaDefinitionParams, CriteriaDefinition, InsertCriteriaDefinitionParams, ResolveCriteriaDefinitionByLinkParams, UpdateCriteriaDefinitionParams
 
 ### Community 346 - "deploy-route-check-20261116/tests/e2e/smoke.spec.ts"
 Cohesion: 0.40
@@ -2211,67 +2118,35 @@ Cohesion: 0.24
 Nodes (9): orphanExampleItem, orphanLinkItem, nullableAny(), nullablePosition(), orphanCriteriaItems(), orphanExampleItems(), orphanParameterItems(), orphanReport() (+1 more)
 
 ### Community 512 - "functions_test.go"
-Cohesion: 0.38
-Nodes (10): newFunctionsTestApp(), seedFunctions(), TestCreateFunctionDuplicateKeyRejected(), TestCreateFunctionRoundTrip(), TestCreateFunctionValidationFieldErrors(), TestFunctionCRUDRoundTrip(), TestListFunctionsFilter(), TestListFunctionsPaginationContract() (+2 more)
+Cohesion: 0.24
+Nodes (11): newFunctionsTestApp(), seedFunctions(), TestCreateFunctionDuplicateKeyRejected(), TestCreateFunctionRoundTrip(), TestCreateFunctionValidationFieldErrors(), TestFunctionCRUDRoundTrip(), TestListFunctionsFilter(), TestListFunctionsPaginationContract() (+3 more)
 
-### Community 513 - "deploy-route-check-20261116/src/lib/components/ui/select.svelte"
-Cohesion: 0.18
-Nodes (9): {
-		page = $bindable(1),
-		total,
-		pageSize = $bindable(20),
-		pageSizeOptions = [10, 20, 50],
-		onPageChange,
-		onPageSizeChange,
-		class: className
-	}, totalPages, filtered, input, open, Option, selectedLabel, term (+1 more)
-
-### Community 514 - "database/sql.NullInt64"
+### Community 513 - "deploy-route-check-20261116/src/lib/components/DictionaryPage.svelte"
 Cohesion: 0.07
-Nodes (21): insertLinkParams, updateLinkAttrs, CriteriaLink, ParameterLink, GetCriteriaLinkRow, GetParameterLinkRow, InsertCriteriaLinkParams, InsertParameterLinkParams (+13 more)
+Nodes (24): confirmRow, content, deviceError, deviceFilter, devices, dialogOpen, editTarget, { kind, title } (+16 more)
 
-### Community 515 - "importHandler"
-Cohesion: 0.31
-Nodes (6): getImportRun(), importHandler(), importRunResponse(), listImportRuns(), registerImportRoutes(), ImportRun
+### Community 514 - "links.go"
+Cohesion: 0.04
+Nodes (57): definitionBody, dictionaryRoutes, httpError, insertLinkParams, linkBody, linkStore, linkView, updateLinkAttrs (+49 more)
 
 ### Community 516 - "tests/api/troubleshooting_registry_test.go"
 Cohesion: 0.62
 Nodes (6): registryItem, registryList, registryItemByKey(), registryItems(), TestTroubleshootingRegistryDeleteValidationAndAtomicReassignment(), TestTroubleshootingRegistryListIncludesCountsAndStableUpdates()
 
-### Community 517 - "$app"
-Cohesion: 0.06
-Nodes (24): { current, onChange }, cycle(), index, onKeydown(), variants, {
+### Community 517 - "@lucide/svelte"
+Cohesion: 0.03
+Nodes (69): { current, onChange }, cycle(), index, onKeydown(), variants, {
 		items,
 		class: className
-	}, ResolvedHref, { children } (+16 more)
+	}, ResolvedHref, { theme = 'system', ...restProps } (+61 more)
 
-### Community 518 - "Foundations"
-Cohesion: 0.25
-Nodes (8): Color roles, Elevation, Foundations, Motion and icons, Palette, Radius, Spacing, Typography
-
-### Community 523 - "nextTroubleshootingKey"
-Cohesion: 0.47
-Nodes (6): capTroubleshootingKey(), nextTroubleshootingKey(), slugTroubleshootingKey(), TestNextTroubleshootingKeySuffixesCollisions(), TestSlugTroubleshootingKey(), TestTroubleshootingKeysStayWithinDatabaseBoundary()
-
-### Community 524 - "ParseWorkbook"
-Cohesion: 0.33
-Nodes (4): indexHeader(), ParseWorkbook(), Files involved, 01: Fixture oracle — derive workbook counts, stop pinning literals
+### Community 519 - "frontend/src/routes/+layout.svelte"
+Cohesion: 0.12
+Nodes (7): { children }, dark, functionsPrototype, navItems, prototypePage, referencePage, reroute()
 
 ### Community 525 - "ScriptKeyAudit"
 Cohesion: 0.33
 Nodes (3): ScriptKeyAudit, ListScriptKeyAuditsParams, UpsertScriptKeyAuditParams
-
-### Community 526 - "Findings"
-Cohesion: 0.33
-Nodes (6): 1. Excelize: prioritize workbook import, 2. Go standard-library TLS verification, 3-4. pgx: two conditional advisories, 5. klauspost/compress, 6. Brotli, Findings
-
-### Community 527 - "Deployment Clarification And Update Status"
-Cohesion: 0.33
-Nodes (6): Applied Security Updates, Deployment Clarification And Update Status, Earlier Offline Workstation Baseline, Final Verification, Remaining Compatible Updates, Scanner Results
-
-### Community 529 - "frontend/src/lib/components/ui/tabs/index.ts"
-Cohesion: 0.40
-Nodes (4): Content, List, Root, Trigger
 
 ## Ambiguous Edges - Review These
 - `Layered Context / Data Stack Concept` → `Storybook Decorative Asset Role`  [AMBIGUOUS]
@@ -2279,8 +2154,8 @@ Nodes (4): Content, List, Root, Trigger
 
 ## Knowledge Gaps
 - **90 isolated node(s):** `master-control-functions (project identity)`, `ADR-0005`, `ADR-0009`, `ADR-0010`, `webprogfndb` (+85 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3562 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **167 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3579 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **171 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Work-memory lessons
 
@@ -2299,18 +2174,18 @@ Nodes (4): Content, List, Root, Trigger
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Review Focus` connect `normalizeDeviceName` to `troubleshooting.ts`?**
-  _High betweenness centrality (0.164) - this node is a cross-community bridge._
+- **Why does `Review Focus` connect `Review Focus` to `Queries`, `troubleshooting/+page.svelte`?**
+  _High betweenness centrality (0.154) - this node is a cross-community bridge._
 - **Are the 74 inferred relationships involving `postJSON()` (e.g. with `compose1()` and `seedComposeFunction()`) actually correct?**
   _`postJSON()` has 74 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `master-control-functions (project identity)`, `ADR-0005`, `ADR-0009` to the rest of the system?**
   _90 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `import_test.go` be split into smaller, more focused modules?**
-  _Cohesion score 0.0687719298245614 - nodes in this community are weakly interconnected._
-- **Why does `Task 3: Frontend Troubleshooting Client, Multi-Solution Helper, and Unit Tests` connect `troubleshooting.ts` to `TroubleshootingDetail.svelte`, `normalizeDeviceName`?**
-  _High betweenness centrality (0.163) - this node is a cross-community bridge._
+  _Cohesion score 0.0782312925170068 - nodes in this community are weakly interconnected._
+- **Why does `Task 3: Frontend Troubleshooting Client, Multi-Solution Helper, and Unit Tests` connect `troubleshooting/+page.svelte` to `Review Focus`?**
+  _High betweenness centrality (0.153) - this node is a cross-community bridge._
 - **Should `frontend/src/routes/devices/[name]/+page.svelte` be split into smaller, more focused modules?**
-  _Cohesion score 0.023964165733482642 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.024342105263157894 - nodes in this community are weakly interconnected._
 
 ### Low-confidence Hints
 _AMBIGUOUS edges — the extractor was unsure. Verify before acting on these._
