@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { ArrowDown, ArrowUp, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import AlertDialog from './ui/alert-dialog.svelte';
@@ -12,6 +13,8 @@
 	import {
 		deleteTroubleshootingCategory,
 		deleteTroubleshootingSeverity,
+		reorderTroubleshootingCategory,
+		reorderTroubleshootingSeverity,
 		updateTroubleshootingCategory,
 		updateTroubleshootingSeverity,
 		type TroubleshootingCategory,
@@ -48,6 +51,22 @@
 			this.persistedDescription = item.description;
 			this.persistedTone = this.tone;
 		}
+
+		reconcile(item: TroubleshootingCategory | TroubleshootingSeverity) {
+			const labelIsDirty = this.label !== this.persistedLabel;
+			const descriptionIsDirty = this.description !== this.persistedDescription;
+			const toneIsDirty = this.tone !== this.persistedTone;
+			if (!labelIsDirty) this.label = item.label;
+			if (!descriptionIsDirty) this.description = item.description;
+			if (!toneIsDirty && 'tone' in item) this.tone = item.tone;
+			this.sort_order = item.sort_order;
+			this.built_in = item.built_in;
+			this.guide_count = item.guide_count;
+			this.displayName = item.label;
+			this.persistedLabel = item.label;
+			this.persistedDescription = item.description;
+			this.persistedTone = 'tone' in item ? item.tone : '';
+		}
 	}
 
 	type CategoryRow = InstanceType<typeof EditableRow>;
@@ -74,14 +93,40 @@
 	} = $props();
 
 	let tab = $state<Kind>('category');
-	let categoryRows = $derived(categories.map((item) => new EditableRow(item)));
-	let severityRows = $derived(severities.map((item) => new EditableRow(item)));
+	let categoryRows = $state(untrack(() => categories.map((item) => new EditableRow(item))));
+	let severityRows = $state(untrack(() => severities.map((item) => new EditableRow(item))));
 	let reordering = $state<Kind | null>(null);
 	let deleteTarget = $state<DeleteTarget | null>(null);
 	let replacement = $state('');
 	let deleting = $state(false);
 	let deleteError = $state('');
 	let blockDeleteClose = false;
+
+	function reconcileRows<T extends TroubleshootingCategory | TroubleshootingSeverity>(
+		current: EditableRow[],
+		items: T[]
+	) {
+		const byKey = new Map(current.map((row) => [row.key, row]));
+		return items.map((item) => {
+			const row = byKey.get(item.key) ?? new EditableRow(item);
+			row.reconcile(item);
+			return row;
+		});
+	}
+
+	$effect(() => {
+		const nextCategories = categories;
+		untrack(() => {
+			categoryRows = reconcileRows(categoryRows, nextCategories);
+		});
+	});
+
+	$effect(() => {
+		const nextSeverities = severities;
+		untrack(() => {
+			severityRows = reconcileRows(severityRows, nextSeverities);
+		});
+	});
 
 	function kindLabel(kind: Kind) {
 		return kind === 'category' ? 'Category' : 'Severity';
@@ -153,37 +198,16 @@
 		neighbor.busy = true;
 		row.error = '';
 		neighbor.error = '';
-		const rowOrder = row.sort_order;
-		const neighborOrder = neighbor.sort_order;
 		let moved = false;
 		try {
-			if (kind === 'category') {
-				await updateTroubleshootingCategory(row.key, {
-					label: row.persistedLabel,
-					description: row.persistedDescription,
-					sort_order: neighborOrder
-				});
-				await updateTroubleshootingCategory(neighbor.key, {
-					label: neighbor.persistedLabel,
-					description: neighbor.persistedDescription,
-					sort_order: rowOrder
-				});
-			} else {
-				await updateTroubleshootingSeverity(row.key, {
-					label: row.persistedLabel,
-					description: row.persistedDescription,
-					sort_order: neighborOrder,
-					tone: (row as SeverityRow).persistedTone
-				});
-				await updateTroubleshootingSeverity(neighbor.key, {
-					label: neighbor.persistedLabel,
-					description: neighbor.persistedDescription,
-					sort_order: rowOrder,
-					tone: (neighbor as SeverityRow).persistedTone
-				});
+			const result =
+				kind === 'category'
+					? await reorderTroubleshootingCategory(row.key, neighbor.key)
+					: await reorderTroubleshootingSeverity(row.key, neighbor.key);
+			for (const item of result.items) {
+				const editable = rows.find((candidate) => candidate.key === item.key);
+				editable?.reconcile(item);
 			}
-			row.sort_order = neighborOrder;
-			neighbor.sort_order = rowOrder;
 			if (kind === 'category') {
 				categoryRows = categoryRows.toSorted((a, b) => a.sort_order - b.sort_order);
 			} else {

@@ -102,20 +102,20 @@
     "semantic_hash": ""
   },
   "backend/internal/store/compose.sql.go": {
-    "mtime": 1795096340.0295947,
-    "seen": 1795096366.962879,
+    "mtime": 1795100435.2228744,
+    "seen": 1795101713.4916677,
     "ast_hash": "18a609ab7d16f216247174760fc806fd",
     "semantic_hash": ""
   },
   "backend/internal/store/criteria_definitions.sql.go": {
-    "mtime": 1795096340.0295947,
-    "seen": 1795096366.9628806,
+    "mtime": 1795100435.2241433,
+    "seen": 1795101713.491669,
     "ast_hash": "e99c7bd26a0ec719096c28acacc9e48d",
     "semantic_hash": ""
   },
   "backend/internal/store/db.go": {
-    "mtime": 1795096340.0295947,
-    "seen": 1795096366.9628816,
+    "mtime": 1795100435.2241433,
+    "seen": 1795101713.4916704,
     "ast_hash": "90adab23fc6b1074566aa7dfb04d0d9d",
     "semantic_hash": ""
   },
@@ -126,56 +126,56 @@
     "semantic_hash": ""
   },
   "backend/internal/store/examples.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630938,
+    "mtime": 1795100435.2270067,
+    "seen": 1795101713.491885,
     "ast_hash": "8026539f990b9f45a642bd6fc6558c1e",
     "semantic_hash": ""
   },
   "backend/internal/store/facets.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630947,
+    "mtime": 1795100435.2270067,
+    "seen": 1795101713.4918861,
     "ast_hash": "16857f19051e03e343af79353cae0646",
     "semantic_hash": ""
   },
   "backend/internal/store/function_links.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630966,
+    "mtime": 1795100435.2296798,
+    "seen": 1795101713.491888,
     "ast_hash": "2c437ff22fda9580325e82eb8385b1c9",
     "semantic_hash": ""
   },
   "backend/internal/store/functions.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630973,
+    "mtime": 1795100435.2296798,
+    "seen": 1795101713.4918895,
     "ast_hash": "608763bc1617ea3b3b041063d79386ef",
     "semantic_hash": ""
   },
   "backend/internal/store/import.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630983,
+    "mtime": 1795100435.2296798,
+    "seen": 1795101713.4918904,
     "ast_hash": "369c5861dcd89a3eab1ee235ff46e26d",
     "semantic_hash": ""
   },
   "backend/internal/store/models.go": {
-    "mtime": 1795096287.1256166,
-    "seen": 1795096366.9630992,
+    "mtime": 1795100414.134198,
+    "seen": 1795101713.4918914,
     "ast_hash": "ff912f1e64ded2c243c790e43b91ce89",
     "semantic_hash": ""
   },
   "backend/internal/store/orphans.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9631,
+    "mtime": 1795100435.2296798,
+    "seen": 1795101713.4918926,
     "ast_hash": "eb64a7e17d2b480b45a2401f1d3cdd59",
     "semantic_hash": ""
   },
   "backend/internal/store/parameter_definitions.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9631004,
+    "mtime": 1795100435.2296798,
+    "seen": 1795101713.4918933,
     "ast_hash": "cc854181dd394201edd70900eff9e276",
     "semantic_hash": ""
   },
   "backend/internal/store/sequences.sql.go": {
-    "mtime": 1795096340.0384288,
-    "seen": 1795096366.9631011,
+    "mtime": 1795100435.2296798,
+    "seen": 1795101713.4918942,
     "ast_hash": "76e34286f55a924f5f4fa9ec51173fbe",
     "semantic_hash": ""
   },
@@ -468,32 +468,32 @@
     "semantic_hash": ""
   },
   "backend/internal/store/devices_definitions_global.sql.go": {
-    "mtime": 1795096340.0295947,
-    "seen": 1795096366.9630196,
+    "mtime": 1795100435.2241433,
+    "seen": 1795101713.49181,
     "ast_hash": "9e87f5f9dc2b2837676a7de404775b0f",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_definitions_scoped.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630203,
+    "mtime": 1795100435.2241433,
+    "seen": 1795101713.4918115,
     "ast_hash": "0e61e322c56ba03aecac0494dab8b77f",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_functions.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630213,
+    "mtime": 1795100435.2264996,
+    "seen": 1795101713.4918127,
     "ast_hash": "516d0837027203b2495258903a36c937",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_index.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.963022,
+    "mtime": 1795100435.2270067,
+    "seen": 1795101713.4918134,
     "ast_hash": "3e80e9c90504284ed13576044a24e8b2",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_registry.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.9630232,
+    "mtime": 1795100435.2270067,
+    "seen": 1795101713.4918146,
     "ast_hash": "d859030f3ef4d8d3290dd1304fad4363",
     "semantic_hash": ""
   },
@@ -1572,9 +1572,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/DevicePicker.svelte": {
-    "mtime": 1795086556.8893623,
-    "seen": 1795088517.1840184,
-    "ast_hash": "cc5890496152a5bb2a537d5991fc4ae1",
+    "mtime": 1795101482.3142123,
+    "seen": 1795101713.4962234,
+    "ast_hash": "c3fd4f17d036a7f39f00e072f18a6016",
     "semantic_hash": ""
   },
   "frontend/src/lib/components/FunctionDetail.svelte": {
@@ -3288,21 +3288,21 @@
     "semantic_hash": ""
   },
   "backend/internal/store/function_grammars.sql.go": {
-    "mtime": 1795096340.0320492,
-    "seen": 1795096366.963096,
+    "mtime": 1795100435.2270067,
+    "seen": 1795101713.491887,
     "ast_hash": "303f78d428e03d0f68376fc1e6047bac",
     "semantic_hash": ""
   },
   "backend/internal/store/troubleshooting.sql.go": {
-    "mtime": 1795096287.1300347,
-    "seen": 1795096366.9631028,
+    "mtime": 1795100414.1401591,
+    "seen": 1795101713.491896,
     "ast_hash": "6cfdebd27640e7c9847cd5c507b8d040",
     "semantic_hash": ""
   },
   "backend/internal/store/troubleshooting_registry.sql.go": {
-    "mtime": 1795096287.1300347,
-    "seen": 1795096366.9631035,
-    "ast_hash": "cfb6f150882a2f940101dd31c875d032",
+    "mtime": 1795100414.1401591,
+    "seen": 1795101713.4918966,
+    "ast_hash": "e36fd7844b35cb88df8ff9e2b931fd88",
     "semantic_hash": ""
   },
   "backend/tests/api/device_delete_test.go": {
@@ -3390,9 +3390,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingDialog.svelte": {
-    "mtime": 1795096010.1165535,
-    "seen": 1795096366.9682558,
-    "ast_hash": "b85bcebc462ad62805ae8c2eb610bc03",
+    "mtime": 1795100841.7271216,
+    "seen": 1795101713.4971673,
+    "ast_hash": "a1a2637a2ac784ec87003af2a03f1e5e",
     "semantic_hash": ""
   },
   "frontend/src/lib/mcp.ts": {
@@ -3408,9 +3408,9 @@
     "semantic_hash": ""
   },
   "frontend/src/routes/troubleshooting/+page.svelte": {
-    "mtime": 1795099713.5753362,
-    "seen": 1795099821.6155195,
-    "ast_hash": "38dd0e3b8fe90d9d317c35f739751e99",
+    "mtime": 1795100695.9051304,
+    "seen": 1795101713.5033019,
+    "ast_hash": "c6fd6b4bcb4648bdc9d53a6866e951c6",
     "semantic_hash": ""
   },
   "frontend/tests/components/Devices.svelte.spec.ts": {
@@ -5184,27 +5184,27 @@
     "semantic_hash": ""
   },
   "backend/internal/api/troubleshooting_registry.go": {
-    "mtime": 1795091606.8078694,
-    "seen": 1795091664.0314524,
-    "ast_hash": "6c6a75c46ce2761d78fc79e0fd1a9690",
+    "mtime": 1795100598.7954133,
+    "seen": 1795101713.491001,
+    "ast_hash": "e094751ff37b91586d3c3640ca76995c",
     "semantic_hash": ""
   },
   "backend/internal/api/troubleshooting_registry_test.go": {
-    "mtime": 1795091589.240932,
-    "seen": 1795091664.031455,
-    "ast_hash": "24c99f84ae9df41c89927b3b64191e14",
+    "mtime": 1795100147.9149375,
+    "seen": 1795101713.491003,
+    "ast_hash": "fa3d57d16f5b8aceae2757cfa37582d5",
     "semantic_hash": ""
   },
   "backend/tests/api/troubleshooting_registry_test.go": {
-    "mtime": 1795091482.547023,
-    "seen": 1795091664.0350177,
-    "ast_hash": "3cf8c7a32af06332d3acfd708f4a5b7e",
+    "mtime": 1795100165.523405,
+    "seen": 1795101713.4931433,
+    "ast_hash": "f3d65600bbe47b2506d627c726a6b92b",
     "semantic_hash": ""
   },
   "frontend/src/lib/troubleshooting-registry.ts": {
-    "mtime": 1795090304.641551,
-    "seen": 1795090347.9003894,
-    "ast_hash": "ec7702e6dc1b6ab2ba771f18f9cb34e3",
+    "mtime": 1795100616.406786,
+    "seen": 1795101713.5021527,
+    "ast_hash": "e7372ae438849f94904451cd1e495496",
     "semantic_hash": ""
   },
   "frontend/tests/unit/troubleshooting-registry.spec.ts": {
@@ -5214,9 +5214,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingRegistryPicker.svelte": {
-    "mtime": 1795098436.838727,
-    "seen": 1795098983.712505,
-    "ast_hash": "847abbed8ee96e42d721b8742879aa68",
+    "mtime": 1795101475.03852,
+    "seen": 1795101713.4971702,
+    "ast_hash": "861573a2ae6b9e5f936a0b2ec6989bc2",
     "semantic_hash": ""
   },
   "frontend/tests/components/TroubleshootingRegistryPicker.svelte.spec.ts": {
@@ -5226,15 +5226,15 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingRegistryDialog.svelte": {
-    "mtime": 1795097967.7813206,
-    "seen": 1795098983.7125032,
-    "ast_hash": "f59cf0299e66c6afeb85838d6b42e956",
+    "mtime": 1795101201.8111286,
+    "seen": 1795101713.4971688,
+    "ast_hash": "6d360f0f6101ba61527fde5e3a2e1fe1",
     "semantic_hash": ""
   },
   "frontend/tests/components/TroubleshootingRegistryDialog.svelte.spec.ts": {
-    "mtime": 1795094113.8041563,
-    "seen": 1795094172.1604679,
-    "ast_hash": "dbc357052928faa574ad835699c4197e",
+    "mtime": 1795101382.634902,
+    "seen": 1795101713.5033803,
+    "ast_hash": "bde0060e2d26130db79cebb590d9493c",
     "semantic_hash": ""
   },
   ".superpowers/sdd/2026-11-19-troubleshooting-registry/task-4-report.md": {
@@ -5244,15 +5244,21 @@
     "semantic_hash": ""
   },
   "frontend/tests/e2e/troubleshooting.spec.ts": {
-    "mtime": 1795097463.2671804,
-    "seen": 1795098983.719371,
-    "ast_hash": "d7710e0275cf80772485a1c683ae117c",
+    "mtime": 1795101289.7381842,
+    "seen": 1795101713.5042596,
+    "ast_hash": "4caa0f2936cba0c184f68267a89c5c81",
     "semantic_hash": ""
   },
   ".superpowers/sdd/2026-11-19-troubleshooting-registry/task-5-report.md": {
     "mtime": 1795094156.7062147,
     "seen": 1795096366.9977076,
     "ast_hash": "7c56ef2a4e99d3b6ced84ae29641f120",
+    "semantic_hash": ""
+  },
+  "frontend/tests/components/TroubleshootingDialog.svelte.spec.ts": {
+    "mtime": 1795101491.0304234,
+    "seen": 1795101713.5033784,
+    "ast_hash": "27c4ebc5001198dac21f5dff2f222aad",
     "semantic_hash": ""
   },
   ".scratch/deploy-route-check-20261116/pnpm-lock.yaml": {

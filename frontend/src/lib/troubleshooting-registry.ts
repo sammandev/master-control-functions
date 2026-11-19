@@ -62,6 +62,16 @@ export function updateTroubleshootingCategory(
 	});
 }
 
+export function reorderTroubleshootingCategory(
+	key: string,
+	withKey: string
+): Promise<{ items: TroubleshootingCategory[] }> {
+	return request<{ items: TroubleshootingCategory[] }>(`${categoriesUrl}/reorder`, {
+		method: 'POST',
+		body: JSON.stringify({ key, with_key: withKey })
+	});
+}
+
 export async function deleteTroubleshootingCategory(
 	key: string,
 	reassignTo: string
@@ -94,6 +104,16 @@ export function updateTroubleshootingSeverity(
 	return request<TroubleshootingSeverity>(`${severitiesUrl}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
 		body: JSON.stringify(body)
+	});
+}
+
+export function reorderTroubleshootingSeverity(
+	key: string,
+	withKey: string
+): Promise<{ items: TroubleshootingSeverity[] }> {
+	return request<{ items: TroubleshootingSeverity[] }>(`${severitiesUrl}/reorder`, {
+		method: 'POST',
+		body: JSON.stringify({ key, with_key: withKey })
 	});
 }
 

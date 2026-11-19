@@ -1,7 +1,7 @@
 # Graph Report - troubleshooting-registry  (2026-11-19)
 
 ## Corpus Check
-- 846 files · ~473,039 words
+- 846 files · ~473,042 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 47 file(s) not represented in the graph (top: .css 12, (none) 12, .ini 6)
 
@@ -532,16 +532,16 @@
 10. `newDictionaryTestApp()` - 41 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Official Svelte MCP process evidence` --references--> `EditableRow`  [INFERRED]
-  .superpowers/sdd/2026-11-19-troubleshooting-registry/task-5-report.md → frontend/src/lib/components/TroubleshootingRegistryDialog.svelte
 - `06: MCP reads grammar from the database` --references--> `Function`  [INFERRED]
   .scratch/mcp-catalog-readiness/issues/06-mcp-database-grammar.md → backend/internal/store/models.go
+- `Official Svelte MCP process evidence` --references--> `EditableRow`  [INFERRED]
+  .superpowers/sdd/2026-11-19-troubleshooting-registry/task-5-report.md → frontend/src/lib/components/TroubleshootingRegistryDialog.svelte
+- `Files involved` --references--> `ParseWorkbook()`  [INFERRED]
+  .scratch/dev-docs/workbook-conventions.md → backend/internal/importer/workbook.go
 - `Task 2: Key Generation and Registry Transaction API` --references--> `validationError()`  [INFERRED]
   docs/superpowers/plans/2026-11-19-troubleshooting-registry.md → backend/internal/api/functions.go
 - `05: Definition and example checks` --references--> `validateDefinition()`  [INFERRED]
   .scratch/mcp-catalog-readiness/issues/05-definition-example-checks.md → backend/internal/api/dictionary.go
-- `Files involved` --references--> `ParseWorkbook()`  [INFERRED]
-  .scratch/dev-docs/workbook-conventions.md → backend/internal/importer/workbook.go
 
 ## Import Cycles
 - None detected.
@@ -2276,7 +2276,7 @@ Nodes (6): capTroubleshootingKey(), nextTroubleshootingKey(), slugTroubleshootin
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Review Focus` connect `normalizeDeviceName` to `TroubleshootingDialog.svelte`?**
-  _High betweenness centrality (0.152) - this node is a cross-community bridge._
+  _High betweenness centrality (0.181) - this node is a cross-community bridge._
 - **Are the 74 inferred relationships involving `postJSON()` (e.g. with `compose1()` and `seedComposeFunction()`) actually correct?**
   _`postJSON()` has 74 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `master-control-functions (project identity)`, `ADR-0005`, `ADR-0009` to the rest of the system?**
@@ -2284,7 +2284,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `testing.T` be split into smaller, more focused modules?**
   _Cohesion score 0.06779661016949153 - nodes in this community are weakly interconnected._
 - **Why does `Task 3: Frontend Troubleshooting Client, Multi-Solution Helper, and Unit Tests` connect `TroubleshootingDialog.svelte` to `normalizeDeviceName`?**
-  _High betweenness centrality (0.152) - this node is a cross-community bridge._
+  _High betweenness centrality (0.181) - this node is a cross-community bridge._
 - **Should `frontend/src/routes/devices/[name]/+page.svelte` be split into smaller, more focused modules?**
   _Cohesion score 0.024342105263157894 - nodes in this community are weakly interconnected._
 

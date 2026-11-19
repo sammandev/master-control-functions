@@ -16,11 +16,17 @@
 		items,
 		value = $bindable(''),
 		kind,
+		id,
+		invalid = false,
+		describedBy,
 		onCreate
 	}: {
 		items: RegistryItem[];
 		value?: string;
 		kind: 'category' | 'severity';
+		id?: string;
+		invalid?: boolean;
+		describedBy?: string;
 		onCreate: (label: string) => Promise<RegistryItem>;
 	} = $props();
 
@@ -90,7 +96,12 @@
 	}}
 >
 	<Popover.Trigger
+		{id}
+		role={invalid ? 'combobox' : undefined}
+		aria-expanded={invalid ? open : undefined}
 		aria-label={`${kindLabel}: ${selectedLabel}`}
+		aria-invalid={invalid || undefined}
+		aria-describedby={describedBy}
 		class="border-border bg-card text-foreground focus-visible:outline-ring flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-[4px] border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
 	>
 		<span class="min-w-0 truncate text-left">{selectedLabel}</span>

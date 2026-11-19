@@ -237,52 +237,78 @@
 						id="guide-title"
 						bind:value={title}
 						placeholder="e.g. TX_MULTI_VERIFICATION Power Low Due to Uncalibrated RF Cable Loss"
+						aria-invalid={fieldErrors.title ? 'true' : undefined}
+						aria-describedby={fieldErrors.title ? 'guide-title-error' : undefined}
 						required
 					/>
 					{#if fieldErrors.title}
-						<span class="text-destructive text-xs">{fieldErrors.title}</span>
+						<span id="guide-title-error" class="text-destructive text-xs">{fieldErrors.title}</span>
 					{/if}
 				</div>
 
 				<div class="grid gap-1.5">
-					<span class="text-foreground text-xs font-semibold">Testing Stage / Category</span>
-					<div id="guide-category" class="registry-field">
+					<label for="guide-category" class="text-foreground text-xs font-semibold">
+						Testing Stage / Category
+					</label>
+					<div class="registry-field">
 						<TroubleshootingRegistryPicker
+							id="guide-category"
 							items={categories}
 							kind="category"
 							bind:value={category}
+							invalid={Boolean(fieldErrors.category)}
+							describedBy={fieldErrors.category ? 'guide-category-error' : undefined}
 							onCreate={createCategory}
 						/>
 					</div>
+					{#if fieldErrors.category}
+						<span id="guide-category-error" class="text-destructive text-xs"
+							>{fieldErrors.category}</span
+						>
+					{/if}
 				</div>
 
 				<div class="grid gap-1.5">
-					<span class="text-foreground text-xs font-semibold">Severity</span>
-					<div id="guide-severity" class="registry-field">
+					<label for="guide-severity" class="text-foreground text-xs font-semibold">Severity</label>
+					<div class="registry-field">
 						<TroubleshootingRegistryPicker
+							id="guide-severity"
 							items={severities}
 							kind="severity"
 							bind:value={severity}
+							invalid={Boolean(fieldErrors.severity)}
+							describedBy={fieldErrors.severity ? 'guide-severity-error' : undefined}
 							onCreate={createSeverity}
 						/>
 					</div>
+					{#if fieldErrors.severity}
+						<span id="guide-severity-error" class="text-destructive text-xs"
+							>{fieldErrors.severity}</span
+						>
+					{/if}
 				</div>
 
 				<div class="grid gap-1.5">
-					<span class="text-foreground text-xs font-semibold">Device / Interface Scope</span>
+					<label for="guide-device" class="text-foreground text-xs font-semibold">
+						Device / Interface Scope
+					</label>
 					<DevicePicker
 						id="guide-device"
 						label="Device / Interface Scope"
 						blankLabel="Global (All Devices)"
 						device={deviceName}
 						summaries={deviceSummaries}
+						invalid={Boolean(fieldErrors.device_name)}
+						describedBy={fieldErrors.device_name ? 'guide-device-error' : undefined}
 						fullWidth
 						onValueChange={(d) => {
 							deviceName = d;
 						}}
 					/>
 					{#if fieldErrors.device_name}
-						<span class="text-destructive text-xs">{fieldErrors.device_name}</span>
+						<span id="guide-device-error" class="text-destructive text-xs"
+							>{fieldErrors.device_name}</span
+						>
 					{/if}
 				</div>
 
@@ -329,10 +355,14 @@
 						rows={2}
 						bind:value={symptom}
 						placeholder="What does the test engineer see in the runner log, console, or measurement report?"
+						aria-invalid={fieldErrors.symptom ? 'true' : undefined}
+						aria-describedby={fieldErrors.symptom ? 'guide-symptom-error' : undefined}
 						required
 					/>
 					{#if fieldErrors.symptom}
-						<span class="text-destructive text-xs">{fieldErrors.symptom}</span>
+						<span id="guide-symptom-error" class="text-destructive text-xs"
+							>{fieldErrors.symptom}</span
+						>
 					{/if}
 				</div>
 
@@ -423,8 +453,17 @@
 									id="step-title-{idx}"
 									bind:value={step.title}
 									placeholder="e.g. Check TX_TARGET_POWER and POWER tolerance in TEST_SPEC.ini"
+									aria-invalid={fieldErrors['steps.title'] ? 'true' : undefined}
+									aria-describedby={fieldErrors['steps.title']
+										? `step-title-error-${idx}`
+										: undefined}
 									required
 								/>
+								{#if fieldErrors['steps.title']}
+									<span id="step-title-error-{idx}" class="text-destructive text-xs">
+										{fieldErrors['steps.title']}
+									</span>
+								{/if}
 							</div>
 
 							<div class="grid gap-1">
@@ -436,8 +475,17 @@
 									rows={2}
 									bind:value={step.instruction}
 									placeholder="Explain exactly what file, parameter, or fixture component to inspect or modify."
+									aria-invalid={fieldErrors['steps.instruction'] ? 'true' : undefined}
+									aria-describedby={fieldErrors['steps.instruction']
+										? `step-instruction-error-${idx}`
+										: undefined}
 									required
 								/>
+								{#if fieldErrors['steps.instruction']}
+									<span id="step-instruction-error-{idx}" class="text-destructive text-xs">
+										{fieldErrors['steps.instruction']}
+									</span>
+								{/if}
 							</div>
 
 							<div class="grid gap-2.5 sm:grid-cols-2">

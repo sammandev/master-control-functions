@@ -9,6 +9,32 @@ import (
 	"context"
 )
 
+const countTroubleshootingCategoryGuides = `-- name: CountTroubleshootingCategoryGuides :one
+SELECT COUNT(*)::BIGINT
+FROM troubleshooting_guides
+WHERE category = $1
+`
+
+func (q *Queries) CountTroubleshootingCategoryGuides(ctx context.Context, category string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTroubleshootingCategoryGuides, category)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countTroubleshootingSeverityGuides = `-- name: CountTroubleshootingSeverityGuides :one
+SELECT COUNT(*)::BIGINT
+FROM troubleshooting_guides
+WHERE severity = $1
+`
+
+func (q *Queries) CountTroubleshootingSeverityGuides(ctx context.Context, severity string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTroubleshootingSeverityGuides, severity)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteTroubleshootingCategory = `-- name: DeleteTroubleshootingCategory :execrows
 DELETE FROM troubleshooting_categories
 WHERE key = $1
@@ -178,6 +204,40 @@ func (q *Queries) ListTroubleshootingCategories(ctx context.Context) ([]Troubles
 	return items, nil
 }
 
+const listTroubleshootingCategoryGuideCounts = `-- name: ListTroubleshootingCategoryGuideCounts :many
+SELECT category AS key, COUNT(*)::BIGINT AS guide_count
+FROM troubleshooting_guides
+GROUP BY category
+`
+
+type ListTroubleshootingCategoryGuideCountsRow struct {
+	Key        string
+	GuideCount int64
+}
+
+func (q *Queries) ListTroubleshootingCategoryGuideCounts(ctx context.Context) ([]ListTroubleshootingCategoryGuideCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTroubleshootingCategoryGuideCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTroubleshootingCategoryGuideCountsRow
+	for rows.Next() {
+		var i ListTroubleshootingCategoryGuideCountsRow
+		if err := rows.Scan(&i.Key, &i.GuideCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTroubleshootingSeverities = `-- name: ListTroubleshootingSeverities :many
 SELECT key, label, description, sort_order, built_in, tone
 FROM troubleshooting_severities
@@ -201,6 +261,40 @@ func (q *Queries) ListTroubleshootingSeverities(ctx context.Context) ([]Troubles
 			&i.BuiltIn,
 			&i.Tone,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTroubleshootingSeverityGuideCounts = `-- name: ListTroubleshootingSeverityGuideCounts :many
+SELECT severity AS key, COUNT(*)::BIGINT AS guide_count
+FROM troubleshooting_guides
+GROUP BY severity
+`
+
+type ListTroubleshootingSeverityGuideCountsRow struct {
+	Key        string
+	GuideCount int64
+}
+
+func (q *Queries) ListTroubleshootingSeverityGuideCounts(ctx context.Context) ([]ListTroubleshootingSeverityGuideCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTroubleshootingSeverityGuideCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTroubleshootingSeverityGuideCountsRow
+	for rows.Next() {
+		var i ListTroubleshootingSeverityGuideCountsRow
+		if err := rows.Scan(&i.Key, &i.GuideCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -290,6 +384,31 @@ func (q *Queries) UpdateTroubleshootingCategory(ctx context.Context, arg UpdateT
 	return i, err
 }
 
+const updateTroubleshootingCategorySortOrder = `-- name: UpdateTroubleshootingCategorySortOrder :one
+UPDATE troubleshooting_categories
+SET sort_order = $1
+WHERE key = $2
+RETURNING key, label, description, sort_order, built_in
+`
+
+type UpdateTroubleshootingCategorySortOrderParams struct {
+	SortOrder int64
+	Key       string
+}
+
+func (q *Queries) UpdateTroubleshootingCategorySortOrder(ctx context.Context, arg UpdateTroubleshootingCategorySortOrderParams) (TroubleshootingCategory, error) {
+	row := q.db.QueryRowContext(ctx, updateTroubleshootingCategorySortOrder, arg.SortOrder, arg.Key)
+	var i TroubleshootingCategory
+	err := row.Scan(
+		&i.Key,
+		&i.Label,
+		&i.Description,
+		&i.SortOrder,
+		&i.BuiltIn,
+	)
+	return i, err
+}
+
 const updateTroubleshootingSeverity = `-- name: UpdateTroubleshootingSeverity :one
 UPDATE troubleshooting_severities
 SET label = $1,
@@ -316,6 +435,32 @@ func (q *Queries) UpdateTroubleshootingSeverity(ctx context.Context, arg UpdateT
 		arg.Tone,
 		arg.Key,
 	)
+	var i TroubleshootingSeverity
+	err := row.Scan(
+		&i.Key,
+		&i.Label,
+		&i.Description,
+		&i.SortOrder,
+		&i.BuiltIn,
+		&i.Tone,
+	)
+	return i, err
+}
+
+const updateTroubleshootingSeveritySortOrder = `-- name: UpdateTroubleshootingSeveritySortOrder :one
+UPDATE troubleshooting_severities
+SET sort_order = $1
+WHERE key = $2
+RETURNING key, label, description, sort_order, built_in, tone
+`
+
+type UpdateTroubleshootingSeveritySortOrderParams struct {
+	SortOrder int64
+	Key       string
+}
+
+func (q *Queries) UpdateTroubleshootingSeveritySortOrder(ctx context.Context, arg UpdateTroubleshootingSeveritySortOrderParams) (TroubleshootingSeverity, error) {
+	row := q.db.QueryRowContext(ctx, updateTroubleshootingSeveritySortOrder, arg.SortOrder, arg.Key)
 	var i TroubleshootingSeverity
 	err := row.Scan(
 		&i.Key,

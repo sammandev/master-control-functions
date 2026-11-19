@@ -23,6 +23,22 @@ SET label = sqlc.arg(label),
 WHERE key = sqlc.arg(key)
 RETURNING key, label, description, sort_order, built_in;
 
+-- name: UpdateTroubleshootingCategorySortOrder :one
+UPDATE troubleshooting_categories
+SET sort_order = sqlc.arg(sort_order)
+WHERE key = sqlc.arg(key)
+RETURNING key, label, description, sort_order, built_in;
+
+-- name: ListTroubleshootingCategoryGuideCounts :many
+SELECT category AS key, COUNT(*)::BIGINT AS guide_count
+FROM troubleshooting_guides
+GROUP BY category;
+
+-- name: CountTroubleshootingCategoryGuides :one
+SELECT COUNT(*)::BIGINT
+FROM troubleshooting_guides
+WHERE category = $1;
+
 -- name: DeleteTroubleshootingCategory :execrows
 DELETE FROM troubleshooting_categories
 WHERE key = $1
@@ -57,6 +73,22 @@ SET label = sqlc.arg(label),
     tone = sqlc.arg(tone)
 WHERE key = sqlc.arg(key)
 RETURNING key, label, description, sort_order, built_in, tone;
+
+-- name: UpdateTroubleshootingSeveritySortOrder :one
+UPDATE troubleshooting_severities
+SET sort_order = sqlc.arg(sort_order)
+WHERE key = sqlc.arg(key)
+RETURNING key, label, description, sort_order, built_in, tone;
+
+-- name: ListTroubleshootingSeverityGuideCounts :many
+SELECT severity AS key, COUNT(*)::BIGINT AS guide_count
+FROM troubleshooting_guides
+GROUP BY severity;
+
+-- name: CountTroubleshootingSeverityGuides :one
+SELECT COUNT(*)::BIGINT
+FROM troubleshooting_guides
+WHERE severity = $1;
 
 -- name: DeleteTroubleshootingSeverity :execrows
 DELETE FROM troubleshooting_severities

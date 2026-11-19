@@ -24,14 +24,38 @@ const severities = [
 
 const refreshes = { list: 0, detail: 0 };
 
-async function mockTroubleshooting(page: Page) {
+async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh?: boolean } = {}) {
+	categories.splice(0, categories.length, {
+		key: 'measurement',
+		label: 'Measurement & Criteria',
+		description: '',
+		sort_order: 1,
+		built_in: true,
+		guide_count: 2
+	});
+	severities.splice(0, severities.length, {
+		key: 'critical',
+		label: 'Critical',
+		description: '',
+		sort_order: 1,
+		built_in: true,
+		guide_count: 2,
+		tone: 'destructive'
+	});
 	refreshes.list = 0;
 	refreshes.detail = 0;
+	let categoryLoads = 0;
+	let categoryRefreshFailed = false;
 	await page.route('**/api/**', async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());
 		const path = url.pathname;
 		if (path === '/api/troubleshooting/categories' && request.method() === 'GET') {
+			categoryLoads++;
+			if (options.failOneCategoryRefresh && categoryLoads > 1 && !categoryRefreshFailed) {
+				categoryRefreshFailed = true;
+				return route.fulfill({ status: 500, json: { error: 'Metadata refresh failed' } });
+			}
 			return route.fulfill({ json: { items: categories, total: categories.length } });
 		}
 		if (path === '/api/troubleshooting/categories/measurement' && request.method() === 'PUT') {
@@ -239,4 +263,31 @@ test('troubleshooting workflow preserves checklist and supports registry control
 		)
 	).toBe(true);
 	expect(errors).toEqual([]);
+});
+
+test('metadata refresh failure preserves the current guide list and detail', async ({ page }) => {
+	await mockTroubleshooting(page, { failOneCategoryRefresh: true });
+	await page.goto('/troubleshooting');
+	await expect(page.getByRole('button', { name: 'Select guide First guide' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'First guide' })).toBeVisible();
+
+	const listRefreshes = refreshes.list;
+	const detailRefreshes = refreshes.detail;
+	await page.getByRole('button', { name: 'Manage Lists' }).click();
+	const manager = page.getByRole('dialog', { name: 'Manage troubleshooting lists' });
+	await manager
+		.getByRole('textbox', { name: 'Measurement & Criteria label' })
+		.fill('Refresh Draft');
+	await manager.getByRole('button', { name: 'Save Measurement & Criteria' }).click();
+
+	await expect(page.getByRole('alert')).toContainText('Metadata refresh failed');
+	await expect(page.getByRole('button', { name: 'Select guide First guide' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'First guide' })).toBeVisible();
+	expect(refreshes.list).toBe(listRefreshes);
+	expect(refreshes.detail).toBe(detailRefreshes);
+
+	await page.getByRole('button', { name: 'Close' }).click();
+	await page.getByRole('button', { name: 'Retry metadata' }).click();
+	await expect.poll(() => refreshes.list).toBeGreaterThan(listRefreshes);
+	await expect.poll(() => refreshes.detail).toBeGreaterThan(detailRefreshes);
 });

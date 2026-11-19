@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -109,5 +110,23 @@ func TestTroubleshootingReplacementErrorPreservesDatabaseFailures(t *testing.T) 
 	}
 	if message, err = classifyTroubleshootingReplacementError(sql.ErrNoRows, sql.ErrNoRows); err != nil || message != "does not exist" {
 		t.Fatalf("missing replacement = (%q, %v)", message, err)
+	}
+}
+
+func TestTroubleshootingRegistryCountsUseGroupedQueries(t *testing.T) {
+	registrySource, err := os.ReadFile("troubleshooting_registry.go")
+	if err != nil {
+		t.Fatalf("read registry source: %v", err)
+	}
+	if strings.Contains(string(registrySource), "ListTroubleshootingGuides") || strings.Contains(string(registrySource), "CountTroubleshootingGuides") {
+		t.Fatal("registry counts must not load or count the full troubleshooting guide catalog")
+	}
+
+	querySource, err := os.ReadFile("../../internal/store/queries/troubleshooting_registry.sql")
+	if err != nil {
+		t.Fatalf("read registry query source: %v", err)
+	}
+	if !strings.Contains(string(querySource), "GROUP BY category") || !strings.Contains(string(querySource), "GROUP BY severity") {
+		t.Fatal("registry query source must contain grouped category and severity counts")
 	}
 }

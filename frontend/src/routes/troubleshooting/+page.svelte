@@ -126,12 +126,9 @@
 
 	async function retryMetadata() {
 		const stableSelectedId = selectedId;
-		const [categoriesLoaded] = await loadMetadataResults();
-		if (
-			categoriesLoaded &&
-			category !== '_all' &&
-			!categories.some((item) => item.key === category)
-		) {
+		const metadataLoaded = await loadMetadataResults();
+		if (!metadataLoaded.every(Boolean)) return;
+		if (category !== '_all' && !categories.some((item) => item.key === category)) {
 			category = '_all';
 			page = 1;
 		}

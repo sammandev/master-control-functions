@@ -206,6 +206,97 @@ FOR EACH ROW EXECUTE FUNCTION fail_troubleshooting_reassignment()`); err != nil 
 	}
 }
 
+func TestTroubleshootingRegistryReorderRollsBackBothRows(t *testing.T) {
+	app, d := newLinksTestApp(t)
+
+	originalOrders := map[string]int64{}
+	rows, err := d.Query(`SELECT key, sort_order FROM troubleshooting_categories WHERE key IN ('connection', 'execution')`)
+	if err != nil {
+		t.Fatalf("read category orders: %v", err)
+	}
+	for rows.Next() {
+		var key string
+		var order int64
+		if err := rows.Scan(&key, &order); err != nil {
+			t.Fatalf("scan category order: %v", err)
+		}
+		originalOrders[key] = order
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("close category order rows: %v", err)
+	}
+
+	if _, err := d.Exec(`CREATE FUNCTION fail_troubleshooting_reorder() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.key = 'execution' THEN RAISE EXCEPTION 'forced reorder failure'; END IF;
+  RETURN NEW;
+END
+$$`); err != nil {
+		t.Fatalf("create reorder trigger function: %v", err)
+	}
+	if _, err := d.Exec(`CREATE TRIGGER fail_troubleshooting_reorder_trigger
+BEFORE UPDATE OF sort_order ON troubleshooting_categories
+FOR EACH ROW EXECUTE FUNCTION fail_troubleshooting_reorder()`); err != nil {
+		t.Fatalf("create reorder trigger: %v", err)
+	}
+
+	resp, body := postJSON(t, app, "/api/troubleshooting/categories/reorder", `{"key":"connection","with_key":"execution"}`)
+	if resp.StatusCode != 500 {
+		t.Fatalf("forced reorder failure = %d, want 500 (%s)", resp.StatusCode, body)
+	}
+	for key, want := range originalOrders {
+		var got int64
+		if err := d.QueryRow(`SELECT sort_order FROM troubleshooting_categories WHERE key = $1`, key).Scan(&got); err != nil {
+			t.Fatalf("read %s after rollback: %v", key, err)
+		}
+		if got != want {
+			t.Fatalf("%s sort_order = %d after rollback, want %d", key, got, want)
+		}
+	}
+}
+
+func TestTroubleshootingRegistryConcurrentSlugAllocation(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+
+	start := make(chan struct{})
+	results := make(chan registryItem, 2)
+	errors := make(chan error, 2)
+	for _, label := range []string{"Concurrent Collision", "Concurrent-Collision"} {
+		label := label
+		go func() {
+			<-start
+			resp, body := postJSON(t, app, "/api/troubleshooting/categories", fmt.Sprintf(`{"label":%q}`, label))
+			if resp.StatusCode != 201 {
+				errors <- fmt.Errorf("create %q: %d (%s)", label, resp.StatusCode, body)
+				return
+			}
+			var item registryItem
+			if err := json.Unmarshal([]byte(body), &item); err != nil {
+				errors <- fmt.Errorf("decode %q: %w (%s)", label, err, body)
+				return
+			}
+			results <- item
+		}()
+	}
+	close(start)
+
+	keys := map[string]bool{}
+	for range 2 {
+		select {
+		case err := <-errors:
+			t.Fatal(err)
+		case item := <-results:
+			if len(item.Key) > 64 {
+				t.Fatalf("key %q exceeds 64 bytes", item.Key)
+			}
+			keys[item.Key] = true
+		}
+	}
+	if !keys["concurrent-collision"] || !keys["concurrent-collision-2"] {
+		t.Fatalf("concurrent keys = %v, want base and -2 suffix", keys)
+	}
+}
+
 func TestTroubleshootingGuideRegistryValidationPrecedesWrites(t *testing.T) {
 	app, _ := newLinksTestApp(t)
 	resp, body := postJSON(t, app, "/api/troubleshooting", `{

@@ -149,21 +149,11 @@ describe('TroubleshootingRegistryDialog', () => {
 		await expect.element(page.getByRole('button', { name: 'Save Script Execution' })).toBeEnabled();
 	});
 
-	it('serializes reorder requests and persists only order while retaining drafts', async () => {
-		const calls: Array<{ url: string; body: unknown }> = [];
-		let releaseFirst: () => void = () => {};
-		const firstResponse = new Promise<Response>((resolve) => {
-			releaseFirst = () => resolve(jsonResponse({ ...categories[1], sort_order: 10 }));
-		});
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-				const body = JSON.parse(String(init?.body));
-				calls.push({ url: String(input), body });
-				if (calls.length === 1) return firstResponse;
-				return jsonResponse({ ...categories[0], ...body });
-			})
+	it('uses one atomic reorder request and retains unsaved row drafts', async () => {
+		const fetchMock = vi.fn<typeof fetch>(async () =>
+			jsonResponse({ items: [categories[1], categories[0]] })
 		);
+		vi.stubGlobal('fetch', fetchMock);
 		renderDialog();
 		await page.getByRole('textbox', { name: 'Flow Execution label' }).fill('Draft Execution');
 		await page
@@ -171,24 +161,14 @@ describe('TroubleshootingRegistryDialog', () => {
 			.fill('Unsaved description');
 
 		await page.getByRole('button', { name: 'Move Flow Execution up' }).click();
-		await expect.poll(() => calls).toHaveLength(1);
-		expect(calls[0]).toEqual({
-			url: '/api/troubleshooting/categories/execution',
-			body: { label: 'Flow Execution', description: 'Execution failures', sort_order: 10 }
-		});
-		releaseFirst();
-		await expect.poll(() => calls).toHaveLength(2);
 
-		expect(calls).toEqual([
-			{
-				url: '/api/troubleshooting/categories/execution',
-				body: { label: 'Flow Execution', description: 'Execution failures', sort_order: 10 }
-			},
-			{
-				url: '/api/troubleshooting/categories/connection',
-				body: { label: 'DUT Connection', description: 'Connection failures', sort_order: 20 }
-			}
-		]);
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(String(fetchMock.mock.calls[0][0])).toBe('/api/troubleshooting/categories/reorder');
+		expect(fetchMock.mock.calls[0][1]?.method).toBe('POST');
+		expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+			key: 'execution',
+			with_key: 'connection'
+		});
 		await expect
 			.element(page.getByRole('textbox', { name: 'Flow Execution label' }))
 			.toHaveValue('Draft Execution');
@@ -197,19 +177,11 @@ describe('TroubleshootingRegistryDialog', () => {
 			.toHaveValue('Unsaved description');
 	});
 
-	it('reorders severity with persisted tone instead of an unsaved tone draft', async () => {
-		const calls: Array<{ url: string; body: unknown }> = [];
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-				const body = JSON.parse(String(init?.body));
-				calls.push({ url: String(input), body });
-				return jsonResponse({
-					...severities.find((item) => String(input).endsWith(item.key)),
-					...body
-				});
-			})
+	it('reorders severity atomically without submitting an unsaved tone draft', async () => {
+		const fetchMock = vi.fn<typeof fetch>(async () =>
+			jsonResponse({ items: [severities[1], severities[0]] })
 		);
+		vi.stubGlobal('fetch', fetchMock);
 		renderDialog();
 		await page.getByRole('tab', { name: 'Severities' }).click();
 		await page.getByRole('button', { name: 'Tone: warn' }).click();
@@ -217,11 +189,65 @@ describe('TroubleshootingRegistryDialog', () => {
 
 		await page.getByRole('button', { name: 'Move Major up' }).click();
 
-		expect(calls[0]).toEqual({
-			url: '/api/troubleshooting/severities/major',
-			body: { label: 'Major', description: 'Needs attention', sort_order: 10, tone: 'warn' }
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(String(fetchMock.mock.calls[0][0])).toBe('/api/troubleshooting/severities/reorder');
+		expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+			key: 'major',
+			with_key: 'critical'
 		});
 		await expect.element(page.getByRole('button', { name: 'Tone: default' })).toBeVisible();
+	});
+
+	it('reconciles refreshed metadata while retaining another rows unsaved drafts', async () => {
+		const onChanged = vi.fn();
+		const onOpenChange = vi.fn();
+		const view = await render(TroubleshootingRegistryDialog, {
+			open: true,
+			categories,
+			severities,
+			onOpenChange,
+			onChanged
+		});
+		await page.getByRole('textbox', { name: 'Flow Execution label' }).fill('Draft Execution');
+		await page
+			.getByRole('textbox', { name: 'Flow Execution description' })
+			.fill('Unsaved description');
+		await page.getByRole('tab', { name: 'Severities' }).click();
+		await page.getByRole('button', { name: 'Tone: warn' }).click();
+		await page.getByRole('option', { name: 'default' }).click();
+
+		await view.rerender({
+			open: true,
+			categories: categories.map((item) =>
+				item.key === 'connection'
+					? {
+							...item,
+							label: 'Refreshed Connection',
+							description: 'Persisted update',
+							guide_count: 8
+						}
+					: item
+			),
+			severities: severities.map((item) =>
+				item.key === 'critical' ? { ...item, guide_count: 9 } : item
+			),
+			onOpenChange,
+			onChanged
+		});
+
+		await expect.element(page.getByRole('button', { name: 'Tone: default' })).toBeVisible();
+		await expect.element(page.getByText('9 guides')).toBeVisible();
+		await page.getByRole('tab', { name: 'Categories' }).click();
+		await expect
+			.element(page.getByRole('textbox', { name: 'Refreshed Connection label' }))
+			.toHaveValue('Refreshed Connection');
+		await expect.element(page.getByText('8 guides')).toBeVisible();
+		await expect
+			.element(page.getByRole('textbox', { name: 'Flow Execution label' }))
+			.toHaveValue('Draft Execution');
+		await expect
+			.element(page.getByRole('textbox', { name: 'Flow Execution description' }))
+			.toHaveValue('Unsaved description');
 	});
 
 	it('requires a different replacement and keeps failed deletion open with visible error', async () => {

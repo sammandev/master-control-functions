@@ -37,6 +37,11 @@ type troubleshootingRegistryBody struct {
 	Tone        *string `json:"tone"`
 }
 
+type troubleshootingRegistryReorderBody struct {
+	Key     string `json:"key"`
+	WithKey string `json:"with_key"`
+}
+
 type troubleshootingRegistryResponse struct {
 	Key         string `json:"key"`
 	Label       string `json:"label"`
@@ -50,10 +55,12 @@ type troubleshootingRegistryResponse struct {
 func registerTroubleshootingRegistryRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Get("/api/troubleshooting/categories", listTroubleshootingCategories(q))
 	app.Post("/api/troubleshooting/categories", createTroubleshootingCategory(q))
+	app.Post("/api/troubleshooting/categories/reorder", reorderTroubleshootingCategories(q, d))
 	app.Put("/api/troubleshooting/categories/:key", updateTroubleshootingCategory(q))
 	app.Delete("/api/troubleshooting/categories/:key", deleteTroubleshootingCategory(q, d))
 	app.Get("/api/troubleshooting/severities", listTroubleshootingSeverities(q))
 	app.Post("/api/troubleshooting/severities", createTroubleshootingSeverity(q))
+	app.Post("/api/troubleshooting/severities/reorder", reorderTroubleshootingSeverities(q, d))
 	app.Put("/api/troubleshooting/severities/:key", updateTroubleshootingSeverity(q))
 	app.Delete("/api/troubleshooting/severities/:key", deleteTroubleshootingSeverity(q, d))
 }
@@ -272,19 +279,34 @@ func createTroubleshootingCategory(q *store.Queries) fiber.Handler {
 		for _, row := range rows {
 			keys[row.Key] = true
 		}
-		row, err := q.InsertTroubleshootingCategory(c.Context(), store.InsertTroubleshootingCategoryParams{
-			Key:         nextTroubleshootingKey(label, keys),
-			Label:       label,
-			Description: description,
-			SortOrder:   nextCategoryOrder(rows),
-		})
-		if err != nil {
-			if store.IsUniqueViolation(err) {
+		sortOrder := nextCategoryOrder(rows)
+		var insertErr error
+		for attempt := 0; attempt < 5; attempt++ {
+			row, err := q.InsertTroubleshootingCategory(c.Context(), store.InsertTroubleshootingCategoryParams{
+				Key:         nextTroubleshootingKey(label, keys),
+				Label:       label,
+				Description: description,
+				SortOrder:   sortOrder,
+			})
+			if err == nil {
+				return c.Status(fiber.StatusCreated).JSON(categoryRegistryResponse(row, 0))
+			}
+			insertErr = err
+			if !store.IsUniqueViolation(err) {
+				return serverError(c, "create troubleshooting category", err)
+			}
+			rows, err = q.ListTroubleshootingCategories(c.Context())
+			if err != nil {
+				return serverError(c, "reconcile troubleshooting category collision", err)
+			}
+			if categoryLabelExists(rows, label, "") {
 				return validationError(c, map[string]string{"label": "already exists"})
 			}
-			return serverError(c, "create troubleshooting category", err)
+			for _, existing := range rows {
+				keys[existing.Key] = true
+			}
 		}
-		return c.Status(fiber.StatusCreated).JSON(categoryRegistryResponse(row, 0))
+		return serverError(c, "create troubleshooting category after key collisions", insertErr)
 	}
 }
 
@@ -310,20 +332,35 @@ func createTroubleshootingSeverity(q *store.Queries) fiber.Handler {
 		for _, row := range rows {
 			keys[row.Key] = true
 		}
-		row, err := q.InsertTroubleshootingSeverity(c.Context(), store.InsertTroubleshootingSeverityParams{
-			Key:         nextTroubleshootingKey(label, keys),
-			Label:       label,
-			Description: description,
-			SortOrder:   nextSeverityOrder(rows),
-			Tone:        tone,
-		})
-		if err != nil {
-			if store.IsUniqueViolation(err) {
+		sortOrder := nextSeverityOrder(rows)
+		var insertErr error
+		for attempt := 0; attempt < 5; attempt++ {
+			row, err := q.InsertTroubleshootingSeverity(c.Context(), store.InsertTroubleshootingSeverityParams{
+				Key:         nextTroubleshootingKey(label, keys),
+				Label:       label,
+				Description: description,
+				SortOrder:   sortOrder,
+				Tone:        tone,
+			})
+			if err == nil {
+				return c.Status(fiber.StatusCreated).JSON(severityRegistryResponse(row, 0))
+			}
+			insertErr = err
+			if !store.IsUniqueViolation(err) {
+				return serverError(c, "create troubleshooting severity", err)
+			}
+			rows, err = q.ListTroubleshootingSeverities(c.Context())
+			if err != nil {
+				return serverError(c, "reconcile troubleshooting severity collision", err)
+			}
+			if severityLabelExists(rows, label, "") {
 				return validationError(c, map[string]string{"label": "already exists"})
 			}
-			return serverError(c, "create troubleshooting severity", err)
+			for _, existing := range rows {
+				keys[existing.Key] = true
+			}
 		}
-		return c.Status(fiber.StatusCreated).JSON(severityRegistryResponse(row, 0))
+		return serverError(c, "create troubleshooting severity after key collisions", insertErr)
 	}
 }
 
@@ -415,32 +452,174 @@ func updateTroubleshootingSeverity(q *store.Queries) fiber.Handler {
 	}
 }
 
+func reorderTroubleshootingCategories(q *store.Queries, d *sql.DB) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		var body troubleshootingRegistryReorderBody
+		if err := c.Bind().Body(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
+		}
+		body.Key = strings.TrimSpace(body.Key)
+		body.WithKey = strings.TrimSpace(body.WithKey)
+		fields := map[string]string{}
+		if body.Key == "" {
+			fields["key"] = "is required"
+		}
+		if body.WithKey == "" {
+			fields["with_key"] = "is required"
+		} else if body.WithKey == body.Key {
+			fields["with_key"] = "must be different from key"
+		}
+		if len(fields) > 0 {
+			return validationError(c, fields)
+		}
+
+		tx, err := d.BeginTx(c.Context(), nil)
+		if err != nil {
+			return serverError(c, "begin troubleshooting category reorder", err)
+		}
+		defer tx.Rollback()
+		tq := q.WithTx(tx)
+		first, err := tq.GetTroubleshootingCategory(c.Context(), body.Key)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "troubleshooting category not found"})
+			}
+			return serverError(c, "read troubleshooting category for reorder", err)
+		}
+		second, err := tq.GetTroubleshootingCategory(c.Context(), body.WithKey)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "troubleshooting category not found"})
+			}
+			return serverError(c, "read troubleshooting category for reorder", err)
+		}
+		firstOrder, secondOrder := first.SortOrder, second.SortOrder
+		first, err = tq.UpdateTroubleshootingCategorySortOrder(c.Context(), store.UpdateTroubleshootingCategorySortOrderParams{
+			Key: first.Key, SortOrder: secondOrder,
+		})
+		if err != nil {
+			return serverError(c, "reorder troubleshooting category", err)
+		}
+		second, err = tq.UpdateTroubleshootingCategorySortOrder(c.Context(), store.UpdateTroubleshootingCategorySortOrderParams{
+			Key: second.Key, SortOrder: firstOrder,
+		})
+		if err != nil {
+			return serverError(c, "reorder troubleshooting category", err)
+		}
+		firstCount, err := registryCategoryCount(c, tq, first.Key)
+		if err != nil {
+			return serverError(c, "count troubleshooting category guides", err)
+		}
+		secondCount, err := registryCategoryCount(c, tq, second.Key)
+		if err != nil {
+			return serverError(c, "count troubleshooting category guides", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return serverError(c, "commit troubleshooting category reorder", err)
+		}
+		return c.JSON(fiber.Map{"items": []troubleshootingRegistryResponse{
+			categoryRegistryResponse(first, firstCount), categoryRegistryResponse(second, secondCount),
+		}})
+	}
+}
+
+func reorderTroubleshootingSeverities(q *store.Queries, d *sql.DB) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		var body troubleshootingRegistryReorderBody
+		if err := c.Bind().Body(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
+		}
+		body.Key = strings.TrimSpace(body.Key)
+		body.WithKey = strings.TrimSpace(body.WithKey)
+		fields := map[string]string{}
+		if body.Key == "" {
+			fields["key"] = "is required"
+		}
+		if body.WithKey == "" {
+			fields["with_key"] = "is required"
+		} else if body.WithKey == body.Key {
+			fields["with_key"] = "must be different from key"
+		}
+		if len(fields) > 0 {
+			return validationError(c, fields)
+		}
+
+		tx, err := d.BeginTx(c.Context(), nil)
+		if err != nil {
+			return serverError(c, "begin troubleshooting severity reorder", err)
+		}
+		defer tx.Rollback()
+		tq := q.WithTx(tx)
+		first, err := tq.GetTroubleshootingSeverity(c.Context(), body.Key)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "troubleshooting severity not found"})
+			}
+			return serverError(c, "read troubleshooting severity for reorder", err)
+		}
+		second, err := tq.GetTroubleshootingSeverity(c.Context(), body.WithKey)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "troubleshooting severity not found"})
+			}
+			return serverError(c, "read troubleshooting severity for reorder", err)
+		}
+		firstOrder, secondOrder := first.SortOrder, second.SortOrder
+		first, err = tq.UpdateTroubleshootingSeveritySortOrder(c.Context(), store.UpdateTroubleshootingSeveritySortOrderParams{
+			Key: first.Key, SortOrder: secondOrder,
+		})
+		if err != nil {
+			return serverError(c, "reorder troubleshooting severity", err)
+		}
+		second, err = tq.UpdateTroubleshootingSeveritySortOrder(c.Context(), store.UpdateTroubleshootingSeveritySortOrderParams{
+			Key: second.Key, SortOrder: firstOrder,
+		})
+		if err != nil {
+			return serverError(c, "reorder troubleshooting severity", err)
+		}
+		firstCount, err := registrySeverityCount(c, tq, first.Key)
+		if err != nil {
+			return serverError(c, "count troubleshooting severity guides", err)
+		}
+		secondCount, err := registrySeverityCount(c, tq, second.Key)
+		if err != nil {
+			return serverError(c, "count troubleshooting severity guides", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return serverError(c, "commit troubleshooting severity reorder", err)
+		}
+		return c.JSON(fiber.Map{"items": []troubleshootingRegistryResponse{
+			severityRegistryResponse(first, firstCount), severityRegistryResponse(second, secondCount),
+		}})
+	}
+}
+
 func troubleshootingGuideRegistryCounts(c fiber.Ctx, q *store.Queries) (map[string]int64, map[string]int64, error) {
-	total, err := q.CountTroubleshootingGuides(c.Context(), store.CountTroubleshootingGuidesParams{})
+	categoryRows, err := q.ListTroubleshootingCategoryGuideCounts(c.Context())
 	if err != nil {
 		return nil, nil, err
 	}
-	rows, err := q.ListTroubleshootingGuides(c.Context(), store.ListTroubleshootingGuidesParams{Limit: total})
+	severityRows, err := q.ListTroubleshootingSeverityGuideCounts(c.Context())
 	if err != nil {
 		return nil, nil, err
 	}
-	categories := map[string]int64{}
-	severities := map[string]int64{}
-	for _, row := range rows {
-		categories[row.Category]++
-		severities[row.Severity]++
+	categories := make(map[string]int64, len(categoryRows))
+	for _, row := range categoryRows {
+		categories[row.Key] = row.GuideCount
+	}
+	severities := make(map[string]int64, len(severityRows))
+	for _, row := range severityRows {
+		severities[row.Key] = row.GuideCount
 	}
 	return categories, severities, nil
 }
 
 func registryCategoryCount(c fiber.Ctx, q *store.Queries, key string) (int64, error) {
-	categories, _, err := troubleshootingGuideRegistryCounts(c, q)
-	return categories[key], err
+	return q.CountTroubleshootingCategoryGuides(c.Context(), key)
 }
 
 func registrySeverityCount(c fiber.Ctx, q *store.Queries, key string) (int64, error) {
-	_, severities, err := troubleshootingGuideRegistryCounts(c, q)
-	return severities[key], err
+	return q.CountTroubleshootingSeverityGuides(c.Context(), key)
 }
 
 func listTroubleshootingCategories(q *store.Queries) fiber.Handler {
