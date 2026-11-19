@@ -5,7 +5,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
 	testDir: './tests/e2e',
-	testMatch: 'polish.spec.ts',
+	testMatch: /(?:polish|troubleshooting)\.spec\.ts/,
 	timeout: 30_000,
 	workers: 1,
 	reporter: [['list']],

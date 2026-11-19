@@ -6,20 +6,30 @@
 	import {
 		categoryLabel,
 		deleteTroubleshootingGuide,
-		findRelatedGuides,
 		getTroubleshootingGuide,
+		listRelatedTroubleshootingGuides,
 		listTroubleshootingGuides,
+		resetChecklistProgress,
+		setChecklistStep,
 		severityLabel,
-		TROUBLESHOOTING_CATEGORIES,
+		severityTone,
+		type TroubleshootingChecklistState,
 		type TroubleshootingGuideDetail,
 		type TroubleshootingGuideListItem,
 		type TroubleshootingSeverity
 	} from '#lib/troubleshooting.ts';
+	import {
+		listTroubleshootingCategories,
+		listTroubleshootingSeverities,
+		type TroubleshootingCategory,
+		type TroubleshootingSeverity as RegistrySeverity
+	} from '#lib/troubleshooting-registry.ts';
 	import DevicePicker from '#lib/components/DevicePicker.svelte';
 	import TroubleshootingDetail from '#lib/components/TroubleshootingDetail.svelte';
 	import TroubleshootingDialog, {
 		type TroubleshootingDialogMode
 	} from '#lib/components/TroubleshootingDialog.svelte';
+	import TroubleshootingRegistryDialog from '#lib/components/TroubleshootingRegistryDialog.svelte';
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
@@ -36,7 +46,6 @@
 	let pageSize = $state(20);
 
 	let items = $state<TroubleshootingGuideListItem[]>([]);
-	let allGuidesCatalog = $state<TroubleshootingGuideListItem[]>([]);
 	let total = $state(0);
 	let loadingList = $state(true);
 	let listError = $state('');
@@ -47,7 +56,15 @@
 	let detailError = $state('');
 
 	let deviceSummaries = $state<DeviceSummary[]>([]);
+	let categories = $state<TroubleshootingCategory[]>([]);
+	let severities = $state<RegistrySeverity[]>([]);
+	let categoryError = $state('');
+	let severityError = $state('');
+	let relatedGuides = $state<TroubleshootingGuideListItem[]>([]);
+	let relatedError = $state('');
+	let checklistState = $state<TroubleshootingChecklistState>({});
 
+	let manageOpen = $state(false);
 	let dialogOpen = $state(false);
 	let dialogMode = $state<TroubleshootingDialogMode>('create');
 	let dialogTarget = $state<TroubleshootingGuideDetail | null>(null);
@@ -77,13 +94,26 @@
 		}
 	}
 
-	async function refreshCatalogForSiblings() {
+	async function loadCategories() {
+		categoryError = '';
 		try {
-			const full = await listTroubleshootingGuides({ page: 1, page_size: 100 });
-			allGuidesCatalog = full.items;
-		} catch {
-			allGuidesCatalog = items;
+			categories = (await listTroubleshootingCategories()).items;
+		} catch (err) {
+			categoryError = err instanceof Error ? err.message : String(err);
 		}
+	}
+
+	async function loadSeverities() {
+		severityError = '';
+		try {
+			severities = (await listTroubleshootingSeverities()).items;
+		} catch (err) {
+			severityError = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	async function loadMetadata() {
+		await Promise.all([loadCategories(), loadSeverities()]);
 	}
 
 	async function refreshList(preferId?: number) {
@@ -100,11 +130,12 @@
 			});
 			items = res.items;
 			total = res.total;
-			void refreshCatalogForSiblings();
 
 			const targetId =
 				preferId ??
-				(selectedId && res.items.some((i) => i.id === selectedId) ? selectedId : res.items[0]?.id) ??
+				(selectedId && res.items.some((i) => i.id === selectedId)
+					? selectedId
+					: res.items[0]?.id) ??
 				null;
 			if (targetId !== null) {
 				await selectGuide(targetId);
@@ -125,6 +156,13 @@
 		detailError = '';
 		try {
 			selectedDetail = await getTroubleshootingGuide(id);
+			relatedError = '';
+			try {
+				relatedGuides = (await listRelatedTroubleshootingGuides(id)).items;
+			} catch (err) {
+				relatedGuides = [];
+				relatedError = err instanceof Error ? err.message : String(err);
+			}
 		} catch (err) {
 			detailError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -180,24 +218,12 @@
 	function severityVariant(
 		severity: TroubleshootingSeverity
 	): 'destructive' | 'warn' | 'default' | 'outline' {
-		switch (severity) {
-			case 'critical':
-				return 'destructive';
-			case 'warning':
-				return 'warn';
-			default:
-				return 'default';
+		const tone = severityTone(severity, severities);
+		if (tone === 'destructive' || tone === 'warn' || tone === 'default' || tone === 'outline') {
+			return tone;
 		}
+		return 'outline';
 	}
-
-	const relatedGuides = $derived(
-		selectedDetail
-			? findRelatedGuides(
-					selectedDetail,
-					allGuidesCatalog.length > 0 ? allGuidesCatalog : items
-				)
-			: []
-	);
 
 	const hasActiveFilters = $derived(
 		Boolean(debouncedSearch || category !== '_all' || device !== '_all' || errorCodeFilter)
@@ -205,6 +231,7 @@
 
 	onMount(() => {
 		void loadDeviceOptions();
+		void loadMetadata();
 		void refreshList();
 	});
 </script>
@@ -222,6 +249,7 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
+		<Button variant="secondary" onclick={() => (manageOpen = true)}>Manage Lists</Button>
 		<Button onclick={openCreate}>
 			<Plus size={16} />
 			<span>New Troubleshooting Guide</span>
@@ -234,10 +262,11 @@
 		<span>Testing Stage / Category</span>
 		<Select
 			ariaLabel="Filter by category"
+			class="registry-filter"
 			value={category}
 			options={[
 				{ value: '_all', label: 'All Stages' },
-				...TROUBLESHOOTING_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))
+				...categories.map((item) => ({ value: item.key, label: item.label }))
 			]}
 			onchange={(value) => {
 				category = value;
@@ -248,12 +277,15 @@
 	</div>
 
 	<div class="filter-field">
+		<span>Device / Interface</span>
 		<DevicePicker
 			id="troubleshooting-device-filter"
 			label="Device / Interface"
+			compact
+			comfortable
 			blankLabel="Global (All Devices)"
 			allowAll
-			device={device}
+			{device}
 			summaries={deviceSummaries}
 			fullWidth
 			onValueChange={(value) => {
@@ -291,6 +323,27 @@
 		<Button variant="secondary" class="clear-filters" onclick={clearFilters}>Clear filters</Button>
 	{/if}
 </div>
+
+{#if categoryError || severityError}
+	<div class="metadata-error banner-error" role="alert">
+		<span
+			>{[
+				categoryError && `Categories: ${categoryError}`,
+				severityError && `Severities: ${severityError}`
+			]
+				.filter(Boolean)
+				.join(' · ')}</span
+		>
+		<Button
+			variant="outline"
+			size="sm"
+			onclick={() => {
+				if (categoryError) void loadCategories();
+				if (severityError) void loadSeverities();
+			}}><RefreshCw size={14} />Retry metadata</Button
+		>
+	</div>
+{/if}
 
 <div class="troubleshooting-workspace">
 	<aside aria-label="Troubleshooting guides" class="guide-list">
@@ -347,7 +400,9 @@
 					onclick={() => selectGuide(row.id)}
 				>
 					<div class="flex flex-wrap items-center gap-1.5">
-						<Badge variant={severityVariant(row.severity)}>{severityLabel(row.severity)}</Badge>
+						<Badge variant={severityVariant(row.severity)}
+							>{severityLabel(row.severity, severities)}</Badge
+						>
 						{#if row.error_code}
 							<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
 						{/if}
@@ -365,11 +420,12 @@
 					<strong>{row.title}</strong>
 					<small>{row.symptom}</small>
 					<span class="meta-line">
-						{categoryLabel(row.category)}
+						{categoryLabel(row.category, categories)}
 						{#if row.function_name}
 							· <code class="font-mono">{row.function_name}</code>
 						{/if}
-						· {row.step_count} {row.step_count === 1 ? 'step' : 'steps'}
+						· {row.step_count}
+						{row.step_count === 1 ? 'step' : 'steps'}
 					</span>
 					<ChevronRight size={16} class="chevron-icon" />
 				</button>
@@ -407,23 +463,38 @@
 				{/if}
 			</div>
 		{:else if selectedDetail}
-			{#key selectedDetail.id}
-				<TroubleshootingDetail
-					guide={selectedDetail}
-					{relatedGuides}
-					onSelectGuide={(id) => selectGuide(id)}
-					onFilterErrorCode={(code) => {
-						errorCodeFilter = code;
-						page = 1;
-						void refreshList(selectedDetail?.id);
-					}}
-					onAddAlternate={openAddAlternate}
-					onEdit={openEdit}
-					onDelete={(guide) => {
-						deleteTarget = guide;
-					}}
-				/>
-			{/key}
+			{#if relatedError}
+				<div class="banner-error" role="alert">
+					<span>{relatedError}</span>
+					<Button variant="outline" size="sm" onclick={() => selectGuide(selectedDetail!.id)}>
+						Retry related guides
+					</Button>
+				</div>
+			{/if}
+			<TroubleshootingDetail
+				guide={selectedDetail}
+				{relatedGuides}
+				{categories}
+				{severities}
+				completedPositions={checklistState[selectedDetail.id] ?? []}
+				onChecklistChange={(position, checked) => {
+					checklistState = setChecklistStep(checklistState, selectedDetail!.id, position, checked);
+				}}
+				onResetChecklist={() => {
+					checklistState = resetChecklistProgress(checklistState, selectedDetail!.id);
+				}}
+				onSelectGuide={(id) => selectGuide(id)}
+				onFilterErrorCode={(code) => {
+					errorCodeFilter = code;
+					page = 1;
+					void refreshList(selectedDetail?.id);
+				}}
+				onAddAlternate={openAddAlternate}
+				onEdit={openEdit}
+				onDelete={(guide) => {
+					deleteTarget = guide;
+				}}
+			/>
 		{:else}
 			<p class="banner-empty" role="status">
 				Select a troubleshooting guide from the catalog or create a new one.
@@ -432,24 +503,39 @@
 	</div>
 </div>
 
-<TroubleshootingDialog
-	open={dialogOpen}
-	mode={dialogMode}
-	initialGuide={dialogTarget}
-	{deviceSummaries}
-	onOpenChange={(o) => {
-		dialogOpen = o;
+{#if dialogOpen}
+	<TroubleshootingDialog
+		open={dialogOpen}
+		mode={dialogMode}
+		initialGuide={dialogTarget}
+		{deviceSummaries}
+		{categories}
+		{severities}
+		onRegistryChanged={loadMetadata}
+		onOpenChange={(o) => {
+			dialogOpen = o;
+		}}
+		onSaved={async (saved) => {
+			toast.success(
+				dialogMode === 'edit'
+					? `Updated guide "${saved.title}"`
+					: dialogMode === 'alternate'
+						? `Added alternate solution "${saved.title}"`
+						: `Created guide "${saved.title}"`
+			);
+			await refreshList(saved.id);
+		}}
+	/>
+{/if}
+
+<TroubleshootingRegistryDialog
+	open={manageOpen}
+	{categories}
+	{severities}
+	onOpenChange={(value) => {
+		manageOpen = value;
 	}}
-	onSaved={async (saved) => {
-		toast.success(
-			dialogMode === 'edit'
-				? `Updated guide "${saved.title}"`
-				: dialogMode === 'alternate'
-					? `Added alternate solution "${saved.title}"`
-					: `Created guide "${saved.title}"`
-		);
-		await refreshList(saved.id);
-	}}
+	onChanged={loadMetadata}
 />
 
 <AlertDialog
@@ -511,6 +597,17 @@
 	}
 	.filters :global(.clear-filters) {
 		flex: 0 0 auto;
+	}
+	.filters :global(.registry-filter) {
+		height: 40px;
+	}
+	.metadata-error {
+		padding: 10px 16px;
+		margin: -8px 0 16px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-wrap: wrap;
 	}
 	.guide-search {
 		position: relative;

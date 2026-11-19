@@ -80,6 +80,51 @@ export interface TroubleshootingGuideInput {
 	steps: TroubleshootingStepInput[];
 }
 
+export type TroubleshootingDraftStep = TroubleshootingStepInput & { client_id: string };
+export type TroubleshootingChecklistState = Record<number, number[]>;
+
+export function setChecklistStep(
+	state: TroubleshootingChecklistState,
+	guideId: number,
+	position: number,
+	checked: boolean
+): TroubleshootingChecklistState {
+	const current = state[guideId] ?? [];
+	const next = checked
+		? current.includes(position)
+			? current
+			: [...current, position]
+		: current.filter((item) => item !== position);
+	if (next.length === 0) {
+		const nextState = { ...state };
+		delete nextState[guideId];
+		return nextState;
+	}
+	return { ...state, [guideId]: next };
+}
+
+export function resetChecklistProgress(
+	state: TroubleshootingChecklistState,
+	guideId: number
+): TroubleshootingChecklistState {
+	const nextState = { ...state };
+	delete nextState[guideId];
+	return nextState;
+}
+
+export function moveDraftStep(
+	steps: TroubleshootingDraftStep[],
+	index: number,
+	delta: -1 | 1
+): TroubleshootingDraftStep[] {
+	const target = index + delta;
+	if (target < 0 || target >= steps.length) return steps;
+	const next = [...steps];
+	const [step] = next.splice(index, 1);
+	next.splice(target, 0, step);
+	return next;
+}
+
 export const TROUBLESHOOTING_CATEGORIES: {
 	value: TroubleshootingCategory;
 	label: string;
@@ -180,6 +225,17 @@ export async function listTroubleshootingGuides(
 export async function getTroubleshootingGuide(id: number): Promise<TroubleshootingGuideDetail> {
 	return request<TroubleshootingGuideDetail>(`/api/troubleshooting/${id}`);
 }
+
+export async function listRelatedTroubleshootingGuides(
+	id: number
+): Promise<TroubleshootingRegistryListResult> {
+	return request<TroubleshootingRegistryListResult>(`/api/troubleshooting/${id}/related`);
+}
+
+type TroubleshootingRegistryListResult = {
+	items: TroubleshootingGuideListItem[];
+	total: number;
+};
 
 export async function createTroubleshootingGuide(
 	body: TroubleshootingGuideInput

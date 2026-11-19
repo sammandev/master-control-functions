@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		AlertTriangle,
 		CheckCircle2,
@@ -17,10 +16,15 @@
 		categoryLabel,
 		formatTroubleshootingAiContext,
 		severityLabel,
+		severityTone,
 		type TroubleshootingGuideDetail,
 		type TroubleshootingGuideListItem,
 		type TroubleshootingSeverity
 	} from '#lib/troubleshooting.ts';
+	import type {
+		TroubleshootingCategory,
+		TroubleshootingSeverity as RegistrySeverity
+	} from '#lib/troubleshooting-registry.ts';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
 	import Checkbox from '#lib/components/ui/checkbox.svelte';
@@ -28,6 +32,11 @@
 	let {
 		guide,
 		relatedGuides = [],
+		categories = [],
+		severities = [],
+		completedPositions = [],
+		onChecklistChange,
+		onResetChecklist,
 		onSelectGuide,
 		onFilterErrorCode,
 		onAddAlternate,
@@ -36,6 +45,11 @@
 	}: {
 		guide: TroubleshootingGuideDetail;
 		relatedGuides?: TroubleshootingGuideListItem[];
+		categories?: TroubleshootingCategory[];
+		severities?: RegistrySeverity[];
+		completedPositions?: number[];
+		onChecklistChange: (position: number, checked: boolean) => void;
+		onResetChecklist: () => void;
 		onSelectGuide: (id: number) => void;
 		onFilterErrorCode?: (errorCode: string) => void;
 		onAddAlternate: (guide: TroubleshootingGuideDetail) => void;
@@ -43,47 +57,19 @@
 		onDelete: (guide: TroubleshootingGuideDetail) => void;
 	} = $props();
 
-	// Track checked step keys ("guideId:stepPosition") across guide switches in the current session.
-	let completedKeys = new SvelteSet<string>();
-
-	function stepKey(guideId: number, position: number): string {
-		return `${guideId}:${position}`;
-	}
-
 	function isStepChecked(position: number): boolean {
-		return completedKeys.has(stepKey(guide.id, position));
-	}
-
-	function toggleStep(position: number, checked: boolean) {
-		const key = stepKey(guide.id, position);
-		if (checked) {
-			completedKeys.add(key);
-		} else {
-			completedKeys.delete(key);
-		}
-	}
-
-	function resetProgress() {
-		for (const step of guide.steps) {
-			completedKeys.delete(stepKey(guide.id, step.position));
-		}
+		return completedPositions.includes(position);
 	}
 
 	const completedCount = $derived(
-		guide.steps.filter((s) => completedKeys.has(stepKey(guide.id, s.position))).length
+		guide.steps.filter((step) => completedPositions.includes(step.position)).length
 	);
 
 	function severityVariant(
 		severity: TroubleshootingSeverity
 	): 'destructive' | 'warn' | 'default' | 'outline' {
-		switch (severity) {
-			case 'critical':
-				return 'destructive';
-			case 'warning':
-				return 'warn';
-			default:
-				return 'default';
-		}
+		const tone = severityTone(severity, severities);
+		return tone === 'destructive' || tone === 'warn' || tone === 'default' ? tone : 'outline';
 	}
 
 	async function copyAiContext() {
@@ -96,8 +82,10 @@
 	<header class="detail-head border-border bg-card rounded-lg border p-4">
 		<div class="detail-head-top">
 			<div class="badge-row">
-				<Badge variant={severityVariant(guide.severity)}>{severityLabel(guide.severity)}</Badge>
-				<Badge variant="outline">{categoryLabel(guide.category)}</Badge>
+				<Badge variant={severityVariant(guide.severity)}
+					>{severityLabel(guide.severity, severities)}</Badge
+				>
+				<Badge variant="outline">{categoryLabel(guide.category, categories)}</Badge>
 				<Badge variant="default">{guide.device_name || 'Global'}</Badge>
 				{#if guide.error_code}
 					{#if onFilterErrorCode}
@@ -135,7 +123,7 @@
 					onclick={() => onAddAlternate(guide)}
 				>
 					<GitBranchPlus size={14} />
-					<span>+ Add Alternate Solution</span>
+					<span>Add Alternate Solution</span>
 				</Button>
 				<Button variant="secondary" size="sm" onclick={() => onEdit(guide)}>
 					<Pencil size={14} />
@@ -148,7 +136,7 @@
 			</div>
 		</div>
 
-		<h2 class="text-foreground mt-2.5 text-lg font-semibold leading-snug">{guide.title}</h2>
+		<h2 class="text-foreground mt-2.5 text-lg leading-snug font-semibold">{guide.title}</h2>
 	</header>
 
 	{#if relatedGuides.length > 0}
@@ -178,7 +166,7 @@
 							<span class="text-foreground line-clamp-1 text-xs font-semibold">{sibling.title}</span
 							>
 							<Badge variant={severityVariant(sibling.severity)}>
-								{severityLabel(sibling.severity)}
+								{severityLabel(sibling.severity, severities)}
 							</Badge>
 						</div>
 						<p class="text-muted-foreground line-clamp-1 text-xs">{sibling.symptom}</p>
@@ -189,7 +177,9 @@
 							{#if sibling.function_name}
 								<span class="text-muted-foreground font-mono">{sibling.function_name}</span>
 							{/if}
-							<span class="text-muted-foreground">· {sibling.step_count} steps</span>
+							<span class="text-muted-foreground"
+								>· {sibling.step_count} {sibling.step_count === 1 ? 'step' : 'steps'}</span
+							>
 						</div>
 					</button>
 				{/each}
@@ -224,9 +214,7 @@
 	<section class="border-border bg-card rounded-lg border p-4">
 		<div class="checklist-header">
 			<div>
-				<h3 class="text-foreground text-sm font-semibold">
-					Step-by-Step Resolution Checklist
-				</h3>
+				<h3 class="text-foreground text-sm font-semibold">Step-by-Step Resolution Checklist</h3>
 				<p class="text-muted-foreground text-xs">
 					Check off each diagnostic step as you verify it on the DUT or station.
 				</p>
@@ -237,7 +225,7 @@
 					{completedCount} / {guide.steps.length} completed
 				</Badge>
 				{#if completedCount > 0}
-					<Button variant="ghost" size="sm" onclick={resetProgress}>
+					<Button variant="ghost" size="sm" onclick={onResetChecklist}>
 						<RotateCcw size={13} />
 						<span>Reset progress</span>
 					</Button>
@@ -245,7 +233,7 @@
 			</div>
 		</div>
 
-		<ol class="mt-3.5 grid gap-3 list-none p-0">
+		<ol class="mt-3.5 grid list-none gap-3 p-0">
 			{#each guide.steps as step (step.position)}
 				{@const checked = isStepChecked(step.position)}
 				<li
@@ -257,9 +245,9 @@
 					<div class="flex items-start gap-3">
 						<div class="pt-0.5">
 							<Checkbox
-								checked={checked}
+								{checked}
 								aria-label="Mark step {step.position}: {step.title} as completed"
-								onCheckedChange={(v) => toggleStep(step.position, v === true)}
+								onCheckedChange={(v) => onChecklistChange(step.position, v === true)}
 							/>
 						</div>
 						<div class="min-w-0 flex-1">

@@ -102,20 +102,20 @@
     "semantic_hash": ""
   },
   "backend/internal/store/compose.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839442,
+    "mtime": 1795096340.0295947,
+    "seen": 1795096366.962879,
     "ast_hash": "18a609ab7d16f216247174760fc806fd",
     "semantic_hash": ""
   },
   "backend/internal/store/criteria_definitions.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839452,
+    "mtime": 1795096340.0295947,
+    "seen": 1795096366.9628806,
     "ast_hash": "e99c7bd26a0ec719096c28acacc9e48d",
     "semantic_hash": ""
   },
   "backend/internal/store/db.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839461,
+    "mtime": 1795096340.0295947,
+    "seen": 1795096366.9628816,
     "ast_hash": "90adab23fc6b1074566aa7dfb04d0d9d",
     "semantic_hash": ""
   },
@@ -126,56 +126,56 @@
     "semantic_hash": ""
   },
   "backend/internal/store/examples.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839542,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630938,
     "ast_hash": "8026539f990b9f45a642bd6fc6558c1e",
     "semantic_hash": ""
   },
   "backend/internal/store/facets.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.183955,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630947,
     "ast_hash": "16857f19051e03e343af79353cae0646",
     "semantic_hash": ""
   },
   "backend/internal/store/function_links.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839566,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630966,
     "ast_hash": "2c437ff22fda9580325e82eb8385b1c9",
     "semantic_hash": ""
   },
   "backend/internal/store/functions.sql.go": {
-    "mtime": 1795087660.6206179,
-    "seen": 1795088517.1839576,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630973,
     "ast_hash": "608763bc1617ea3b3b041063d79386ef",
     "semantic_hash": ""
   },
   "backend/internal/store/import.sql.go": {
-    "mtime": 1795087660.6206179,
-    "seen": 1795088517.1839585,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630983,
     "ast_hash": "369c5861dcd89a3eab1ee235ff46e26d",
     "semantic_hash": ""
   },
   "backend/internal/store/models.go": {
-    "mtime": 1795087651.7164593,
-    "seen": 1795088517.1839592,
+    "mtime": 1795096287.1256166,
+    "seen": 1795096366.9630992,
     "ast_hash": "ff912f1e64ded2c243c790e43b91ce89",
     "semantic_hash": ""
   },
   "backend/internal/store/orphans.sql.go": {
-    "mtime": 1795087660.6206179,
-    "seen": 1795088517.18396,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9631,
     "ast_hash": "eb64a7e17d2b480b45a2401f1d3cdd59",
     "semantic_hash": ""
   },
   "backend/internal/store/parameter_definitions.sql.go": {
-    "mtime": 1795087660.6206179,
-    "seen": 1795088517.183961,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9631004,
     "ast_hash": "cc854181dd394201edd70900eff9e276",
     "semantic_hash": ""
   },
   "backend/internal/store/sequences.sql.go": {
-    "mtime": 1795087660.6206179,
-    "seen": 1795088517.1839616,
+    "mtime": 1795096340.0384288,
+    "seen": 1795096366.9631011,
     "ast_hash": "76e34286f55a924f5f4fa9ec51173fbe",
     "semantic_hash": ""
   },
@@ -468,32 +468,32 @@
     "semantic_hash": ""
   },
   "backend/internal/store/devices_definitions_global.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.183949,
+    "mtime": 1795096340.0295947,
+    "seen": 1795096366.9630196,
     "ast_hash": "9e87f5f9dc2b2837676a7de404775b0f",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_definitions_scoped.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839502,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630203,
     "ast_hash": "0e61e322c56ba03aecac0494dab8b77f",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_functions.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.183951,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630213,
     "ast_hash": "516d0837027203b2495258903a36c937",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_index.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839516,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.963022,
     "ast_hash": "3e80e9c90504284ed13576044a24e8b2",
     "semantic_hash": ""
   },
   "backend/internal/store/devices_registry.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.1839523,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.9630232,
     "ast_hash": "d859030f3ef4d8d3290dd1304fad4363",
     "semantic_hash": ""
   },
@@ -660,9 +660,9 @@
     "semantic_hash": ""
   },
   "frontend/playwright.ui.config.ts": {
-    "mtime": 1795086556.8706944,
-    "seen": 1795088517.1840017,
-    "ast_hash": "9f59aa501d3fd9fbeef642360578a678",
+    "mtime": 1795095761.066607,
+    "seen": 1795096366.9661546,
+    "ast_hash": "29e642d4e7f72a2b12d864022b78f7c3",
     "semantic_hash": ""
   },
   "frontend/prettier.config.js": {
@@ -3258,9 +3258,9 @@
     "semantic_hash": ""
   },
   "backend/internal/api/troubleshooting.go": {
-    "mtime": 1795088879.6819544,
-    "seen": 1795089148.484261,
-    "ast_hash": "299b8e2b4e08f689e63215108cc58c5d",
+    "mtime": 1795096319.6830635,
+    "seen": 1795096366.9620533,
+    "ast_hash": "c39910e66da4cbb0ca04cb0329a46ac4",
     "semantic_hash": ""
   },
   "backend/internal/api/troubleshooting_validation_test.go": {
@@ -3288,20 +3288,20 @@
     "semantic_hash": ""
   },
   "backend/internal/store/function_grammars.sql.go": {
-    "mtime": 1795087660.610436,
-    "seen": 1795088517.183956,
+    "mtime": 1795096340.0320492,
+    "seen": 1795096366.963096,
     "ast_hash": "303f78d428e03d0f68376fc1e6047bac",
     "semantic_hash": ""
   },
   "backend/internal/store/troubleshooting.sql.go": {
-    "mtime": 1795087651.7164593,
-    "seen": 1795088517.1839626,
-    "ast_hash": "bc6f5d68c5010092d572049ddab80218",
+    "mtime": 1795096287.1300347,
+    "seen": 1795096366.9631028,
+    "ast_hash": "6cfdebd27640e7c9847cd5c507b8d040",
     "semantic_hash": ""
   },
   "backend/internal/store/troubleshooting_registry.sql.go": {
-    "mtime": 1795087651.7164593,
-    "seen": 1795088517.1839633,
+    "mtime": 1795096287.1300347,
+    "seen": 1795096366.9631035,
     "ast_hash": "cfb6f150882a2f940101dd31c875d032",
     "semantic_hash": ""
   },
@@ -3324,9 +3324,9 @@
     "semantic_hash": ""
   },
   "backend/tests/api/troubleshooting_test.go": {
-    "mtime": 1795086556.6914961,
-    "seen": 1795088517.1839797,
-    "ast_hash": "ba0716628a12c2815403c5a47372953f",
+    "mtime": 1795094719.0210612,
+    "seen": 1795096366.9645193,
+    "ast_hash": "45258fe26068d03f1e6890b3c1b5c850",
     "semantic_hash": ""
   },
   "backend/tests/importer/dependency_regression_test.go": {
@@ -3384,15 +3384,15 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingDetail.svelte": {
-    "mtime": 1795086556.8981297,
-    "seen": 1795088517.18403,
-    "ast_hash": "addbcbccf5a74854f1ae4fa3343ad604",
+    "mtime": 1795095760.972617,
+    "seen": 1795096366.9682548,
+    "ast_hash": "c3a68851ddb85aeef89d72992b77adeb",
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingDialog.svelte": {
-    "mtime": 1795086556.8981297,
-    "seen": 1795088517.184031,
-    "ast_hash": "3e8aaf31e7584b773ef09ca3aa81a734",
+    "mtime": 1795096010.1165535,
+    "seen": 1795096366.9682558,
+    "ast_hash": "b85bcebc462ad62805ae8c2eb610bc03",
     "semantic_hash": ""
   },
   "frontend/src/lib/mcp.ts": {
@@ -3402,15 +3402,15 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/troubleshooting.ts": {
-    "mtime": 1795090304.6291902,
-    "seen": 1795090347.9003918,
-    "ast_hash": "efe716a65a18742e249e5d88b01477d0",
+    "mtime": 1795096107.785217,
+    "seen": 1795096366.973985,
+    "ast_hash": "55b436bee24a4e59cfb29dc79789cb8d",
     "semantic_hash": ""
   },
   "frontend/src/routes/troubleshooting/+page.svelte": {
-    "mtime": 1795086556.9307742,
-    "seen": 1795088517.1841013,
-    "ast_hash": "bf43f09e53d1e76058898a38f776398d",
+    "mtime": 1795096010.033399,
+    "seen": 1795096366.9751139,
+    "ast_hash": "986202a6f76ff5a2d0b84a7168eb7be2",
     "semantic_hash": ""
   },
   "frontend/tests/components/Devices.svelte.spec.ts": {
@@ -3444,9 +3444,9 @@
     "semantic_hash": ""
   },
   "frontend/tests/unit/troubleshooting.spec.ts": {
-    "mtime": 1795090304.6577187,
-    "seen": 1795090347.9031324,
-    "ast_hash": "2c79e36d13fd7d6b982c47d499713f9a",
+    "mtime": 1795094700.5153255,
+    "seen": 1795096366.9769723,
+    "ast_hash": "cad4a4b17c22918f6f1b364cb0aa6813",
     "semantic_hash": ""
   },
   "skills-lock.json": {
@@ -5214,9 +5214,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingRegistryPicker.svelte": {
-    "mtime": 1795091038.538621,
-    "seen": 1795091163.6457305,
-    "ast_hash": "152246a9e70dcaf695aa8313ad5f4e51",
+    "mtime": 1795095641.1634493,
+    "seen": 1795096366.968331,
+    "ast_hash": "3975e7c70cb7de7b9e196d23a3a827b5",
     "semantic_hash": ""
   },
   "frontend/tests/components/TroubleshootingRegistryPicker.svelte.spec.ts": {
@@ -5241,6 +5241,18 @@
     "mtime": 1795091711.6941009,
     "seen": 1795093128.5771272,
     "ast_hash": "42a419839fc3a37ff74c032fba71db8e",
+    "semantic_hash": ""
+  },
+  "frontend/tests/e2e/troubleshooting.spec.ts": {
+    "mtime": 1795096010.1513977,
+    "seen": 1795096366.9763198,
+    "ast_hash": "ece099d4f9df3642e0888331f2b4c18e",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/2026-11-19-troubleshooting-registry/task-5-report.md": {
+    "mtime": 1795094156.7062147,
+    "seen": 1795096366.9977076,
+    "ast_hash": "7c56ef2a4e99d3b6ced84ae29641f120",
     "semantic_hash": ""
   },
   ".scratch/deploy-route-check-20261116/pnpm-lock.yaml": {

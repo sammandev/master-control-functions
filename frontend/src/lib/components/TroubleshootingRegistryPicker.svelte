@@ -102,7 +102,7 @@
 			aria-label={`Choose ${kind}`}
 			sideOffset={6}
 			align="start"
-			class="border-border bg-card text-foreground w-[360px] max-w-[calc(100vw-32px)] rounded-[4px] border p-2 shadow-md"
+			class="border-border bg-card text-foreground z-[60] w-[360px] max-w-[calc(100vw-32px)] rounded-[4px] border p-2 shadow-md"
 			onOpenAutoFocus={(event) => {
 				event.preventDefault();
 				input?.focus({ preventScroll: true });

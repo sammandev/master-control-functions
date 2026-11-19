@@ -93,7 +93,8 @@ func (q *Queries) GetTroubleshootingGuide(ctx context.Context, id int64) (Troubl
 const getTroubleshootingRelatedGuides = `-- name: GetTroubleshootingRelatedGuides :many
 SELECT related.id, related.title, related.category, related.severity,
        related.device_name, related.function_name, related.error_code,
-       related.symptom, related.root_cause, related.created_at, related.updated_at
+       related.symptom, related.root_cause, related.created_at, related.updated_at,
+       (SELECT count(*) FROM troubleshooting_steps steps WHERE steps.guide_id = related.id) AS step_count
 FROM troubleshooting_guides source
 JOIN troubleshooting_guides related
   ON related.id <> source.id
@@ -109,15 +110,30 @@ ORDER BY CASE
          related.id
 `
 
-func (q *Queries) GetTroubleshootingRelatedGuides(ctx context.Context, id int64) ([]TroubleshootingGuide, error) {
+type GetTroubleshootingRelatedGuidesRow struct {
+	ID           int64
+	Title        string
+	Category     string
+	Severity     string
+	DeviceName   string
+	FunctionName string
+	ErrorCode    string
+	Symptom      string
+	RootCause    string
+	CreatedAt    string
+	UpdatedAt    string
+	StepCount    int64
+}
+
+func (q *Queries) GetTroubleshootingRelatedGuides(ctx context.Context, id int64) ([]GetTroubleshootingRelatedGuidesRow, error) {
 	rows, err := q.db.QueryContext(ctx, getTroubleshootingRelatedGuides, id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TroubleshootingGuide
+	var items []GetTroubleshootingRelatedGuidesRow
 	for rows.Next() {
-		var i TroubleshootingGuide
+		var i GetTroubleshootingRelatedGuidesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -130,6 +146,7 @@ func (q *Queries) GetTroubleshootingRelatedGuides(ctx context.Context, id int64)
 			&i.RootCause,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.StepCount,
 		); err != nil {
 			return nil, err
 		}

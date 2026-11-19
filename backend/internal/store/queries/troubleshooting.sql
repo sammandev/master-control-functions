@@ -75,7 +75,8 @@ LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
 -- name: GetTroubleshootingRelatedGuides :many
 SELECT related.id, related.title, related.category, related.severity,
        related.device_name, related.function_name, related.error_code,
-       related.symptom, related.root_cause, related.created_at, related.updated_at
+       related.symptom, related.root_cause, related.created_at, related.updated_at,
+       (SELECT count(*) FROM troubleshooting_steps steps WHERE steps.guide_id = related.id) AS step_count
 FROM troubleshooting_guides source
 JOIN troubleshooting_guides related
   ON related.id <> source.id

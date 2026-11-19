@@ -3,8 +3,11 @@ import {
 	categoryLabel,
 	findRelatedGuides,
 	formatTroubleshootingAiContext,
+	moveDraftStep,
+	resetChecklistProgress,
 	severityLabel,
 	severityTone,
+	setChecklistStep,
 	type TroubleshootingGuideDetail,
 	type TroubleshootingGuideListItem
 } from '../../src/lib/troubleshooting';
@@ -128,6 +131,41 @@ test('categoryLabel uses registry metadata and preserves legacy one-argument cal
 	expect(categoryLabel('measurement')).toBe('Measurement & Criteria');
 	expect(categoryLabel('signal_quality')).toBe('Signal Quality');
 	expect(categoryLabel('')).toBe('');
+});
+
+test('checklist state is isolated by guide and reset affects only the current guide', () => {
+	const state = { 4: [1], 5: [2] };
+	const checked = setChecklistStep(state, 4, 2, true);
+	const unchecked = setChecklistStep(checked, 4, 1, false);
+	const reset = resetChecklistProgress(unchecked, 4);
+
+	expect(unchecked).toEqual({ 4: [2], 5: [2] });
+	expect(reset).toEqual({ 5: [2] });
+	expect(state).toEqual({ 4: [1], 5: [2] });
+});
+
+test('moveDraftStep moves a complete stable record without rekeying fields', () => {
+	const first = {
+		client_id: 'draft-a',
+		title: 'First',
+		instruction: 'Inspect first',
+		script_snippet: 'FIRST=1',
+		verification: 'first verified'
+	};
+	const second = {
+		client_id: 'draft-b',
+		title: 'Second',
+		instruction: 'Inspect second',
+		script_snippet: 'SECOND=2',
+		verification: 'second verified'
+	};
+	const steps = [first, second];
+
+	const moved = moveDraftStep(steps, 1, -1);
+
+	expect(moved).toEqual([second, first]);
+	expect(moved[0]).toBe(second);
+	expect(steps).toEqual([first, second]);
 });
 
 test('severity helpers use registry metadata and neutral fallbacks', () => {
