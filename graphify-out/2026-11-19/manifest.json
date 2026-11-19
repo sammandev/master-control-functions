@@ -5225,6 +5225,24 @@
     "ast_hash": "2e0288fb4f51912e360062844ebe3e75",
     "semantic_hash": ""
   },
+  "frontend/src/lib/components/TroubleshootingRegistryDialog.svelte": {
+    "mtime": 1795093027.1328664,
+    "seen": 1795093128.5466547,
+    "ast_hash": "1650d4ec78121ca949df70097b187c63",
+    "semantic_hash": ""
+  },
+  "frontend/tests/components/TroubleshootingRegistryDialog.svelte.spec.ts": {
+    "mtime": 1795093027.163553,
+    "seen": 1795093128.5548677,
+    "ast_hash": "8ba56c7751ca2ae0d01a2c84cbf4fcb0",
+    "semantic_hash": ""
+  },
+  ".superpowers/sdd/2026-11-19-troubleshooting-registry/task-4-report.md": {
+    "mtime": 1795091711.6941009,
+    "seen": 1795093128.5771272,
+    "ast_hash": "42a419839fc3a37ff74c032fba71db8e",
+    "semantic_hash": ""
+  },
   ".scratch/deploy-route-check-20261116/pnpm-lock.yaml": {
     "mtime": 1795086556.5507295,
     "seen": 1795088517.1843882,

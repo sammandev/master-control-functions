@@ -5226,15 +5226,15 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingRegistryDialog.svelte": {
-    "mtime": 1795093027.1328664,
-    "seen": 1795093128.5466547,
-    "ast_hash": "1650d4ec78121ca949df70097b187c63",
+    "mtime": 1795093732.986292,
+    "seen": 1795093981.7071636,
+    "ast_hash": "13aef70e2862bb9f6b8f5d24464eb9db",
     "semantic_hash": ""
   },
   "frontend/tests/components/TroubleshootingRegistryDialog.svelte.spec.ts": {
-    "mtime": 1795093027.163553,
-    "seen": 1795093128.5548677,
-    "ast_hash": "8ba56c7751ca2ae0d01a2c84cbf4fcb0",
+    "mtime": 1795094113.8041563,
+    "seen": 1795094172.1604679,
+    "ast_hash": "dbc357052928faa574ad835699c4197e",
     "semantic_hash": ""
   },
   ".superpowers/sdd/2026-11-19-troubleshooting-registry/task-4-report.md": {

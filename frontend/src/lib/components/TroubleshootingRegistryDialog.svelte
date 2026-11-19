@@ -31,6 +31,9 @@
 		error = $state('');
 		displayName = $state('');
 		tone = $state('');
+		persistedLabel = '';
+		persistedDescription = '';
+		persistedTone = '';
 
 		constructor(item: TroubleshootingCategory | TroubleshootingSeverity) {
 			this.key = item.key;
@@ -41,6 +44,9 @@
 			this.guide_count = item.guide_count;
 			this.displayName = item.label;
 			this.tone = 'tone' in item ? item.tone : '';
+			this.persistedLabel = item.label;
+			this.persistedDescription = item.description;
+			this.persistedTone = this.tone;
 		}
 	}
 
@@ -91,6 +97,14 @@
 			.map((item) => ({ value: item.key, label: item.label }));
 	}
 
+	async function refreshAfterChange() {
+		try {
+			await onChanged();
+		} catch (failure) {
+			toast.error(formatApiError(failure));
+		}
+	}
+
 	function saveBody(row: CategoryRow | SeverityRow, kind: Kind) {
 		const body = {
 			label: row.label.trim(),
@@ -104,6 +118,7 @@
 		if (row.busy) return;
 		row.busy = true;
 		row.error = '';
+		let saved = false;
 		try {
 			const body = saveBody(row, kind);
 			if (kind === 'category') {
@@ -111,15 +126,19 @@
 			} else {
 				await updateTroubleshootingSeverity(row.key, body);
 			}
+			row.persistedLabel = body.label;
+			row.persistedDescription = body.description ?? '';
+			row.persistedTone = kind === 'severity' ? (row as SeverityRow).tone : '';
 			row.displayName = row.label.trim();
 			toast.success(`${kindLabel(kind)} saved`);
-			await onChanged();
+			saved = true;
 		} catch (failure) {
 			row.error = formatApiError(failure);
 			toast.error(row.error);
 		} finally {
 			row.busy = false;
 		}
+		if (saved) await refreshAfterChange();
 	}
 
 	async function move(row: CategoryRow | SeverityRow, kind: Kind, direction: -1 | 1) {
@@ -136,30 +155,31 @@
 		neighbor.error = '';
 		const rowOrder = row.sort_order;
 		const neighborOrder = neighbor.sort_order;
+		let moved = false;
 		try {
 			if (kind === 'category') {
 				await updateTroubleshootingCategory(row.key, {
-					label: row.label.trim(),
-					description: row.description?.trim() ?? '',
+					label: row.persistedLabel,
+					description: row.persistedDescription,
 					sort_order: neighborOrder
 				});
 				await updateTroubleshootingCategory(neighbor.key, {
-					label: neighbor.label.trim(),
-					description: neighbor.description?.trim() ?? '',
+					label: neighbor.persistedLabel,
+					description: neighbor.persistedDescription,
 					sort_order: rowOrder
 				});
 			} else {
 				await updateTroubleshootingSeverity(row.key, {
-					label: row.label.trim(),
-					description: row.description?.trim() ?? '',
+					label: row.persistedLabel,
+					description: row.persistedDescription,
 					sort_order: neighborOrder,
-					tone: (row as SeverityRow).tone
+					tone: (row as SeverityRow).persistedTone
 				});
 				await updateTroubleshootingSeverity(neighbor.key, {
-					label: neighbor.label.trim(),
-					description: neighbor.description?.trim() ?? '',
+					label: neighbor.persistedLabel,
+					description: neighbor.persistedDescription,
 					sort_order: rowOrder,
-					tone: (neighbor as SeverityRow).tone
+					tone: (neighbor as SeverityRow).persistedTone
 				});
 			}
 			row.sort_order = neighborOrder;
@@ -169,7 +189,7 @@
 			} else {
 				severityRows = severityRows.toSorted((a, b) => a.sort_order - b.sort_order);
 			}
-			await onChanged();
+			moved = true;
 		} catch (failure) {
 			row.error = formatApiError(failure);
 			toast.error(row.error);
@@ -178,6 +198,7 @@
 			neighbor.busy = false;
 			reordering = null;
 		}
+		if (moved) await refreshAfterChange();
 	}
 
 	function beginDelete(kind: Kind, row: CategoryRow | SeverityRow) {
@@ -202,22 +223,28 @@
 		}
 		deleting = true;
 		deleteError = '';
+		const target = deleteTarget;
 		try {
-			if (deleteTarget.kind === 'category') {
-				await deleteTroubleshootingCategory(deleteTarget.row.key, replacement);
+			if (target.kind === 'category') {
+				await deleteTroubleshootingCategory(target.row.key, replacement);
 			} else {
-				await deleteTroubleshootingSeverity(deleteTarget.row.key, replacement);
+				await deleteTroubleshootingSeverity(target.row.key, replacement);
 			}
-			const label = deleteTarget.row.label;
-			toast.success(`${kindLabel(deleteTarget.kind)} “${label}” deleted`);
-			await onChanged();
+			toast.success(`${kindLabel(target.kind)} “${target.row.label}” deleted`);
+			if (target.kind === 'category') {
+				categoryRows = categoryRows.filter((item) => item.key !== target.row.key);
+			} else {
+				severityRows = severityRows.filter((item) => item.key !== target.row.key);
+			}
 			closeDelete(true);
 		} catch (failure) {
 			deleteError = formatApiError(failure);
 			toast.error(deleteError);
+			return;
 		} finally {
 			deleting = false;
 		}
+		await refreshAfterChange();
 	}
 </script>
 
