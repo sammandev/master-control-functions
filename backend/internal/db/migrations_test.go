@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -113,6 +112,7 @@ func TestTroubleshootingRegistryMigrationAppliesToExistingGuides(t *testing.T) {
 		VALUES (99, 'Preserved custom guide', 'production', 'info', 't', 't')`); err != nil {
 		t.Fatalf("insert pre-taxonomy guide: %v", err)
 	}
+	wantGuideTaxonomies := snapshotGuideTaxonomies(t, transaction)
 	if _, err := transaction.Exec(migration.SQL); err != nil {
 		t.Fatalf("apply registry migration: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestTroubleshootingRegistryMigrationAppliesToExistingGuides(t *testing.T) {
 		t.Fatalf("commit: %v", err)
 	}
 
-	assertGuideKeysPreserved(t, database)
+	assertGuideKeysPreserved(t, database, wantGuideTaxonomies)
 	assertRegistryRows(t, database)
 	assertRegistryConstraints(t, database)
 }
@@ -182,28 +182,55 @@ func openIsolatedPostgres(t *testing.T) *sql.DB {
 	return database
 }
 
-func assertGuideKeysPreserved(t *testing.T, database *sql.DB) {
+type guideTaxonomy struct {
+	category string
+	severity string
+}
+
+type guideQueryer interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
+func snapshotGuideTaxonomies(t *testing.T, queryer guideQueryer) map[int64]guideTaxonomy {
 	t.Helper()
-	rows, err := database.Query(`SELECT category, severity FROM troubleshooting_guides ORDER BY id`)
+	rows, err := queryer.Query(`SELECT id, category, severity FROM troubleshooting_guides ORDER BY id`)
 	if err != nil {
-		t.Fatalf("query preserved guides: %v", err)
+		t.Fatalf("snapshot guide taxonomies: %v", err)
 	}
 	defer rows.Close()
-	var count int
+
+	snapshot := make(map[int64]guideTaxonomy)
 	for rows.Next() {
-		var category, severity string
-		if err := rows.Scan(&category, &severity); err != nil {
-			t.Fatalf("scan preserved guide: %v", err)
+		var id int64
+		var taxonomy guideTaxonomy
+		if err := rows.Scan(&id, &taxonomy.category, &taxonomy.severity); err != nil {
+			t.Fatalf("scan guide taxonomy snapshot: %v", err)
 		}
-		assertRegistryKey(t, database, "troubleshooting_categories", category)
-		assertRegistryKey(t, database, "troubleshooting_severities", severity)
-		count++
+		snapshot[id] = taxonomy
 	}
 	if err := rows.Err(); err != nil {
-		t.Fatalf("iterate preserved guides: %v", err)
+		t.Fatalf("iterate guide taxonomy snapshot: %v", err)
 	}
-	if count != 8 {
-		t.Fatalf("preserved guide count = %d, want 8", count)
+	return snapshot
+}
+
+func assertGuideKeysPreserved(t *testing.T, database *sql.DB, want map[int64]guideTaxonomy) {
+	t.Helper()
+	got := snapshotGuideTaxonomies(t, database)
+	if len(got) != len(want) {
+		t.Fatalf("preserved guide count = %d, want %d", len(got), len(want))
+	}
+	for id, wantTaxonomy := range want {
+		gotTaxonomy, ok := got[id]
+		if !ok {
+			t.Errorf("guide %d disappeared during registry migration", id)
+			continue
+		}
+		if gotTaxonomy != wantTaxonomy {
+			t.Errorf("guide %d taxonomy = (%q, %q), want (%q, %q)", id,
+				gotTaxonomy.category, gotTaxonomy.severity,
+				wantTaxonomy.category, wantTaxonomy.severity)
+		}
 	}
 	var customTitle string
 	if err := database.QueryRow(`SELECT title FROM troubleshooting_guides WHERE id = 99`).Scan(&customTitle); err != nil {
@@ -214,19 +241,23 @@ func assertGuideKeysPreserved(t *testing.T, database *sql.DB) {
 	}
 }
 
-func assertRegistryKey(t *testing.T, database *sql.DB, table, key string) {
-	t.Helper()
-	var found bool
-	if err := database.QueryRow(fmt.Sprintf(`SELECT EXISTS (SELECT 1 FROM %s WHERE key = $1)`, table), key).Scan(&found); err != nil {
-		t.Fatalf("check %s key %q: %v", table, key, err)
-	}
-	if !found {
-		t.Fatalf("%s missing existing guide key %q", table, key)
-	}
-}
-
 func assertRegistryRows(t *testing.T, database *sql.DB) {
 	t.Helper()
+	var categoryCount int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM troubleshooting_categories`).Scan(&categoryCount); err != nil {
+		t.Fatalf("count troubleshooting categories: %v", err)
+	}
+	if categoryCount != 11 {
+		t.Fatalf("troubleshooting category count = %d, want 11", categoryCount)
+	}
+	var severityCount int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM troubleshooting_severities`).Scan(&severityCount); err != nil {
+		t.Fatalf("count troubleshooting severities: %v", err)
+	}
+	if severityCount != 5 {
+		t.Fatalf("troubleshooting severity count = %d, want 5", severityCount)
+	}
+
 	categories := []struct {
 		key, label string
 		order      int
