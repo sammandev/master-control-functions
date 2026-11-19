@@ -287,7 +287,7 @@
 	<div class="filter-field">
 		<span>Testing Stage / Category</span>
 		<Select
-			ariaLabel="Filter by category"
+			ariaLabel={`Filter by category: ${categories.find((item) => item.key === category)?.label ?? 'All Stages'}`}
 			class="registry-filter"
 			value={category}
 			options={[
@@ -414,10 +414,11 @@
 			{#each items as row (row.id)}
 				<button
 					type="button"
-					class="focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
-					class:chosen={selectedId === row.id}
+					class={[
+						'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+						{ chosen: selectedId === row.id }
+					]}
 					aria-pressed={selectedId === row.id}
-					aria-label="Select guide {row.title}"
 					onclick={() => selectGuide(row.id)}
 				>
 					<div class="flex flex-wrap items-center gap-1.5">
@@ -438,6 +439,7 @@
 							</span>
 						{/if}
 					</div>
+					<span class="sr-only">Select guide </span>
 					<strong>{row.title}</strong>
 					<small>{row.symptom}</small>
 					<span class="meta-line">
@@ -454,6 +456,7 @@
 
 			<Pagination
 				variant="rail"
+				pageSizeLabel={`${pageSize} / page, Page size`}
 				{page}
 				{total}
 				{pageSize}

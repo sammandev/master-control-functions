@@ -263,7 +263,7 @@
 
 		{#each ['category', 'severity'] as currentKind (currentKind)}
 			<Tabs.Content value={currentKind} class="outline-none">
-				<div class="space-y-3">
+				<div class="flex flex-col gap-3">
 					{#each rowsFor(currentKind as Kind) as row, index (row.key)}
 						{@const kind = currentKind as Kind}
 						{@const rows = rowsFor(kind)}

@@ -17,7 +17,7 @@
 	const variants: Record<Variant, string> = {
 		default: 'border border-primary/20 bg-primary/10 text-primary',
 		warn: 'border border-warn/40 bg-warn/10 text-warn',
-		destructive: 'border border-destructive/30 bg-destructive/10 text-destructive',
+		destructive: 'border border-destructive bg-destructive text-destructive-foreground',
 		outline: 'border border-border text-foreground'
 	};
 

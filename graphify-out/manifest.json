@@ -708,9 +708,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/ui/badge.svelte": {
-    "mtime": 1795086556.8999796,
-    "seen": 1795088517.1840327,
-    "ast_hash": "471df8837cf98b0d685c3c04e052aae6",
+    "mtime": 1795098787.8699055,
+    "seen": 1795098983.7125864,
+    "ast_hash": "6d9a4023a249509bc73ce8182c394843",
     "semantic_hash": ""
   },
   "frontend/src/lib/components/ui/breadcrumb.svelte": {
@@ -918,9 +918,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/ui/pagination.svelte": {
-    "mtime": 1795086556.9108007,
-    "seen": 1795088517.1840637,
-    "ast_hash": "254a63645873bcc487d576046e54b75c",
+    "mtime": 1795099713.5753362,
+    "seen": 1795099821.6116781,
+    "ast_hash": "609767bbeb609ffd60b1e618ded01793",
     "semantic_hash": ""
   },
   "frontend/src/lib/components/ui/radio-group-item.svelte": {
@@ -3324,9 +3324,9 @@
     "semantic_hash": ""
   },
   "backend/tests/api/troubleshooting_test.go": {
-    "mtime": 1795094719.0210612,
-    "seen": 1795096366.9645193,
-    "ast_hash": "45258fe26068d03f1e6890b3c1b5c850",
+    "mtime": 1795097182.66611,
+    "seen": 1795098983.708592,
+    "ast_hash": "a30bfc254b77eb9227a106213f1e83f6",
     "semantic_hash": ""
   },
   "backend/tests/importer/dependency_regression_test.go": {
@@ -3408,9 +3408,9 @@
     "semantic_hash": ""
   },
   "frontend/src/routes/troubleshooting/+page.svelte": {
-    "mtime": 1795096010.033399,
-    "seen": 1795096366.9751139,
-    "ast_hash": "986202a6f76ff5a2d0b84a7168eb7be2",
+    "mtime": 1795099713.5753362,
+    "seen": 1795099821.6155195,
+    "ast_hash": "38dd0e3b8fe90d9d317c35f739751e99",
     "semantic_hash": ""
   },
   "frontend/tests/components/Devices.svelte.spec.ts": {
@@ -5214,9 +5214,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingRegistryPicker.svelte": {
-    "mtime": 1795095641.1634493,
-    "seen": 1795096366.968331,
-    "ast_hash": "3975e7c70cb7de7b9e196d23a3a827b5",
+    "mtime": 1795098436.838727,
+    "seen": 1795098983.712505,
+    "ast_hash": "847abbed8ee96e42d721b8742879aa68",
     "semantic_hash": ""
   },
   "frontend/tests/components/TroubleshootingRegistryPicker.svelte.spec.ts": {
@@ -5226,9 +5226,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/components/TroubleshootingRegistryDialog.svelte": {
-    "mtime": 1795093732.986292,
-    "seen": 1795093981.7071636,
-    "ast_hash": "13aef70e2862bb9f6b8f5d24464eb9db",
+    "mtime": 1795097967.7813206,
+    "seen": 1795098983.7125032,
+    "ast_hash": "f59cf0299e66c6afeb85838d6b42e956",
     "semantic_hash": ""
   },
   "frontend/tests/components/TroubleshootingRegistryDialog.svelte.spec.ts": {
@@ -5244,9 +5244,9 @@
     "semantic_hash": ""
   },
   "frontend/tests/e2e/troubleshooting.spec.ts": {
-    "mtime": 1795096010.1513977,
-    "seen": 1795096366.9763198,
-    "ast_hash": "ece099d4f9df3642e0888331f2b4c18e",
+    "mtime": 1795097463.2671804,
+    "seen": 1795098983.719371,
+    "ast_hash": "d7710e0275cf80772485a1c683ae117c",
     "semantic_hash": ""
   },
   ".superpowers/sdd/2026-11-19-troubleshooting-registry/task-5-report.md": {
