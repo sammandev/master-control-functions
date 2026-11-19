@@ -81,6 +81,7 @@
 		{ href: '/criteria-definitions', label: 'Criteria' },
 		{ href: '/examples', label: 'Examples' },
 		{ href: '/sequences', label: 'Sequences' },
+		{ href: '/troubleshooting', label: 'Troubleshooting' },
 		{ href: '/orphans', label: 'Orphans' },
 		{ href: '/import', label: 'Import' }
 	] as const;

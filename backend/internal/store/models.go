@@ -254,3 +254,27 @@ type SequenceStep struct {
 	DeviceName        string
 	Note              string
 }
+
+type TroubleshootingGuide struct {
+	ID           int64
+	Title        string
+	Category     string
+	Severity     string
+	DeviceName   string
+	FunctionName string
+	ErrorCode    string
+	Symptom      string
+	RootCause    string
+	CreatedAt    string
+	UpdatedAt    string
+}
+
+type TroubleshootingStep struct {
+	ID            int64
+	GuideID       int64
+	Position      int64
+	Title         string
+	Instruction   string
+	ScriptSnippet string
+	Verification  string
+}

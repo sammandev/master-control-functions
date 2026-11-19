@@ -1,0 +1,660 @@
+<script lang="ts">
+	import { onDestroy, onMount } from 'svelte';
+	import { toast } from 'svelte-sonner';
+	import { ChevronRight, Layers, Plus, RefreshCw, Search, X } from '@lucide/svelte';
+	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
+	import {
+		categoryLabel,
+		deleteTroubleshootingGuide,
+		findRelatedGuides,
+		getTroubleshootingGuide,
+		listTroubleshootingGuides,
+		severityLabel,
+		TROUBLESHOOTING_CATEGORIES,
+		type TroubleshootingGuideDetail,
+		type TroubleshootingGuideListItem,
+		type TroubleshootingSeverity
+	} from '#lib/troubleshooting.ts';
+	import DevicePicker from '#lib/components/DevicePicker.svelte';
+	import TroubleshootingDetail from '#lib/components/TroubleshootingDetail.svelte';
+	import TroubleshootingDialog, {
+		type TroubleshootingDialogMode
+	} from '#lib/components/TroubleshootingDialog.svelte';
+	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
+	import Badge from '#lib/components/ui/badge.svelte';
+	import Button from '#lib/components/ui/button.svelte';
+	import Input from '#lib/components/ui/input.svelte';
+	import Pagination from '#lib/components/ui/pagination.svelte';
+	import Select from '#lib/components/ui/select.svelte';
+
+	let search = $state('');
+	let debouncedSearch = $state('');
+	let category = $state('_all');
+	let device = $state('_all');
+	let errorCodeFilter = $state('');
+	let page = $state(1);
+	let pageSize = $state(20);
+
+	let items = $state<TroubleshootingGuideListItem[]>([]);
+	let allGuidesCatalog = $state<TroubleshootingGuideListItem[]>([]);
+	let total = $state(0);
+	let loadingList = $state(true);
+	let listError = $state('');
+
+	let selectedId = $state<number | null>(null);
+	let selectedDetail = $state<TroubleshootingGuideDetail | null>(null);
+	let loadingDetail = $state(false);
+	let detailError = $state('');
+
+	let deviceSummaries = $state<DeviceSummary[]>([]);
+
+	let dialogOpen = $state(false);
+	let dialogMode = $state<TroubleshootingDialogMode>('create');
+	let dialogTarget = $state<TroubleshootingGuideDetail | null>(null);
+
+	let deleteTarget = $state<TroubleshootingGuideDetail | null>(null);
+	let deleteBusy = $state(false);
+
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	function handleSearchInput(value: string) {
+		search = value;
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			debouncedSearch = value.trim();
+			page = 1;
+			void refreshList();
+		}, 220);
+	}
+
+	onDestroy(() => clearTimeout(searchTimer));
+
+	async function loadDeviceOptions() {
+		try {
+			const res = await listDevices();
+			deviceSummaries = res.items;
+		} catch {
+			// DevicePicker also self-loads if summaries are empty
+		}
+	}
+
+	async function refreshCatalogForSiblings() {
+		try {
+			const full = await listTroubleshootingGuides({ page: 1, page_size: 100 });
+			allGuidesCatalog = full.items;
+		} catch {
+			allGuidesCatalog = items;
+		}
+	}
+
+	async function refreshList(preferId?: number) {
+		loadingList = true;
+		listError = '';
+		try {
+			const res = await listTroubleshootingGuides({
+				search: debouncedSearch || undefined,
+				category: category !== '_all' ? category : undefined,
+				device: device !== '_all' ? device : undefined,
+				error_code: errorCodeFilter || undefined,
+				page,
+				page_size: pageSize
+			});
+			items = res.items;
+			total = res.total;
+			void refreshCatalogForSiblings();
+
+			const targetId =
+				preferId ??
+				(selectedId && res.items.some((i) => i.id === selectedId) ? selectedId : res.items[0]?.id) ??
+				null;
+			if (targetId !== null) {
+				await selectGuide(targetId);
+			} else {
+				selectedId = null;
+				selectedDetail = null;
+			}
+		} catch (err) {
+			listError = err instanceof Error ? err.message : String(err);
+		} finally {
+			loadingList = false;
+		}
+	}
+
+	async function selectGuide(id: number) {
+		selectedId = id;
+		loadingDetail = true;
+		detailError = '';
+		try {
+			selectedDetail = await getTroubleshootingGuide(id);
+		} catch (err) {
+			detailError = err instanceof Error ? err.message : String(err);
+		} finally {
+			loadingDetail = false;
+		}
+	}
+
+	function clearFilters() {
+		clearTimeout(searchTimer);
+		search = '';
+		debouncedSearch = '';
+		category = '_all';
+		device = '_all';
+		errorCodeFilter = '';
+		page = 1;
+		void refreshList();
+	}
+
+	function openCreate() {
+		dialogMode = 'create';
+		dialogTarget = null;
+		dialogOpen = true;
+	}
+
+	function openEdit(guide: TroubleshootingGuideDetail) {
+		dialogMode = 'edit';
+		dialogTarget = guide;
+		dialogOpen = true;
+	}
+
+	function openAddAlternate(guide: TroubleshootingGuideDetail) {
+		dialogMode = 'alternate';
+		dialogTarget = guide;
+		dialogOpen = true;
+	}
+
+	async function confirmDelete() {
+		if (!deleteTarget) return;
+		deleteBusy = true;
+		try {
+			await deleteTroubleshootingGuide(deleteTarget.id);
+			toast.success(`Deleted guide "${deleteTarget.title}"`);
+			deleteTarget = null;
+			selectedId = null;
+			await refreshList();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : String(err));
+		} finally {
+			deleteBusy = false;
+		}
+	}
+
+	function severityVariant(
+		severity: TroubleshootingSeverity
+	): 'destructive' | 'warn' | 'default' | 'outline' {
+		switch (severity) {
+			case 'critical':
+				return 'destructive';
+			case 'warning':
+				return 'warn';
+			default:
+				return 'default';
+		}
+	}
+
+	const relatedGuides = $derived(
+		selectedDetail
+			? findRelatedGuides(
+					selectedDetail,
+					allGuidesCatalog.length > 0 ? allGuidesCatalog : items
+				)
+			: []
+	);
+
+	const hasActiveFilters = $derived(
+		Boolean(debouncedSearch || category !== '_all' || device !== '_all' || errorCodeFilter)
+	);
+
+	onMount(() => {
+		void loadDeviceOptions();
+		void refreshList();
+	});
+</script>
+
+<div class="directory-heading">
+	<div>
+		<div class="directory-title">
+			<h1>Troubleshooting Playbook</h1>
+			<span>{total} {total === 1 ? 'guide' : 'guides'}</span>
+		</div>
+		<p class="text-muted-foreground mt-1 text-sm">
+			Step-by-step resolution guides for DUT testing & production runs. Multiple solutions can share
+			the same Error Code or Function to cover distinct failure causes and feed AI diagnostic
+			context.
+		</p>
+	</div>
+	<div class="flex flex-wrap items-center gap-2">
+		<Button onclick={openCreate}>
+			<Plus size={16} />
+			<span>New Troubleshooting Guide</span>
+		</Button>
+	</div>
+</div>
+
+<div class="filters">
+	<div class="filter-field">
+		<span>Testing Stage / Category</span>
+		<Select
+			ariaLabel="Filter by category"
+			value={category}
+			options={[
+				{ value: '_all', label: 'All Stages' },
+				...TROUBLESHOOTING_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))
+			]}
+			onchange={(value) => {
+				category = value;
+				page = 1;
+				void refreshList();
+			}}
+		/>
+	</div>
+
+	<div class="filter-field">
+		<DevicePicker
+			id="troubleshooting-device-filter"
+			label="Device / Interface"
+			blankLabel="Global (All Devices)"
+			allowAll
+			device={device}
+			summaries={deviceSummaries}
+			fullWidth
+			onValueChange={(value) => {
+				device = value;
+				page = 1;
+				void refreshList();
+			}}
+		/>
+	</div>
+
+	{#if errorCodeFilter}
+		<div class="filter-field">
+			<span>Error Code Filter</span>
+			<div class="flex h-8 items-center">
+				<Badge variant="default" class="gap-1.5 px-2.5 py-1 font-mono text-xs">
+					<span>{errorCodeFilter}</span>
+					<button
+						type="button"
+						aria-label="Clear error code filter"
+						class="hover:text-foreground focus-visible:ring-ring rounded-full focus-visible:ring-2 focus-visible:outline-none"
+						onclick={() => {
+							errorCodeFilter = '';
+							page = 1;
+							void refreshList();
+						}}
+					>
+						<X size={12} />
+					</button>
+				</Badge>
+			</div>
+		</div>
+	{/if}
+
+	{#if hasActiveFilters}
+		<Button variant="secondary" class="clear-filters" onclick={clearFilters}>Clear filters</Button>
+	{/if}
+</div>
+
+<div class="troubleshooting-workspace">
+	<aside aria-label="Troubleshooting guides" class="guide-list">
+		<div class="rail-controls">
+			<div class="rail-heading">
+				<h2>Playbook Catalog</h2>
+				<span>{total} total</span>
+			</div>
+			<div class="catalog-controls">
+				<div class="guide-search">
+					<Search size={16} />
+					<Input
+						type="search"
+						placeholder="Search error code, symptom, function…"
+						aria-label="Search troubleshooting guides"
+						value={search}
+						oninput={(e) => handleSearchInput(e.currentTarget.value)}
+					/>
+				</div>
+			</div>
+		</div>
+
+		{#if loadingList}
+			<p class="banner-empty" role="status">Loading troubleshooting guides…</p>
+		{:else if listError}
+			<div class="banner-error" role="alert">
+				<span>{listError}</span>
+				<Button variant="outline" size="sm" onclick={() => refreshList()}>
+					<RefreshCw size={14} />
+					<span>Retry</span>
+				</Button>
+			</div>
+		{:else if items.length === 0}
+			<div class="banner-empty" role="status">
+				<p>No troubleshooting guides match the current filters.</p>
+				<div class="mt-2 flex justify-center gap-2">
+					{#if hasActiveFilters}
+						<Button variant="secondary" size="sm" onclick={clearFilters}>Reset filters</Button>
+					{/if}
+					<Button size="sm" onclick={openCreate}>
+						<Plus size={14} />
+						<span>Create Guide</span>
+					</Button>
+				</div>
+			</div>
+		{:else}
+			{#each items as row (row.id)}
+				<button
+					type="button"
+					class="focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+					class:chosen={selectedId === row.id}
+					aria-pressed={selectedId === row.id}
+					aria-label="Select guide {row.title}"
+					onclick={() => selectGuide(row.id)}
+				>
+					<div class="flex flex-wrap items-center gap-1.5">
+						<Badge variant={severityVariant(row.severity)}>{severityLabel(row.severity)}</Badge>
+						{#if row.error_code}
+							<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
+						{/if}
+						<Badge variant="outline">{row.device_name || 'Global'}</Badge>
+						{#if row.related_count > 0}
+							<span
+								class="text-primary inline-flex items-center gap-1 text-[11px] font-semibold"
+								title="{row.related_count + 1} solutions available for this problem / error code"
+							>
+								<Layers size={11} />
+								+{row.related_count} alt
+							</span>
+						{/if}
+					</div>
+					<strong>{row.title}</strong>
+					<small>{row.symptom}</small>
+					<span class="meta-line">
+						{categoryLabel(row.category)}
+						{#if row.function_name}
+							· <code class="font-mono">{row.function_name}</code>
+						{/if}
+						· {row.step_count} {row.step_count === 1 ? 'step' : 'steps'}
+					</span>
+					<ChevronRight size={16} class="chevron-icon" />
+				</button>
+			{/each}
+
+			<Pagination
+				variant="rail"
+				{page}
+				{total}
+				{pageSize}
+				onPageChange={(nextPage) => {
+					page = nextPage;
+					void refreshList();
+				}}
+				onPageSizeChange={(nextSize) => {
+					pageSize = nextSize;
+					page = 1;
+					void refreshList();
+				}}
+			/>
+		{/if}
+	</aside>
+
+	<div class="detail-pane">
+		{#if loadingDetail}
+			<p class="banner-empty" role="status">Loading step-by-step playbook…</p>
+		{:else if detailError}
+			<div class="banner-error" role="alert">
+				<span>{detailError}</span>
+				{#if selectedId !== null}
+					<Button variant="outline" size="sm" onclick={() => selectGuide(selectedId!)}>
+						<RefreshCw size={14} />
+						<span>Retry</span>
+					</Button>
+				{/if}
+			</div>
+		{:else if selectedDetail}
+			{#key selectedDetail.id}
+				<TroubleshootingDetail
+					guide={selectedDetail}
+					{relatedGuides}
+					onSelectGuide={(id) => selectGuide(id)}
+					onFilterErrorCode={(code) => {
+						errorCodeFilter = code;
+						page = 1;
+						void refreshList(selectedDetail?.id);
+					}}
+					onAddAlternate={openAddAlternate}
+					onEdit={openEdit}
+					onDelete={(guide) => {
+						deleteTarget = guide;
+					}}
+				/>
+			{/key}
+		{:else}
+			<p class="banner-empty" role="status">
+				Select a troubleshooting guide from the catalog or create a new one.
+			</p>
+		{/if}
+	</div>
+</div>
+
+<TroubleshootingDialog
+	open={dialogOpen}
+	mode={dialogMode}
+	initialGuide={dialogTarget}
+	{deviceSummaries}
+	onOpenChange={(o) => {
+		dialogOpen = o;
+	}}
+	onSaved={async (saved) => {
+		toast.success(
+			dialogMode === 'edit'
+				? `Updated guide "${saved.title}"`
+				: dialogMode === 'alternate'
+					? `Added alternate solution "${saved.title}"`
+					: `Created guide "${saved.title}"`
+		);
+		await refreshList(saved.id);
+	}}
+/>
+
+<AlertDialog
+	open={deleteTarget !== null}
+	onOpenChange={(o) => {
+		if (!o && !deleteBusy) deleteTarget = null;
+	}}
+	title="Delete Troubleshooting Guide?"
+	description={deleteTarget
+		? `Delete "${deleteTarget.title}" and all ${deleteTarget.steps.length} resolution steps? Sibling solutions for ${deleteTarget.error_code || 'this problem'} will remain intact.`
+		: ''}
+	confirmLabel={deleteBusy ? 'Deleting…' : 'Delete Guide'}
+	onConfirm={confirmDelete}
+/>
+
+<style>
+	.directory-heading,
+	.directory-title {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+	}
+	.directory-heading {
+		justify-content: space-between;
+		flex-wrap: wrap;
+		margin: 8px 0 22px;
+	}
+	.directory-title {
+		gap: 8px;
+		align-items: baseline;
+	}
+	h1 {
+		font-size: 28px;
+		font-weight: 650;
+		line-height: 1.3;
+	}
+	.directory-title span {
+		color: var(--muted-foreground);
+		font-size: 12px;
+		background: var(--muted);
+		border-radius: 4px;
+		padding: 4px 8px;
+	}
+	.filters {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: 10px;
+		margin-bottom: 20px;
+	}
+	.filter-field {
+		display: grid;
+		gap: 5px;
+		flex: 1 1 180px;
+		min-width: 0;
+		color: var(--muted-foreground);
+		font-size: 11px;
+		font-weight: 600;
+	}
+	.filters :global(.clear-filters) {
+		flex: 0 0 auto;
+	}
+	.guide-search {
+		position: relative;
+		min-width: 0;
+	}
+	.guide-search :global(svg) {
+		position: absolute;
+		left: 12px;
+		top: 9px;
+		color: var(--muted-foreground);
+	}
+	.guide-search :global(input) {
+		padding-left: 36px;
+	}
+	.catalog-controls {
+		display: grid;
+		gap: 10px;
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--border);
+	}
+	.troubleshooting-workspace {
+		display: grid;
+		grid-template-columns: minmax(270px, 350px) minmax(0, 1fr);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--card);
+		min-height: 620px;
+		height: max(620px, calc(100dvh - 240px));
+		grid-template-rows: minmax(0, 1fr);
+	}
+	.guide-list {
+		min-width: 0;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow-y: auto;
+		overscroll-behavior-y: contain;
+		scrollbar-gutter: stable;
+		border-right: 1px solid var(--border);
+	}
+	.rail-controls {
+		flex-shrink: 0;
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		background: var(--card);
+	}
+	.rail-heading {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 18px 16px 6px;
+	}
+	.rail-heading h2 {
+		font-size: 14px;
+		font-weight: 650;
+	}
+	.rail-heading span {
+		font-size: 12px;
+		color: var(--muted-foreground);
+	}
+	.guide-list > button {
+		flex-shrink: 0;
+		display: grid;
+		position: relative;
+		gap: 6px;
+		width: 100%;
+		min-width: 0;
+		text-align: left;
+		padding: 14px 28px 14px 16px;
+		border-left: 3px solid transparent;
+		border-top: 1px solid var(--border);
+		cursor: pointer;
+	}
+	.guide-list strong {
+		font-size: 13px;
+		font-weight: 600;
+		line-height: 1.4;
+		color: var(--foreground);
+		overflow-wrap: anywhere;
+	}
+	.guide-list small {
+		font-size: 12px;
+		color: var(--muted-foreground);
+		display: -webkit-box;
+		line-clamp: 2;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+	}
+	.guide-list .meta-line {
+		font-size: 11px;
+		color: var(--muted-foreground);
+	}
+	.guide-list > button :global(.chevron-icon) {
+		position: absolute;
+		top: 50%;
+		right: 6px;
+		transform: translateY(-50%);
+		color: var(--muted-foreground);
+	}
+	.guide-list button:hover,
+	.guide-list button.chosen {
+		background: var(--device-soft);
+	}
+	.guide-list button.chosen {
+		border-left-color: var(--device-accent);
+	}
+	.detail-pane {
+		min-width: 0;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 18px;
+		background: var(--background);
+	}
+	.banner-empty,
+	.banner-error {
+		padding: 28px 16px;
+		text-align: center;
+		font-size: 13px;
+		color: var(--muted-foreground);
+	}
+	.banner-error {
+		display: grid;
+		justify-items: center;
+		gap: 10px;
+		color: var(--destructive);
+	}
+	@media (max-width: 850px) {
+		.troubleshooting-workspace {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: auto auto;
+			height: auto;
+		}
+		.guide-list {
+			position: static;
+			border-right: 0;
+			border-bottom: 1px solid var(--border);
+			max-height: 360px;
+			overflow-y: auto;
+		}
+		.detail-pane {
+			overflow-y: visible;
+		}
+	}
+</style>

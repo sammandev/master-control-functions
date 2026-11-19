@@ -61,6 +61,7 @@ func New(d *sql.DB) *fiber.App {
 	registerComposeRoutes(app, q)
 	registerSequenceRoutes(app, q, d)
 	registerMCPRoutes(app, q)
+	registerTroubleshootingRoutes(app, q, d)
 
 	app.Get("/health", func(c fiber.Ctx) error {
 		if err := d.Ping(); err != nil {
