@@ -90,7 +90,62 @@ func (q *Queries) GetTroubleshootingGuide(ctx context.Context, id int64) (Troubl
 	return i, err
 }
 
+const getTroubleshootingRelatedGuides = `-- name: GetTroubleshootingRelatedGuides :many
+SELECT related.id, related.title, related.category, related.severity,
+       related.device_name, related.function_name, related.error_code,
+       related.symptom, related.root_cause, related.created_at, related.updated_at
+FROM troubleshooting_guides source
+JOIN troubleshooting_guides related
+  ON related.id <> source.id
+ AND ((source.error_code <> '' AND lower(related.error_code) = lower(source.error_code))
+      OR (source.function_name <> '' AND lower(related.function_name) = lower(source.function_name)))
+WHERE source.id = $1
+ORDER BY CASE
+             WHEN source.error_code <> ''
+              AND lower(related.error_code) = lower(source.error_code) THEN 0
+             ELSE 1
+         END,
+         lower(related.title),
+         related.id
+`
+
+func (q *Queries) GetTroubleshootingRelatedGuides(ctx context.Context, id int64) ([]TroubleshootingGuide, error) {
+	rows, err := q.db.QueryContext(ctx, getTroubleshootingRelatedGuides, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TroubleshootingGuide
+	for rows.Next() {
+		var i TroubleshootingGuide
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Category,
+			&i.Severity,
+			&i.DeviceName,
+			&i.FunctionName,
+			&i.ErrorCode,
+			&i.Symptom,
+			&i.RootCause,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertTroubleshootingGuide = `-- name: InsertTroubleshootingGuide :one
+
 INSERT INTO troubleshooting_guides (
     title, category, severity, device_name, function_name, error_code,
     symptom, root_cause, created_at, updated_at
@@ -113,6 +168,9 @@ type InsertTroubleshootingGuideParams struct {
 	UpdatedAt    string
 }
 
+// Troubleshooting Playbook & AI Knowledge Base queries.
+// Multiple guides can share the same error_code or function_name to represent different
+// manifestations/solutions for the same problem.
 func (q *Queries) InsertTroubleshootingGuide(ctx context.Context, arg InsertTroubleshootingGuideParams) (TroubleshootingGuide, error) {
 	row := q.db.QueryRowContext(ctx, insertTroubleshootingGuide,
 		arg.Title,
@@ -183,6 +241,8 @@ SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
           AND ((g.error_code <> '' AND lower(g2.error_code) = lower(g.error_code))
                OR (g.function_name <> '' AND lower(g2.function_name) = lower(g.function_name)))) AS related_count
 FROM troubleshooting_guides g
+JOIN troubleshooting_severities taxonomy_severity ON taxonomy_severity.key = g.severity
+JOIN troubleshooting_categories taxonomy_category ON taxonomy_category.key = g.category
 WHERE ($1::text IS NULL
        OR lower(g.title) LIKE lower($1::text)
        OR lower(g.symptom) LIKE lower($1::text)
@@ -192,15 +252,11 @@ WHERE ($1::text IS NULL
   AND ($2::text IS NULL OR g.category = $2::text)
   AND ($3::text IS NULL OR g.device_name = $3::text)
   AND ($4::text IS NULL OR lower(g.error_code) = lower($4::text))
-ORDER BY
-    CASE g.severity
-        WHEN 'critical' THEN 0
-        WHEN 'warning' THEN 1
-        ELSE 2
-    END,
-    lower(g.title),
-    g.id
-LIMIT $5 OFFSET $6
+ORDER BY taxonomy_severity.sort_order,
+         taxonomy_category.sort_order,
+         lower(g.title),
+         g.id
+LIMIT $6::bigint OFFSET $5::bigint
 `
 
 type ListTroubleshootingGuidesParams struct {
@@ -208,8 +264,8 @@ type ListTroubleshootingGuidesParams struct {
 	Category   sql.NullString
 	DeviceName sql.NullString
 	ErrorCode  sql.NullString
-	Limit      int64
 	Offset     int64
+	Limit      int64
 }
 
 type ListTroubleshootingGuidesRow struct {
@@ -234,8 +290,8 @@ func (q *Queries) ListTroubleshootingGuides(ctx context.Context, arg ListTrouble
 		arg.Category,
 		arg.DeviceName,
 		arg.ErrorCode,
-		arg.Limit,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
