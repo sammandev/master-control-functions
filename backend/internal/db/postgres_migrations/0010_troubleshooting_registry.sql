@@ -2,8 +2,8 @@
 
 CREATE TABLE troubleshooting_categories (
     key TEXT PRIMARY KEY CHECK (btrim(key) <> '' AND length(key) <= 64),
-    label TEXT NOT NULL CHECK (btrim(label) <> '' AND length(label) <= 100),
-    description TEXT NOT NULL CHECK (btrim(description) <> '' AND length(description) <= 1000),
+    label TEXT NOT NULL CHECK (btrim(label) <> '' AND length(label) <= 64),
+    description TEXT NOT NULL CHECK (length(description) <= 240),
     sort_order BIGINT NOT NULL CHECK (sort_order > 0),
     built_in BOOLEAN NOT NULL DEFAULT FALSE
 );
@@ -12,8 +12,8 @@ CREATE UNIQUE INDEX idx_troubleshooting_categories_label_ci
 
 CREATE TABLE troubleshooting_severities (
     key TEXT PRIMARY KEY CHECK (btrim(key) <> '' AND length(key) <= 64),
-    label TEXT NOT NULL CHECK (btrim(label) <> '' AND length(label) <= 100),
-    description TEXT NOT NULL CHECK (btrim(description) <> '' AND length(description) <= 1000),
+    label TEXT NOT NULL CHECK (btrim(label) <> '' AND length(label) <= 64),
+    description TEXT NOT NULL CHECK (length(description) <= 240),
     sort_order BIGINT NOT NULL CHECK (sort_order > 0),
     built_in BOOLEAN NOT NULL DEFAULT FALSE,
     tone TEXT NOT NULL CHECK (tone IN ('destructive', 'warn', 'default', 'outline'))

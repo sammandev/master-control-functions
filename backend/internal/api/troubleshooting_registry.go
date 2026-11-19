@@ -20,6 +20,7 @@ import (
 const (
 	maxTroubleshootingRegistryLabelRunes       = 64
 	maxTroubleshootingRegistryDescriptionRunes = 240
+	maxTroubleshootingRegistryKeyBytes         = 64
 )
 
 var validTroubleshootingTones = map[string]bool{
@@ -77,7 +78,18 @@ func slugTroubleshootingKey(label string) string {
 	if out.Len() == 0 {
 		return "item"
 	}
-	return out.String()
+	return capTroubleshootingKey(out.String(), maxTroubleshootingRegistryKeyBytes)
+}
+
+func capTroubleshootingKey(key string, limit int) string {
+	if len(key) > limit {
+		key = key[:limit]
+	}
+	key = strings.TrimRight(key, "-")
+	if key == "" {
+		return "item"
+	}
+	return key
 }
 
 func nextTroubleshootingKey(label string, existing map[string]bool) string {
@@ -86,7 +98,9 @@ func nextTroubleshootingKey(label string, existing map[string]bool) string {
 		return base
 	}
 	for suffix := 2; ; suffix++ {
-		candidate := base + "-" + strconv.Itoa(suffix)
+		token := "-" + strconv.Itoa(suffix)
+		candidateBase := capTroubleshootingKey(base, maxTroubleshootingRegistryKeyBytes-len(token))
+		candidate := candidateBase + token
 		if !existing[candidate] {
 			return candidate
 		}
@@ -146,8 +160,8 @@ func categoryValues(body troubleshootingRegistryBody, existing *store.Troublesho
 	}
 	if body.SortOrder != nil {
 		sortOrder = *body.SortOrder
-		if sortOrder < 0 {
-			fields["sort_order"] = "must be zero or greater"
+		if sortOrder <= 0 {
+			fields["sort_order"] = "must be greater than zero"
 		}
 	}
 	return label, description, sortOrder, fields
@@ -181,8 +195,8 @@ func severityValues(body troubleshootingRegistryBody, existing *store.Troublesho
 	}
 	if body.SortOrder != nil {
 		sortOrder = *body.SortOrder
-		if sortOrder < 0 {
-			fields["sort_order"] = "must be zero or greater"
+		if sortOrder <= 0 {
+			fields["sort_order"] = "must be greater than zero"
 		}
 	}
 	tone := "default"
@@ -578,17 +592,28 @@ func troubleshootingReplacementError(c fiber.Ctx, q *store.Queries, replacement 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return serverError(c, "read troubleshooting replacement", err)
 	}
-	wrongType := false
+	var oppositeErr error
 	if checkingSeverity {
-		_, otherErr := q.GetTroubleshootingCategory(c.Context(), replacement)
-		wrongType = otherErr == nil
+		_, oppositeErr = q.GetTroubleshootingCategory(c.Context(), replacement)
 	} else {
-		_, otherErr := q.GetTroubleshootingSeverity(c.Context(), replacement)
-		wrongType = otherErr == nil
+		_, oppositeErr = q.GetTroubleshootingSeverity(c.Context(), replacement)
 	}
-	message := "does not exist"
-	if wrongType {
-		message = "must reference the same registry type"
+	message, classifyErr := classifyTroubleshootingReplacementError(err, oppositeErr)
+	if classifyErr != nil {
+		return serverError(c, "read troubleshooting replacement", classifyErr)
 	}
 	return validationError(c, map[string]string{"reassign_to": message})
+}
+
+func classifyTroubleshootingReplacementError(replacementErr, oppositeErr error) (string, error) {
+	if replacementErr != nil && !errors.Is(replacementErr, sql.ErrNoRows) {
+		return "", replacementErr
+	}
+	if oppositeErr == nil {
+		return "must reference the same registry type", nil
+	}
+	if !errors.Is(oppositeErr, sql.ErrNoRows) {
+		return "", oppositeErr
+	}
+	return "does not exist", nil
 }

@@ -66,6 +66,7 @@ func TestTroubleshootingRegistryMigrationDefinition(t *testing.T) {
 
 	for _, snippet := range []string{
 		"CREATE TABLE troubleshooting_categories",
+		"description TEXT NOT NULL CHECK (length(description) <= 240)",
 		"CREATE TABLE troubleshooting_severities",
 		"DROP CONSTRAINT troubleshooting_guides_category_check",
 		"DROP CONSTRAINT troubleshooting_guides_severity_check",
@@ -83,6 +84,9 @@ func TestTroubleshootingRegistryMigrationDefinition(t *testing.T) {
 		if !strings.Contains(migration.SQL, snippet) {
 			t.Errorf("0010_troubleshooting_registry.sql missing %q", snippet)
 		}
+	}
+	if strings.Contains(migration.SQL, "btrim(description) <> ''") {
+		t.Error("0010_troubleshooting_registry.sql must allow optional empty descriptions")
 	}
 }
 
@@ -343,8 +347,12 @@ func assertRegistryConstraints(t *testing.T, database *sql.DB) {
 		t.Fatal("case-insensitive duplicate severity label must be rejected")
 	}
 	if _, err := database.Exec(`INSERT INTO troubleshooting_categories
-		(key, label, description, sort_order) VALUES ('custom-test', 'Custom Test', 'Custom category', 99)`); err != nil {
-		t.Fatalf("insert custom category: %v", err)
+		(key, label, description, sort_order) VALUES ('custom-test', 'Custom Test', '', 99)`); err != nil {
+		t.Fatalf("insert custom category with optional empty description: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO troubleshooting_severities
+		(key, label, description, sort_order, tone) VALUES ('custom-severity', 'Custom Severity', '', 99, 'default')`); err != nil {
+		t.Fatalf("insert custom severity with optional empty description: %v", err)
 	}
 	var builtIn bool
 	if err := database.QueryRow(`SELECT built_in FROM troubleshooting_categories WHERE key = 'custom-test'`).Scan(&builtIn); err != nil {

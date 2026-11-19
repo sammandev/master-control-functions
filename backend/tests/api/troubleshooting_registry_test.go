@@ -65,6 +65,11 @@ func TestTroubleshootingRegistryValidationAndKeyGeneration(t *testing.T) {
 		})
 	}
 
+	resp, emptyDescriptionBody := postJSON(t, app, "/api/troubleshooting/categories", `{"label":"No Description Category"}`)
+	if resp.StatusCode != 201 {
+		t.Fatalf("create with optional description: %d (%s)", resp.StatusCode, emptyDescriptionBody)
+	}
+
 	resp, firstBody := postJSON(t, app, "/api/troubleshooting/categories", `{"label":"Foo Bar"}`)
 	if resp.StatusCode != 201 {
 		t.Fatalf("create first colliding key: %d (%s)", resp.StatusCode, firstBody)
@@ -77,9 +82,15 @@ func TestTroubleshootingRegistryValidationAndKeyGeneration(t *testing.T) {
 		t.Fatalf("collision keys not suffixed: first=%s second=%s", firstBody, secondBody)
 	}
 
-	resp, body := doJSON(t, app, "PUT", "/api/troubleshooting/categories/foo-bar", `{"label":"Foo Bar","sort_order":-1}`)
-	if resp.StatusCode != 422 || !strings.Contains(body, `"sort_order"`) {
-		t.Fatalf("invalid update order: %d (%s)", resp.StatusCode, body)
+	for _, tc := range []struct{ path, payload string }{
+		{path: "/api/troubleshooting/categories/foo-bar", payload: `{"label":"Foo Bar","sort_order":-1}`},
+		{path: "/api/troubleshooting/categories/foo-bar", payload: `{"label":"Foo Bar","sort_order":0}`},
+		{path: "/api/troubleshooting/severities/critical", payload: `{"sort_order":0}`},
+	} {
+		resp, body := doJSON(t, app, "PUT", tc.path, tc.payload)
+		if resp.StatusCode != 422 || !strings.Contains(body, `"sort_order"`) {
+			t.Fatalf("invalid update order for %s: %d (%s)", tc.path, resp.StatusCode, body)
+		}
 	}
 }
 
