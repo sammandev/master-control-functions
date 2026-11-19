@@ -94,29 +94,55 @@
 		}
 	}
 
-	async function loadCategories() {
+	async function loadCategories(): Promise<boolean> {
 		categoryError = '';
 		try {
 			categories = (await listTroubleshootingCategories()).items;
+			return true;
 		} catch (err) {
 			categoryError = err instanceof Error ? err.message : String(err);
+			return false;
 		}
 	}
 
-	async function loadSeverities() {
+	async function loadSeverities(): Promise<boolean> {
 		severityError = '';
 		try {
 			severities = (await listTroubleshootingSeverities()).items;
+			return true;
 		} catch (err) {
 			severityError = err instanceof Error ? err.message : String(err);
+			return false;
 		}
 	}
 
-	async function loadMetadata() {
-		await Promise.all([loadCategories(), loadSeverities()]);
+	async function loadMetadataResults() {
+		return Promise.all([loadCategories(), loadSeverities()]);
 	}
 
-	async function refreshList(preferId?: number) {
+	async function loadMetadata(): Promise<void> {
+		await loadMetadataResults();
+	}
+
+	async function retryMetadata() {
+		const stableSelectedId = selectedId;
+		const [categoriesLoaded] = await loadMetadataResults();
+		if (
+			categoriesLoaded &&
+			category !== '_all' &&
+			!categories.some((item) => item.key === category)
+		) {
+			category = '_all';
+			page = 1;
+		}
+		await refreshList(stableSelectedId ?? undefined, true);
+	}
+
+	async function handleRegistryChanged() {
+		await retryMetadata();
+	}
+
+	async function refreshList(preferId?: number, preservePreferred = false) {
 		loadingList = true;
 		listError = '';
 		try {
@@ -131,12 +157,12 @@
 			items = res.items;
 			total = res.total;
 
+			const requestedId = preferId ?? selectedId;
 			const targetId =
-				preferId ??
-				(selectedId && res.items.some((i) => i.id === selectedId)
-					? selectedId
-					: res.items[0]?.id) ??
-				null;
+				(requestedId !== null &&
+				(preservePreferred || res.items.some((item) => item.id === requestedId))
+					? requestedId
+					: res.items[0]?.id) ?? null;
 			if (targetId !== null) {
 				await selectGuide(targetId);
 			} else {
@@ -334,13 +360,8 @@
 				.filter(Boolean)
 				.join(' · ')}</span
 		>
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => {
-				if (categoryError) void loadCategories();
-				if (severityError) void loadSeverities();
-			}}><RefreshCw size={14} />Retry metadata</Button
+		<Button variant="outline" size="sm" onclick={retryMetadata}
+			><RefreshCw size={14} />Retry metadata</Button
 		>
 	</div>
 {/if}
@@ -535,7 +556,7 @@
 	onOpenChange={(value) => {
 		manageOpen = value;
 	}}
-	onChanged={loadMetadata}
+	onChanged={handleRegistryChanged}
 />
 
 <AlertDialog

@@ -56,7 +56,8 @@ func TestTroubleshootingCRUDAndMultiSolutionPerErrorCode(t *testing.T) {
 func TestTroubleshootingRelatedEndpointReturnsMoreThanOneHundredSiblings(t *testing.T) {
 	app, d := newLinksTestApp(t)
 
-	for i := 0; i < 101; i++ {
+	const insertedGuides = 102
+	for i := 0; i < insertedGuides; i++ {
 		_, err := d.Exec(`INSERT INTO troubleshooting_guides
 			(title, category, severity, device_name, function_name, error_code, symptom, root_cause, created_at, updated_at)
 			VALUES ($1, 'measurement', 'warning', '', 'BULK_RELATED', 'ERRCODE:BULK', $2, '', '2026-11-19T00:00:00Z', '2026-11-19T00:00:00Z')`,
@@ -81,7 +82,8 @@ func TestTroubleshootingRelatedEndpointReturnsMoreThanOneHundredSiblings(t *test
 	if err := json.Unmarshal([]byte(body), &result); err != nil {
 		t.Fatalf("decode related response: %v", err)
 	}
-	if result.Total != 100 || len(result.Items) != 100 {
-		t.Fatalf("related result = total %d, items %d; want 100 excluding source", result.Total, len(result.Items))
+	wantSiblings := insertedGuides - 1
+	if result.Total != wantSiblings || len(result.Items) != wantSiblings {
+		t.Fatalf("related result = total %d, items %d; want %d excluding source", result.Total, len(result.Items), wantSiblings)
 	}
 }

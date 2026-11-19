@@ -22,13 +22,21 @@ const severities = [
 	}
 ];
 
+const refreshes = { list: 0, detail: 0 };
+
 async function mockTroubleshooting(page: Page) {
+	refreshes.list = 0;
+	refreshes.detail = 0;
 	await page.route('**/api/**', async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());
 		const path = url.pathname;
 		if (path === '/api/troubleshooting/categories' && request.method() === 'GET') {
 			return route.fulfill({ json: { items: categories, total: categories.length } });
+		}
+		if (path === '/api/troubleshooting/categories/measurement' && request.method() === 'PUT') {
+			categories[0].label = 'Renamed Measurement';
+			return route.fulfill({ json: categories[0] });
 		}
 		if (path === '/api/troubleshooting/categories' && request.method() === 'POST') {
 			const item = {
@@ -60,6 +68,7 @@ async function mockTroubleshooting(page: Page) {
 		}
 		if (path === '/api/devices') return route.fulfill({ json: { items: [], total: 0 } });
 		if (path === '/api/troubleshooting') {
+			refreshes.list++;
 			return route.fulfill({
 				json: {
 					items: guides.map(({ steps: _steps, ...guide }) => ({
@@ -89,8 +98,10 @@ async function mockTroubleshooting(page: Page) {
 			});
 		}
 		const match = path.match(/^\/api\/troubleshooting\/(\d+)$/);
-		if (match)
+		if (match) {
+			refreshes.detail++;
 			return route.fulfill({ json: guides.find((guide) => guide.id === Number(match[1])) });
+		}
 		return route.fulfill({ status: 404, json: { error: 'not mocked' } });
 	});
 }
@@ -180,8 +191,18 @@ test('troubleshooting workflow preserves checklist and supports registry control
 		page.getByRole('checkbox', { name: /Mark step 1: Inspect first/ })
 	).not.toBeChecked();
 
+	const listRefreshes = refreshes.list;
+	const detailRefreshes = refreshes.detail;
 	await page.getByRole('button', { name: 'Manage Lists' }).click();
-	await expect(page.getByRole('dialog', { name: 'Manage troubleshooting lists' })).toBeVisible();
+	const manager = page.getByRole('dialog', { name: 'Manage troubleshooting lists' });
+	await expect(manager).toBeVisible();
+	await manager
+		.getByRole('textbox', { name: 'Measurement & Criteria label' })
+		.fill('Renamed Measurement');
+	await manager.getByRole('button', { name: 'Save Measurement & Criteria' }).click();
+	await expect(page.getByText('Renamed Measurement', { exact: true }).first()).toBeVisible();
+	await expect.poll(() => refreshes.list).toBeGreaterThan(listRefreshes);
+	await expect.poll(() => refreshes.detail).toBeGreaterThan(detailRefreshes);
 	await page.getByRole('button', { name: 'Close' }).click();
 
 	await page.getByRole('button', { name: 'New Troubleshooting Guide' }).click();
