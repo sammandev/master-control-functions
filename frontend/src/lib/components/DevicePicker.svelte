@@ -12,6 +12,8 @@
 		blankLabel = 'Global definitions',
 		allowAll = false,
 		disabled = false,
+		invalid = false,
+		describedBy,
 		fullWidth = false,
 		compact = false,
 		comfortable = false,
@@ -25,6 +27,8 @@
 		blankLabel?: string;
 		allowAll?: boolean;
 		disabled?: boolean;
+		invalid?: boolean;
+		describedBy?: string;
 		fullWidth?: boolean;
 		compact?: boolean;
 		comfortable?: boolean;
@@ -92,7 +96,11 @@
 		<Popover.Trigger
 			{id}
 			{disabled}
+			role={invalid ? 'combobox' : undefined}
+			aria-expanded={invalid ? open : undefined}
 			aria-label={`${label}: ${currentLabel}`}
+			aria-invalid={invalid || undefined}
+			aria-describedby={describedBy}
 			title={currentLabel}
 			class={cn(
 				'border-border bg-card text-foreground flex w-full min-w-0 items-center justify-between rounded-[4px] border text-sm',

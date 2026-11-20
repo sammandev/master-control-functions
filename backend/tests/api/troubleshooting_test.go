@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -48,5 +50,40 @@ func TestTroubleshootingCRUDAndMultiSolutionPerErrorCode(t *testing.T) {
 	resp, listBody := doRequest(t, app, "GET", "/api/troubleshooting?error_code=ERRCODE:104")
 	if resp.StatusCode != 200 || !strings.Contains(listBody, `"total":3`) {
 		t.Fatalf("expected 3 guides for ERRCODE:104, got %d (%s)", resp.StatusCode, listBody)
+	}
+}
+
+func TestTroubleshootingRelatedEndpointReturnsMoreThanOneHundredSiblings(t *testing.T) {
+	app, d := newLinksTestApp(t)
+
+	const insertedGuides = 102
+	for i := 0; i < insertedGuides; i++ {
+		_, err := d.Exec(`INSERT INTO troubleshooting_guides
+			(title, category, severity, device_name, function_name, error_code, symptom, root_cause, created_at, updated_at)
+			VALUES ($1, 'measurement', 'warning', '', 'BULK_RELATED', 'ERRCODE:BULK', $2, '', '2026-11-19T00:00:00Z', '2026-11-19T00:00:00Z')`,
+			fmt.Sprintf("Bulk sibling %03d", i), fmt.Sprintf("Symptom %03d", i))
+		if err != nil {
+			t.Fatalf("seed sibling %d: %v", i, err)
+		}
+	}
+
+	var sourceID int64
+	if err := d.QueryRow(`SELECT id FROM troubleshooting_guides WHERE error_code = 'ERRCODE:BULK' ORDER BY id LIMIT 1`).Scan(&sourceID); err != nil {
+		t.Fatalf("find source guide: %v", err)
+	}
+	resp, body := doRequest(t, app, "GET", fmt.Sprintf("/api/troubleshooting/%d/related", sourceID))
+	if resp.StatusCode != 200 {
+		t.Fatalf("related endpoint: %d (%s)", resp.StatusCode, body)
+	}
+	var result struct {
+		Items []json.RawMessage `json:"items"`
+		Total int               `json:"total"`
+	}
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		t.Fatalf("decode related response: %v", err)
+	}
+	wantSiblings := insertedGuides - 1
+	if result.Total != wantSiblings || len(result.Items) != wantSiblings {
+		t.Fatalf("related result = total %d, items %d; want %d excluding source", result.Total, len(result.Items), wantSiblings)
 	}
 }

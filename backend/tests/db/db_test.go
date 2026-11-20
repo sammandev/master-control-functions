@@ -77,8 +77,8 @@ func TestCurrentVersionOnFreshDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion: %v", err)
 	}
-	if v != 8 {
-		t.Fatalf("expected version 8 on fresh database (migrations 0001-0008), got %d", v)
+	if v != 10 {
+		t.Fatalf("expected version 10 on fresh database (migrations through 0010), got %d", v)
 	}
 }
 

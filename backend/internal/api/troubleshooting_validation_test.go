@@ -42,6 +42,20 @@ func TestTroubleshootingBodyValidation(t *testing.T) {
 		t.Fatalf("error_code = %q, want ERRCODE:104", valid.ErrorCode)
 	}
 
+	registryManaged := troubleshootingBody{
+		Title:      "Registry Managed",
+		Category:   "custom-category",
+		Severity:   "custom-severity",
+		DeviceName: "WIFI_TEST",
+		Symptom:    "Custom registry keys are checked against storage later.",
+		Steps: []troubleshootingStepBody{
+			{Title: "Check", Instruction: "Check it"},
+		},
+	}
+	if fields := registryManaged.validate(); len(fields) != 0 {
+		t.Fatalf("shape validation rejected registry-managed keys: %v", fields)
+	}
+
 	empty := troubleshootingBody{}
 	fields := empty.validate()
 	for _, key := range []string{"title", "category", "severity", "symptom", "steps"} {

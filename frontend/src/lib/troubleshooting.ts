@@ -2,11 +2,17 @@
 // Multiple guides can share the same error_code, function_name, or device_name because one
 // error code or symptom can manifest in multiple ways with distinct step-by-step solutions.
 import { ApiError, request } from './client';
+import type {
+	TroubleshootingCategory as RegistryCategory,
+	TroubleshootingSeverity as RegistrySeverity
+} from './troubleshooting-registry';
 
 export { ApiError };
 
-export type TroubleshootingCategory = 'connection' | 'execution' | 'measurement' | 'production';
-export type TroubleshootingSeverity = 'critical' | 'warning' | 'info';
+// Guide payloads retain stable string keys. Registry item models are exported by
+// troubleshooting-registry.ts; these aliases keep existing form imports compatible.
+export type TroubleshootingCategory = string;
+export type TroubleshootingSeverity = string;
 
 export interface TroubleshootingStep {
 	id: number;
@@ -74,6 +80,51 @@ export interface TroubleshootingGuideInput {
 	steps: TroubleshootingStepInput[];
 }
 
+export type TroubleshootingDraftStep = TroubleshootingStepInput & { client_id: string };
+export type TroubleshootingChecklistState = Record<number, number[]>;
+
+export function setChecklistStep(
+	state: TroubleshootingChecklistState,
+	guideId: number,
+	position: number,
+	checked: boolean
+): TroubleshootingChecklistState {
+	const current = state[guideId] ?? [];
+	const next = checked
+		? current.includes(position)
+			? current
+			: [...current, position]
+		: current.filter((item) => item !== position);
+	if (next.length === 0) {
+		const nextState = { ...state };
+		delete nextState[guideId];
+		return nextState;
+	}
+	return { ...state, [guideId]: next };
+}
+
+export function resetChecklistProgress(
+	state: TroubleshootingChecklistState,
+	guideId: number
+): TroubleshootingChecklistState {
+	const nextState = { ...state };
+	delete nextState[guideId];
+	return nextState;
+}
+
+export function moveDraftStep(
+	steps: TroubleshootingDraftStep[],
+	index: number,
+	delta: -1 | 1
+): TroubleshootingDraftStep[] {
+	const target = index + delta;
+	if (target < 0 || target >= steps.length) return steps;
+	const next = [...steps];
+	const [step] = next.splice(index, 1);
+	next.splice(target, 0, step);
+	return next;
+}
+
 export const TROUBLESHOOTING_CATEGORIES: {
 	value: TroubleshootingCategory;
 	label: string;
@@ -110,11 +161,28 @@ export const TROUBLESHOOTING_SEVERITIES: {
 	{ value: 'info', label: 'Info (Best Practice)' }
 ];
 
-export function categoryLabel(category: string): string {
-	return TROUBLESHOOTING_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+function humanizeRegistryKey(key: string): string {
+	if (!key) return '';
+	return key
+		.split(/[-_\s]+/)
+		.filter(Boolean)
+		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+		.join(' ');
 }
 
-export function severityLabel(severity: string): string {
+export function categoryLabel(category: string, categories: RegistryCategory[] = []): string {
+	const metadata = categories.find((item) => item.key === category);
+	return (
+		metadata?.label ??
+		TROUBLESHOOTING_CATEGORIES.find((item) => item.value === category)?.label ??
+		humanizeRegistryKey(category)
+	);
+}
+
+export function severityLabel(severity: string, severities: RegistrySeverity[] = []): string {
+	const metadata = severities.find((item) => item.key === severity);
+	if (metadata) return metadata.label;
+
 	switch (severity) {
 		case 'critical':
 			return 'Critical';
@@ -123,8 +191,12 @@ export function severityLabel(severity: string): string {
 		case 'info':
 			return 'Info';
 		default:
-			return severity;
+			return humanizeRegistryKey(severity);
 	}
+}
+
+export function severityTone(severity: string, severities: RegistrySeverity[] = []): string {
+	return severities.find((item) => item.key === severity)?.tone || 'outline';
 }
 
 export interface ListTroubleshootingQuery {
@@ -153,6 +225,17 @@ export async function listTroubleshootingGuides(
 export async function getTroubleshootingGuide(id: number): Promise<TroubleshootingGuideDetail> {
 	return request<TroubleshootingGuideDetail>(`/api/troubleshooting/${id}`);
 }
+
+export async function listRelatedTroubleshootingGuides(
+	id: number
+): Promise<TroubleshootingRegistryListResult> {
+	return request<TroubleshootingRegistryListResult>(`/api/troubleshooting/${id}/related`);
+}
+
+type TroubleshootingRegistryListResult = {
+	items: TroubleshootingGuideListItem[];
+	total: number;
+};
 
 export async function createTroubleshootingGuide(
 	body: TroubleshootingGuideInput

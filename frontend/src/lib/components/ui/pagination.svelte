@@ -17,6 +17,7 @@
 		pageSizeOptions = [10, 20, 50],
 		onPageChange,
 		onPageSizeChange,
+		pageSizeLabel = 'Page size',
 		variant = 'default',
 		class: className
 	}: {
@@ -27,6 +28,7 @@
 		pageSizeOptions?: number[];
 		onPageChange?: (page: number) => void;
 		onPageSizeChange?: (size: number) => void;
+		pageSizeLabel?: string;
 		/** `rail` is the compact sticky footer used by list/detail sidebars. */
 		variant?: 'default' | 'rail';
 		class?: string;
@@ -66,7 +68,7 @@
 				<span aria-hidden="true">Rows</span>
 				<Select
 					class="w-28"
-					ariaLabel="Page size"
+					ariaLabel={pageSizeLabel}
 					value={String(pageSize)}
 					options={sizeOptions}
 					onchange={changeSize}
@@ -100,7 +102,7 @@
 			</Pagination.NextButton>
 			<Select
 				class="w-28"
-				ariaLabel="Page size"
+				ariaLabel={pageSizeLabel}
 				value={String(pageSize)}
 				options={sizeOptions}
 				onchange={changeSize}

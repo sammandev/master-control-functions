@@ -1,24 +1,30 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { ArrowDown, ArrowUp, GitBranchPlus, Plus, Trash2 } from '@lucide/svelte';
 	import {
 		ApiError,
 		createTroubleshootingGuide,
-		TROUBLESHOOTING_CATEGORIES,
-		TROUBLESHOOTING_SEVERITIES,
+		moveDraftStep,
 		updateTroubleshootingGuide,
 		type TroubleshootingCategory,
 		type TroubleshootingGuideDetail,
 		type TroubleshootingGuideInput,
 		type TroubleshootingSeverity,
-		type TroubleshootingStepInput
+		type TroubleshootingDraftStep
 	} from '#lib/troubleshooting.ts';
+	import {
+		createTroubleshootingCategory,
+		createTroubleshootingSeverity,
+		type TroubleshootingCategory as RegistryCategory,
+		type TroubleshootingSeverity as RegistrySeverity
+	} from '#lib/troubleshooting-registry.ts';
 	import type { DeviceSummary } from '#lib/devices.ts';
 	import DevicePicker from '#lib/components/DevicePicker.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
 	import Dialog from '#lib/components/ui/dialog.svelte';
 	import Input from '#lib/components/ui/input.svelte';
-	import Select from '#lib/components/ui/select.svelte';
+	import TroubleshootingRegistryPicker from '#lib/components/TroubleshootingRegistryPicker.svelte';
 	import Textarea from '#lib/components/ui/textarea.svelte';
 
 	export type TroubleshootingDialogMode = 'create' | 'edit' | 'alternate';
@@ -28,78 +34,59 @@
 		mode = 'create',
 		initialGuide = null,
 		deviceSummaries = [],
+		categories = [],
+		severities = [],
 		onOpenChange,
-		onSaved
+		onSaved,
+		onRegistryChanged
 	}: {
 		open: boolean;
 		mode: TroubleshootingDialogMode;
 		initialGuide: TroubleshootingGuideDetail | null;
 		deviceSummaries?: DeviceSummary[];
+		categories?: RegistryCategory[];
+		severities?: RegistrySeverity[];
 		onOpenChange: (open: boolean) => void;
 		onSaved: (saved: TroubleshootingGuideDetail) => void;
+		onRegistryChanged: () => void | Promise<void>;
 	} = $props();
 
-	let title = $state('');
-	let category = $state<TroubleshootingCategory>('connection');
-	let severity = $state<TroubleshootingSeverity>('critical');
-	let deviceName = $state('');
-	let functionName = $state('');
-	let errorCode = $state('');
-	let symptom = $state('');
-	let rootCause = $state('');
-	let steps = $state<TroubleshootingStepInput[]>([
-		{ title: '', instruction: '', script_snippet: '', verification: '' }
-	]);
+	let draftSequence = 0;
+	function makeDraftStep(
+		step?: Omit<TroubleshootingDraftStep, 'client_id'>
+	): TroubleshootingDraftStep {
+		return {
+			client_id: `draft-${++draftSequence}`,
+			title: step?.title ?? '',
+			instruction: step?.instruction ?? '',
+			script_snippet: step?.script_snippet ?? '',
+			verification: step?.verification ?? ''
+		};
+	}
+
+	let title = $state(untrack(() => (mode === 'edit' ? (initialGuide?.title ?? '') : '')));
+	let category = $state<TroubleshootingCategory>(
+		untrack(() => initialGuide?.category ?? 'connection')
+	);
+	let severity = $state<TroubleshootingSeverity>(
+		untrack(() => initialGuide?.severity ?? 'critical')
+	);
+	let deviceName = $state(untrack(() => initialGuide?.device_name ?? ''));
+	let functionName = $state(untrack(() => initialGuide?.function_name ?? ''));
+	let errorCode = $state(untrack(() => initialGuide?.error_code ?? ''));
+	let symptom = $state(untrack(() => (mode === 'edit' ? (initialGuide?.symptom ?? '') : '')));
+	let rootCause = $state(untrack(() => (mode === 'edit' ? (initialGuide?.root_cause ?? '') : '')));
+	let steps = $state<TroubleshootingDraftStep[]>(
+		untrack(() =>
+			mode === 'edit' && initialGuide?.steps.length
+				? initialGuide.steps.map((step) => makeDraftStep(step))
+				: [makeDraftStep()]
+		)
+	);
 
 	let busy = $state(false);
 	let generalError = $state('');
 	let fieldErrors = $state<Record<string, string>>({});
-
-	// Reset form whenever dialog opens or target mode/guide changes.
-	$effect(() => {
-		if (!open) return;
-		generalError = '';
-		fieldErrors = {};
-		if (mode === 'edit' && initialGuide) {
-			title = initialGuide.title;
-			category = initialGuide.category;
-			severity = initialGuide.severity;
-			deviceName = initialGuide.device_name;
-			functionName = initialGuide.function_name;
-			errorCode = initialGuide.error_code;
-			symptom = initialGuide.symptom;
-			rootCause = initialGuide.root_cause;
-			steps =
-				initialGuide.steps.length > 0
-					? initialGuide.steps.map((s) => ({
-							title: s.title,
-							instruction: s.instruction,
-							script_snippet: s.script_snippet,
-							verification: s.verification
-						}))
-					: [{ title: '', instruction: '', script_snippet: '', verification: '' }];
-		} else if (mode === 'alternate' && initialGuide) {
-			title = '';
-			category = initialGuide.category;
-			severity = initialGuide.severity;
-			deviceName = initialGuide.device_name;
-			functionName = initialGuide.function_name;
-			errorCode = initialGuide.error_code;
-			symptom = '';
-			rootCause = '';
-			steps = [{ title: '', instruction: '', script_snippet: '', verification: '' }];
-		} else {
-			title = '';
-			category = 'connection';
-			severity = 'critical';
-			deviceName = '';
-			functionName = '';
-			errorCode = '';
-			symptom = '';
-			rootCause = '';
-			steps = [{ title: '', instruction: '', script_snippet: '', verification: '' }];
-		}
-	});
 
 	const dialogTitle = $derived(
 		mode === 'edit'
@@ -116,7 +103,7 @@
 	);
 
 	function addStep() {
-		steps = [...steps, { title: '', instruction: '', script_snippet: '', verification: '' }];
+		steps = [...steps, makeDraftStep()];
 	}
 
 	function removeStep(index: number) {
@@ -125,12 +112,7 @@
 	}
 
 	function moveStep(index: number, delta: -1 | 1) {
-		const target = index + delta;
-		if (target < 0 || target >= steps.length) return;
-		const copy = [...steps];
-		const [item] = copy.splice(index, 1);
-		copy.splice(target, 0, item);
-		steps = copy;
+		steps = moveDraftStep(steps, index, delta);
 	}
 
 	function validateClient(): Record<string, string> {
@@ -147,6 +129,20 @@
 			}
 		});
 		return errs;
+	}
+
+	async function createCategory(label: string) {
+		const created = await createTroubleshootingCategory({ label });
+		await onRegistryChanged();
+		category = created.key;
+		return created;
+	}
+
+	async function createSeverity(label: string) {
+		const created = await createTroubleshootingSeverity({ label, tone: 'outline' });
+		await onRegistryChanged();
+		severity = created.key;
+		return created;
 	}
 
 	async function handleSubmit(event: SubmitEvent) {
@@ -241,10 +237,12 @@
 						id="guide-title"
 						bind:value={title}
 						placeholder="e.g. TX_MULTI_VERIFICATION Power Low Due to Uncalibrated RF Cable Loss"
+						aria-invalid={fieldErrors.title ? 'true' : undefined}
+						aria-describedby={fieldErrors.title ? 'guide-title-error' : undefined}
 						required
 					/>
 					{#if fieldErrors.title}
-						<span class="text-destructive text-xs">{fieldErrors.title}</span>
+						<span id="guide-title-error" class="text-destructive text-xs">{fieldErrors.title}</span>
 					{/if}
 				</div>
 
@@ -252,40 +250,65 @@
 					<label for="guide-category" class="text-foreground text-xs font-semibold">
 						Testing Stage / Category
 					</label>
-					<Select
-						id="guide-category"
-						ariaLabel="Testing Stage Category"
-						bind:value={category}
-						options={TROUBLESHOOTING_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
-					/>
+					<div class="registry-field">
+						<TroubleshootingRegistryPicker
+							id="guide-category"
+							items={categories}
+							kind="category"
+							bind:value={category}
+							invalid={Boolean(fieldErrors.category)}
+							describedBy={fieldErrors.category ? 'guide-category-error' : undefined}
+							onCreate={createCategory}
+						/>
+					</div>
+					{#if fieldErrors.category}
+						<span id="guide-category-error" class="text-destructive text-xs"
+							>{fieldErrors.category}</span
+						>
+					{/if}
 				</div>
 
 				<div class="grid gap-1.5">
-					<label for="guide-severity" class="text-foreground text-xs font-semibold">
-						Severity
+					<label for="guide-severity" class="text-foreground text-xs font-semibold">Severity</label>
+					<div class="registry-field">
+						<TroubleshootingRegistryPicker
+							id="guide-severity"
+							items={severities}
+							kind="severity"
+							bind:value={severity}
+							invalid={Boolean(fieldErrors.severity)}
+							describedBy={fieldErrors.severity ? 'guide-severity-error' : undefined}
+							onCreate={createSeverity}
+						/>
+					</div>
+					{#if fieldErrors.severity}
+						<span id="guide-severity-error" class="text-destructive text-xs"
+							>{fieldErrors.severity}</span
+						>
+					{/if}
+				</div>
+
+				<div class="grid gap-1.5">
+					<label for="guide-device" class="text-foreground text-xs font-semibold">
+						Device / Interface Scope
 					</label>
-					<Select
-						id="guide-severity"
-						ariaLabel="Severity"
-						bind:value={severity}
-						options={TROUBLESHOOTING_SEVERITIES}
-					/>
-				</div>
-
-				<div class="grid gap-1.5">
 					<DevicePicker
 						id="guide-device"
 						label="Device / Interface Scope"
 						blankLabel="Global (All Devices)"
 						device={deviceName}
 						summaries={deviceSummaries}
+						invalid={Boolean(fieldErrors.device_name)}
+						describedBy={fieldErrors.device_name ? 'guide-device-error' : undefined}
 						fullWidth
 						onValueChange={(d) => {
 							deviceName = d;
 						}}
 					/>
 					{#if fieldErrors.device_name}
-						<span class="text-destructive text-xs">{fieldErrors.device_name}</span>
+						<span id="guide-device-error" class="text-destructive text-xs"
+							>{fieldErrors.device_name}</span
+						>
 					{/if}
 				</div>
 
@@ -332,10 +355,14 @@
 						rows={2}
 						bind:value={symptom}
 						placeholder="What does the test engineer see in the runner log, console, or measurement report?"
+						aria-invalid={fieldErrors.symptom ? 'true' : undefined}
+						aria-describedby={fieldErrors.symptom ? 'guide-symptom-error' : undefined}
 						required
 					/>
 					{#if fieldErrors.symptom}
-						<span class="text-destructive text-xs">{fieldErrors.symptom}</span>
+						<span id="guide-symptom-error" class="text-destructive text-xs"
+							>{fieldErrors.symptom}</span
+						>
 					{/if}
 				</div>
 
@@ -376,7 +403,7 @@
 			{/if}
 
 			<div class="mt-3 grid gap-3">
-				{#each steps as step, idx (idx)}
+				{#each steps as step, idx (step.client_id)}
 					<div class="border-border bg-card rounded-md border p-3">
 						<div class="flex items-center justify-between gap-2">
 							<Badge variant="default" class="font-mono">Step {idx + 1}</Badge>
@@ -426,8 +453,17 @@
 									id="step-title-{idx}"
 									bind:value={step.title}
 									placeholder="e.g. Check TX_TARGET_POWER and POWER tolerance in TEST_SPEC.ini"
+									aria-invalid={fieldErrors['steps.title'] ? 'true' : undefined}
+									aria-describedby={fieldErrors['steps.title']
+										? `step-title-error-${idx}`
+										: undefined}
 									required
 								/>
+								{#if fieldErrors['steps.title']}
+									<span id="step-title-error-{idx}" class="text-destructive text-xs">
+										{fieldErrors['steps.title']}
+									</span>
+								{/if}
 							</div>
 
 							<div class="grid gap-1">
@@ -439,8 +475,17 @@
 									rows={2}
 									bind:value={step.instruction}
 									placeholder="Explain exactly what file, parameter, or fixture component to inspect or modify."
+									aria-invalid={fieldErrors['steps.instruction'] ? 'true' : undefined}
+									aria-describedby={fieldErrors['steps.instruction']
+										? `step-instruction-error-${idx}`
+										: undefined}
 									required
 								/>
+								{#if fieldErrors['steps.instruction']}
+									<span id="step-instruction-error-{idx}" class="text-destructive text-xs">
+										{fieldErrors['steps.instruction']}
+									</span>
+								{/if}
 							</div>
 
 							<div class="grid gap-2.5 sm:grid-cols-2">
