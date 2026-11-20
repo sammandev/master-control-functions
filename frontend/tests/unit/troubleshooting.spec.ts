@@ -1,10 +1,20 @@
 import { expect, test } from 'vitest';
 import {
+	categoryLabel,
 	findRelatedGuides,
 	formatTroubleshootingAiContext,
+	moveDraftStep,
+	resetChecklistProgress,
+	severityLabel,
+	severityTone,
+	setChecklistStep,
 	type TroubleshootingGuideDetail,
 	type TroubleshootingGuideListItem
 } from '../../src/lib/troubleshooting';
+import type {
+	TroubleshootingCategory,
+	TroubleshootingSeverity
+} from '../../src/lib/troubleshooting-registry';
 
 const baseGuide: TroubleshootingGuideDetail = {
 	id: 4,
@@ -92,11 +102,90 @@ test('findRelatedGuides groups sibling solutions sharing error_code or function_
 test('formatTroubleshootingAiContext includes problem tags, steps, script snippets, and sibling solutions', () => {
 	const related = findRelatedGuides(baseGuide, catalogItems);
 	const context = formatTroubleshootingAiContext(baseGuide, related);
-	expect(context).toContain('# MCV2 Troubleshooting Guide: TX_MULTI_VERIFICATION Power Out of Spec');
+	expect(context).toContain(
+		'# MCV2 Troubleshooting Guide: TX_MULTI_VERIFICATION Power Out of Spec'
+	);
 	expect(context).toContain('ERRCODE:104');
 	expect(context).toContain('WIFI_TEST');
 	expect(context).toContain('Step 1: Check TX_TARGET_POWER and POWER criterion');
 	expect(context).toContain('DLL:WIFI_TEST,TX_MULTI_VERIFICATION');
 	expect(context).toContain('Alternative Solutions for This Problem / Error Code (2)');
-	expect(context).toContain('TX_MULTI_VERIFICATION Power Low Across All Channels Due to RF Path Loss Table');
+	expect(context).toContain(
+		'TX_MULTI_VERIFICATION Power Low Across All Channels Due to RF Path Loss Table'
+	);
+});
+
+test('categoryLabel uses registry metadata and preserves legacy one-argument calls', () => {
+	const categories: TroubleshootingCategory[] = [
+		{
+			key: 'measurement-plus',
+			label: 'Advanced Measurement',
+			description: '',
+			sort_order: 1,
+			built_in: false,
+			guide_count: 0
+		}
+	];
+
+	expect(categoryLabel('measurement-plus', categories)).toBe('Advanced Measurement');
+	expect(categoryLabel('measurement')).toBe('Measurement & Criteria');
+	expect(categoryLabel('signal_quality')).toBe('Signal Quality');
+	expect(categoryLabel('')).toBe('');
+});
+
+test('checklist state is isolated by guide and reset affects only the current guide', () => {
+	const state = { 4: [1], 5: [2] };
+	const checked = setChecklistStep(state, 4, 2, true);
+	const unchecked = setChecklistStep(checked, 4, 1, false);
+	const reset = resetChecklistProgress(unchecked, 4);
+
+	expect(unchecked).toEqual({ 4: [2], 5: [2] });
+	expect(reset).toEqual({ 5: [2] });
+	expect(state).toEqual({ 4: [1], 5: [2] });
+});
+
+test('moveDraftStep moves a complete stable record without rekeying fields', () => {
+	const first = {
+		client_id: 'draft-a',
+		title: 'First',
+		instruction: 'Inspect first',
+		script_snippet: 'FIRST=1',
+		verification: 'first verified'
+	};
+	const second = {
+		client_id: 'draft-b',
+		title: 'Second',
+		instruction: 'Inspect second',
+		script_snippet: 'SECOND=2',
+		verification: 'second verified'
+	};
+	const steps = [first, second];
+
+	const moved = moveDraftStep(steps, 1, -1);
+
+	expect(moved).toEqual([second, first]);
+	expect(moved[0]).toBe(second);
+	expect(steps).toEqual([first, second]);
+});
+
+test('severity helpers use registry metadata and neutral fallbacks', () => {
+	const severities: TroubleshootingSeverity[] = [
+		{
+			key: 'review',
+			label: 'Needs Review',
+			description: '',
+			sort_order: 1,
+			built_in: false,
+			guide_count: 0,
+			tone: 'warn'
+		}
+	];
+
+	expect(severityLabel('review', severities)).toBe('Needs Review');
+	expect(severityTone('review', severities)).toBe('warn');
+	expect(severityLabel('critical')).toBe('Critical');
+	expect(severityLabel('operator_attention')).toBe('Operator Attention');
+	expect(severityTone('unknown')).toBe('outline');
+	expect(severityLabel('')).toBe('');
+	expect(severityTone('')).toBe('outline');
 });

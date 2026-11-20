@@ -55,6 +55,8 @@ SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
           AND ((g.error_code <> '' AND lower(g2.error_code) = lower(g.error_code))
                OR (g.function_name <> '' AND lower(g2.function_name) = lower(g.function_name)))) AS related_count
 FROM troubleshooting_guides g
+JOIN troubleshooting_severities taxonomy_severity ON taxonomy_severity.key = g.severity
+JOIN troubleshooting_categories taxonomy_category ON taxonomy_category.key = g.category
 WHERE (sqlc.narg('search')::text IS NULL
        OR lower(g.title) LIKE lower(sqlc.narg('search')::text)
        OR lower(g.symptom) LIKE lower(sqlc.narg('search')::text)
@@ -64,15 +66,30 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (sqlc.narg('category')::text IS NULL OR g.category = sqlc.narg('category')::text)
   AND (sqlc.narg('device_name')::text IS NULL OR g.device_name = sqlc.narg('device_name')::text)
   AND (sqlc.narg('error_code')::text IS NULL OR lower(g.error_code) = lower(sqlc.narg('error_code')::text))
-ORDER BY
-    CASE g.severity
-        WHEN 'critical' THEN 0
-        WHEN 'warning' THEN 1
-        ELSE 2
-    END,
-    lower(g.title),
-    g.id
-LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+ORDER BY taxonomy_severity.sort_order,
+         taxonomy_category.sort_order,
+         lower(g.title),
+         g.id
+LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
+
+-- name: GetTroubleshootingRelatedGuides :many
+SELECT related.id, related.title, related.category, related.severity,
+       related.device_name, related.function_name, related.error_code,
+       related.symptom, related.root_cause, related.created_at, related.updated_at,
+       (SELECT count(*) FROM troubleshooting_steps steps WHERE steps.guide_id = related.id) AS step_count
+FROM troubleshooting_guides source
+JOIN troubleshooting_guides related
+  ON related.id <> source.id
+ AND ((source.error_code <> '' AND lower(related.error_code) = lower(source.error_code))
+      OR (source.function_name <> '' AND lower(related.function_name) = lower(source.function_name)))
+WHERE source.id = $1
+ORDER BY CASE
+             WHEN source.error_code <> ''
+              AND lower(related.error_code) = lower(source.error_code) THEN 0
+             ELSE 1
+         END,
+         lower(related.title),
+         related.id;
 
 -- name: InsertTroubleshootingStep :one
 INSERT INTO troubleshooting_steps (

@@ -56,6 +56,15 @@ _Avoid_: script builder
 Regenerating the complete six-sheet workbook from the application database in the original column layout; the result re-imports without data loss.
 _Avoid_: dump
 
+**Troubleshooting category**:
+A managed classification for the testing or operating stage where a troubleshooting guide applies. Guides reference a stable key; labels and descriptions may be renamed.
+
+**Troubleshooting severity**:
+A managed urgency classification for a troubleshooting guide. It has a stable key, editable label, display tone, and sort order.
+
+**Taxonomy reassignment**:
+An atomic operation that moves all guides from one custom troubleshooting category or severity to a replacement value, then deletes the source value.
+
 ### Sequences
 
 **Sequence**:

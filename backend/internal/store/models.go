@@ -187,6 +187,31 @@ type McpV1ScriptKeyAudit struct {
 	Scope             string
 }
 
+type McpV1TroubleshootingGuide struct {
+	ID           int64
+	Title        string
+	Category     string
+	Severity     string
+	DeviceName   string
+	FunctionName string
+	ErrorCode    string
+	Symptom      string
+	RootCause    string
+	CreatedAt    string
+	UpdatedAt    string
+	StepCount    int64
+}
+
+type McpV1TroubleshootingStep struct {
+	ID            int64
+	GuideID       int64
+	Position      int64
+	Title         string
+	Instruction   string
+	ScriptSnippet string
+	Verification  string
+}
+
 type ParameterDefinition struct {
 	ID            int64
 	Name          string
@@ -255,6 +280,14 @@ type SequenceStep struct {
 	Note              string
 }
 
+type TroubleshootingCategory struct {
+	Key         string
+	Label       string
+	Description string
+	SortOrder   int64
+	BuiltIn     bool
+}
+
 type TroubleshootingGuide struct {
 	ID           int64
 	Title        string
@@ -267,6 +300,15 @@ type TroubleshootingGuide struct {
 	RootCause    string
 	CreatedAt    string
 	UpdatedAt    string
+}
+
+type TroubleshootingSeverity struct {
+	Key         string
+	Label       string
+	Description string
+	SortOrder   int64
+	BuiltIn     bool
+	Tone        string
 }
 
 type TroubleshootingStep struct {
