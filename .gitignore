@@ -13,6 +13,7 @@
 .chat/
 .copilot/
 .opencode/
+opencode.json
 
 .vscode/*
 
