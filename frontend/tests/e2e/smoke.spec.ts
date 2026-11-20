@@ -104,7 +104,7 @@ test('compose a script and save it as an example', async ({ page }) => {
 	await page.goto(fnPath);
 	await page.getByRole('button', { name: 'Compose script' }).click();
 
-	const dialog = page.getByRole('dialog', { name: 'Script composer' });
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
 	await expect(dialog).toBeVisible();
 
 	// The form is generated from the function's parameter links; fill
@@ -245,7 +245,7 @@ test('sequence: emit, reorder and add a composer step', async ({ page, request }
 	// this sequence.
 	await page.goto(fnPath);
 	await page.getByRole('button', { name: 'Compose script' }).click();
-	const dialog = page.getByRole('dialog', { name: 'Script composer' });
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
 	await expect(dialog).toBeVisible();
 	await dialog.getByText('Add to sequence').click();
 	await dialog.getByRole('button', { name: 'Target sequence' }).click();

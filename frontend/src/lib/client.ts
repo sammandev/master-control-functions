@@ -38,7 +38,7 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export function formatApiError(e: unknown): string {
 	if (e instanceof ApiError) {
 		const field = Object.values(e.fields)[0];
-		return field ? `${e.message} — ${field}` : e.message;
+		return field ? `${e.message}: ${field}` : e.message;
 	}
 	return e instanceof Error ? e.message : String(e);
 }

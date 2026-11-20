@@ -11,12 +11,9 @@
 		listTroubleshootingGuides,
 		resetChecklistProgress,
 		setChecklistStep,
-		severityLabel,
-		severityTone,
 		type TroubleshootingChecklistState,
 		type TroubleshootingGuideDetail,
-		type TroubleshootingGuideListItem,
-		type TroubleshootingSeverity
+		type TroubleshootingGuideListItem
 	} from '#lib/troubleshooting.ts';
 	import {
 		listTroubleshootingCategories,
@@ -238,16 +235,6 @@
 		}
 	}
 
-	function severityVariant(
-		severity: TroubleshootingSeverity
-	): 'destructive' | 'warn' | 'default' | 'outline' {
-		const tone = severityTone(severity, severities);
-		if (tone === 'destructive' || tone === 'warn' || tone === 'default' || tone === 'outline') {
-			return tone;
-		}
-		return 'outline';
-	}
-
 	const hasActiveFilters = $derived(
 		Boolean(debouncedSearch || category !== '_all' || device !== '_all' || errorCodeFilter)
 	);
@@ -262,13 +249,12 @@
 <div class="directory-heading">
 	<div>
 		<div class="directory-title">
-			<h1>Troubleshooting Playbook</h1>
+			<h1>Troubleshooting Guides</h1>
 			<span>{total} {total === 1 ? 'guide' : 'guides'}</span>
 		</div>
 		<p class="text-muted-foreground mt-1 text-sm">
-			Step-by-step resolution guides for DUT testing & production runs. Multiple solutions can share
-			the same Error Code or Function to cover distinct failure causes and feed AI diagnostic
-			context.
+			Step-by-step resolution guides for troubleshooting. Multiple solutions can share
+			the same issue, error code, or function to cover distinct failure causes.
 		</p>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
@@ -367,7 +353,7 @@
 	<aside aria-label="Troubleshooting guides" class="guide-list">
 		<div class="rail-controls">
 			<div class="rail-heading">
-				<h2>Playbook Catalog</h2>
+				<h2>Troubleshooting Catalog</h2>
 				<span>{total} total</span>
 			</div>
 			<div class="catalog-controls">
@@ -419,13 +405,15 @@
 					onclick={() => selectGuide(row.id)}
 				>
 					<div class="flex flex-wrap items-center gap-1.5">
-						<Badge variant={severityVariant(row.severity)}
-							>{severityLabel(row.severity, severities)}</Badge
-						>
-						{#if row.error_code}
-							<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
-						{/if}
-						<Badge variant="outline">{row.device_name || 'Global'}</Badge>
+						<div class="guide-labels flex flex-wrap items-center gap-1.5">
+							{#if row.error_code}
+								<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
+							{/if}
+							<Badge variant="outline">{row.device_name || 'Global'}</Badge>
+							{#if row.function_name}
+								<Badge variant="outline"><code class="font-mono">{row.function_name}</code></Badge>
+							{/if}
+						</div>
 						{#if row.related_count > 0}
 							<span
 								class="text-primary inline-flex items-center gap-1 text-[11px] font-semibold"
@@ -441,9 +429,6 @@
 					<small>{row.symptom}</small>
 					<span class="meta-line">
 						{categoryLabel(row.category, categories)}
-						{#if row.function_name}
-							· <code class="font-mono">{row.function_name}</code>
-						{/if}
 						· {row.step_count}
 						{row.step_count === 1 ? 'step' : 'steps'}
 					</span>
@@ -472,7 +457,7 @@
 
 	<div class="detail-pane">
 		{#if loadingDetail}
-			<p class="banner-empty" role="status">Loading step-by-step playbook…</p>
+			<p class="banner-empty" role="status">Loading step-by-step guide…</p>
 		{:else if detailError}
 			<div class="banner-error" role="alert">
 				<span>{detailError}</span>

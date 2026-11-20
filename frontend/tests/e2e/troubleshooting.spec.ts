@@ -24,15 +24,64 @@ const severities = [
 
 const refreshes = { list: 0, detail: 0 };
 
-async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh?: boolean } = {}) {
-	categories.splice(0, categories.length, {
-		key: 'measurement',
-		label: 'Measurement & Criteria',
-		description: '',
-		sort_order: 1,
-		built_in: true,
-		guide_count: 2
+async function assertDialogChromeIsSeparated(
+	dialog: ReturnType<Page['getByRole']>,
+	stickyTabs = false
+) {
+	const heading = dialog.locator('.dialog-heading');
+	const body = dialog.locator('.dialog-body');
+	await expect(body).toBeVisible();
+	const headingBox = await heading.boundingBox();
+	const bodyBox = await body.boundingBox();
+	expect(headingBox).not.toBeNull();
+	expect(bodyBox).not.toBeNull();
+	expect(bodyBox!.y).toBeGreaterThanOrEqual(headingBox!.y + headingBox!.height - 0.5);
+
+	if (stickyTabs) {
+		const tabs = dialog.getByRole('tablist', { name: 'Troubleshooting lists' });
+		await body.evaluate((element) => {
+			element.scrollTop = element.scrollHeight;
+		});
+		await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+		await expect(tabs).toBeVisible();
+		await expect(tabs).toHaveCSS('position', 'sticky');
+		const tabsBox = await tabs.boundingBox();
+		expect(tabsBox).not.toBeNull();
+		expect(Math.abs(tabsBox!.y - bodyBox!.y)).toBeLessThan(2);
+	}
+
+	const overlap = await dialog.evaluate((element) => {
+		const heading = element.querySelector('.dialog-heading')!.getBoundingClientRect();
+		return (
+			element.ownerDocument
+				.elementFromPoint(heading.left + 12, heading.top - 1)
+				?.closest('[role="dialog"] [role="tabpanel"], [role="dialog"] form') != null
+		);
 	});
+	expect(overlap).toBe(false);
+}
+
+async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh?: boolean } = {}) {
+	categories.splice(
+		0,
+		categories.length,
+		{
+			key: 'measurement',
+			label: 'Measurement & Criteria',
+			description: '',
+			sort_order: 1,
+			built_in: true,
+			guide_count: 2
+		},
+		...Array.from({ length: 10 }, (_, index) => ({
+			key: `category-${index + 2}`,
+			label: `Category ${index + 2}`,
+			description: '',
+			sort_order: index + 2,
+			built_in: true,
+			guide_count: 0
+		}))
+	);
 	severities.splice(0, severities.length, {
 		key: 'critical',
 		label: 'Critical',
@@ -193,6 +242,27 @@ test('troubleshooting workflow preserves checklist and supports registry control
 
 	await expect(page.getByText('Testing Stage / Category', { exact: true })).toBeVisible();
 	await expect(page.getByText('Device / Interface', { exact: true })).toBeVisible();
+	const firstGuide = page.getByRole('button', { name: 'Select guide First guide' });
+	await expect(firstGuide.getByText('Critical', { exact: true })).toHaveCount(0);
+	await expect(firstGuide.locator('.guide-labels > span')).toHaveText([
+		'ERRCODE:1',
+		'WIFI_TEST',
+		'TX_VERIFY'
+	]);
+	const detailSeverity = page.locator('.detail-head .severity-badge');
+	await expect(detailSeverity).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	const alternativeSection = page.getByRole('region', { name: 'Alternative Solutions' });
+	await expect(alternativeSection.getByText(/One error code or symptom/)).toContainText(
+		'One error code or symptom can have multiple causes. Choose another solution below if needed.'
+	);
+	const titleBox = await alternativeSection.locator('.alternative-solutions-title').boundingBox();
+	const subtitleBox = await alternativeSection
+		.locator('.alternative-solutions-title')
+		.locator('xpath=../following-sibling::p')
+		.boundingBox();
+	expect(titleBox).not.toBeNull();
+	expect(subtitleBox).not.toBeNull();
+	expect(subtitleBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height);
 	const categoryFilter = page.getByRole('button', { name: 'Filter by category' });
 	const deviceFilter = page.getByRole('button', { name: /Device \/ Interface:/ });
 	await expect(categoryFilter).toHaveCSS('height', '40px');
@@ -218,8 +288,9 @@ test('troubleshooting workflow preserves checklist and supports registry control
 	const listRefreshes = refreshes.list;
 	const detailRefreshes = refreshes.detail;
 	await page.getByRole('button', { name: 'Manage Lists' }).click();
-	const manager = page.getByRole('dialog', { name: 'Manage troubleshooting lists' });
+	const manager = page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' });
 	await expect(manager).toBeVisible();
+	await assertDialogChromeIsSeparated(manager, true);
 	await manager
 		.getByRole('textbox', { name: 'Measurement & Criteria label' })
 		.fill('Renamed Measurement');
@@ -227,7 +298,15 @@ test('troubleshooting workflow preserves checklist and supports registry control
 	await expect(page.getByText('Renamed Measurement', { exact: true }).first()).toBeVisible();
 	await expect.poll(() => refreshes.list).toBeGreaterThan(listRefreshes);
 	await expect.poll(() => refreshes.detail).toBeGreaterThan(detailRefreshes);
-	await page.getByRole('button', { name: 'Close' }).click();
+	await manager.getByRole('button', { name: 'Close dialog' }).click();
+
+	await page.getByRole('button', { name: 'Add Alternate Solution', exact: true }).click();
+	const alternate = page.getByRole('dialog', {
+		name: 'Add Alternate Solution for Existing Problem / Error Code'
+	});
+	await expect(alternate).toBeVisible();
+	await assertDialogChromeIsSeparated(alternate);
+	await alternate.getByRole('button', { name: 'Close dialog' }).click();
 
 	await page.getByRole('button', { name: 'New Troubleshooting Guide' }).click();
 	const editor = page.getByRole('dialog', { name: 'New Troubleshooting Guide' });
@@ -274,7 +353,7 @@ test('metadata refresh failure preserves the current guide list and detail', asy
 	const listRefreshes = refreshes.list;
 	const detailRefreshes = refreshes.detail;
 	await page.getByRole('button', { name: 'Manage Lists' }).click();
-	const manager = page.getByRole('dialog', { name: 'Manage troubleshooting lists' });
+	const manager = page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' });
 	await manager
 		.getByRole('textbox', { name: 'Measurement & Criteria label' })
 		.fill('Refresh Draft');

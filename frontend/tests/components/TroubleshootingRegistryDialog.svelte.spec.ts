@@ -78,7 +78,7 @@ describe('TroubleshootingRegistryDialog', () => {
 	it('offers category and severity tabs while hiding delete and tone for categories', async () => {
 		renderDialog();
 		await expect
-			.element(page.getByRole('dialog', { name: 'Manage troubleshooting lists' }))
+			.element(page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' }))
 			.toBeVisible();
 		await expect.element(page.getByRole('tab', { name: 'Categories' })).toBeVisible();
 		await expect.element(page.getByRole('tab', { name: 'Severities' })).toBeVisible();

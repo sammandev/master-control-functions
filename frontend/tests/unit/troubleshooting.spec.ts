@@ -109,7 +109,7 @@ test('formatTroubleshootingAiContext includes problem tags, steps, script snippe
 	expect(context).toContain('WIFI_TEST');
 	expect(context).toContain('Step 1: Check TX_TARGET_POWER and POWER criterion');
 	expect(context).toContain('DLL:WIFI_TEST,TX_MULTI_VERIFICATION');
-	expect(context).toContain('Alternative Solutions for This Problem / Error Code (2)');
+	expect(context).toContain('Alternative Solutions (2)');
 	expect(context).toContain(
 		'TX_MULTI_VERIFICATION Power Low Across All Channels Due to RF Path Loss Table'
 	);

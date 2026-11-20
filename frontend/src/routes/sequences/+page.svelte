@@ -167,7 +167,7 @@
 							href={resolve('/sequences/[id]', { id: String(s.id) })}>{s.name}</a
 						>
 					</TableCell>
-					<TableCell>{s.description || '—'}</TableCell>
+					<TableCell>{s.description || 'Not set'}</TableCell>
 					<TableCell>{s.step_count}</TableCell>
 					<TableCell class="text-muted-foreground text-xs">{s.updated_at.slice(0, 10)}</TableCell>
 				</TableRow>

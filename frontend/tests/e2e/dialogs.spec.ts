@@ -64,7 +64,7 @@ test('examples dialog: Escape closes and focus returns to the trigger', async ({
 	await page.goto('/examples');
 	const trigger = page.getByRole('button', { name: 'New example' });
 	await trigger.click();
-	const dialog = page.getByRole('dialog', { name: 'New example' });
+	const dialog = page.getByRole('dialog', { name: 'New Example' });
 	await expect(dialog).toBeVisible();
 
 	// Focus moves into the dialog when it opens (bits-ui autofocus).
@@ -80,7 +80,7 @@ test('examples dialog: Escape closes and focus returns to the trigger', async ({
 test('examples dialog: focus stays trapped while open', async ({ page }) => {
 	await page.goto('/examples');
 	await page.getByRole('button', { name: 'New example' }).click();
-	const dialog = page.getByRole('dialog', { name: 'New example' });
+	const dialog = page.getByRole('dialog', { name: 'New Example' });
 	await expect(dialog).toBeVisible();
 
 	// Tab past the number of focusable elements in the dialog: a trapped
@@ -94,7 +94,7 @@ test('examples dialog: focus stays trapped while open', async ({ page }) => {
 test('examples dialog: backdrop click closes', async ({ page }) => {
 	await page.goto('/examples');
 	await page.getByRole('button', { name: 'New example' }).click();
-	const dialog = page.getByRole('dialog', { name: 'New example' });
+	const dialog = page.getByRole('dialog', { name: 'New Example' });
 	await expect(dialog).toBeVisible();
 
 	// The overlay covers the viewport; the far-left edge is backdrop.
@@ -196,14 +196,14 @@ test('functions row actions: dropdown menu is keyboard operable', async ({ page,
 	await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeFocused();
 	await page.keyboard.press('Enter');
 
-	const dialog = page.getByRole('dialog', { name: `Edit function #${id}` });
+	const dialog = page.getByRole('dialog', { name: `Edit Function #${id}` });
 	await expect(dialog).toBeVisible();
 });
 
 test('functions save: success toast announces politely', async ({ page }) => {
 	await page.goto('/functions');
 	await page.getByRole('button', { name: 'New function' }).click();
-	const dialog = page.getByRole('dialog', { name: 'New function' });
+	const dialog = page.getByRole('dialog', { name: 'New Function' });
 	await dialog.getByRole('button', { name: /^Device \/ Interface:/ }).click();
 	const picker = page.getByRole('dialog', { name: 'Choose Device / Interface', exact: true });
 	await picker.getByRole('combobox', { name: 'Search devices' }).fill('GPIB');

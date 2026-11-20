@@ -557,7 +557,7 @@ test('CRUD dialogs provide multiline fields and preserve saved line breaks', asy
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto('/functions');
 	await page.getByRole('button', { name: 'New function', exact: true }).click();
-	let dialog = page.getByRole('dialog', { name: 'New function', exact: true });
+	let dialog = page.getByRole('dialog', { name: 'New Function', exact: true });
 	await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('MULTILINE_FUNCTION');
 	await expect(dialog.getByRole('textbox', { name: 'Description', exact: true })).toHaveJSProperty(
 		'tagName',
@@ -764,7 +764,7 @@ test('Functions detail refreshes the tab count after detaching a link', async ({
 	await detail.getByRole('button', { name: 'Actions for ANT' }).click();
 	await page.getByRole('menuitem', { name: 'Detach' }).click();
 	await page
-		.getByRole('alertdialog', { name: 'Detach link' })
+		.getByRole('alertdialog', { name: 'Detach Link' })
 		.getByRole('button', { name: 'Detach' })
 		.click();
 	await expect(count).toHaveText('0');
@@ -1287,7 +1287,7 @@ test('Function Device / Interface searches the catalog and accepts blank on edit
 	const { mutations } = await mockFunctionCatalog(page);
 	await page.goto('/functions');
 	await page.getByRole('button', { name: 'New function', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'New function', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'New Function', exact: true });
 	await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('CATALOG_PICKER_FN');
 	await dialog.getByRole('button', { name: /^Device \/ Interface:/ }).click();
 	const popup = page.getByRole('dialog', { name: 'Choose Device / Interface', exact: true });
@@ -1300,7 +1300,7 @@ test('Function Device / Interface searches the catalog and accepts blank on edit
 	await page.getByRole('button', { name: 'Edit function', exact: true }).click();
 	await chooseFormDevice(page, '');
 	await page
-		.getByRole('dialog', { name: 'Edit function #3', exact: true })
+		.getByRole('dialog', { name: 'Edit Function #3', exact: true })
 		.getByRole('button', { name: 'Save', exact: true })
 		.click();
 	await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -1333,7 +1333,7 @@ test('Function picker retries catalog failures without losing the blank choice',
 	await expect(popup.getByRole('option', { name: 'WIFI_TEST', exact: true })).toBeVisible();
 	await popup.getByRole('option', { name: 'Global (no Device / Interface)', exact: true }).click();
 	await page
-		.getByRole('dialog', { name: 'New function', exact: true })
+		.getByRole('dialog', { name: 'New Function', exact: true })
 		.getByRole('button', { name: 'Cancel' })
 		.click();
 });
@@ -1462,7 +1462,7 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 		await expect(details.getByRole('heading', { name: 'ANT', exact: true })).toBeVisible();
 		await expect(page).toHaveURL(/definition=2/);
 		await details.getByRole('button', { name: 'Delete definition', exact: true }).click();
-		const confirmation = page.getByRole('alertdialog', { name: 'Force delete ANT?', exact: true });
+		const confirmation = page.getByRole('alertdialog', { name: 'Force Delete ANT?', exact: true });
 		await expect(confirmation).toContainText(
 			'Links are retained and may resolve to a Global fallback.'
 		);
@@ -1623,7 +1623,7 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 			.click();
 		await expect(page.getByRole('alertdialog')).toContainText('Definition is in use.');
 		await expect(
-			page.getByRole('alertdialog', { name: 'Force delete ANT?', exact: true })
+			page.getByRole('alertdialog', { name: 'Force Delete ANT?', exact: true })
 		).toBeVisible();
 		expect(mutations).toHaveLength(0);
 		await page
@@ -1636,7 +1636,7 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 			.getByRole('button', { name: 'Delete', exact: true })
 			.click();
 		await expect(
-			page.getByRole('alertdialog', { name: 'Force delete ANT?', exact: true })
+			page.getByRole('alertdialog', { name: 'Force Delete ANT?', exact: true })
 		).toBeVisible();
 		await page
 			.getByRole('alertdialog')
@@ -2225,7 +2225,7 @@ test('Functions prototype A uses searchable catalog controls in both themes', as
 		await expect(checkbox).not.toBeChecked();
 		await checkbox.click();
 		await page.getByRole('button', { name: 'New function' }).click();
-		const dialog = page.getByRole('dialog', { name: 'New function' });
+		const dialog = page.getByRole('dialog', { name: 'New Function' });
 		await dialog.getByRole('button', { name: 'Source', exact: true }).click();
 		const options = page.getByRole('dialog', { name: 'Choose Source' });
 		await options.getByRole('combobox', { name: 'Search options' }).fill('built');
@@ -2235,7 +2235,7 @@ test('Functions prototype A uses searchable catalog controls in both themes', as
 		);
 		await dialog.getByRole('button', { name: 'Cancel' }).click();
 		await page.getByRole('button', { name: 'Attach parameter' }).click();
-		const linkDialog = page.getByRole('dialog', { name: 'Attach parameter' });
+		const linkDialog = page.getByRole('dialog', { name: 'Attach Parameter' });
 		await expect(linkDialog.getByRole('checkbox', { name: 'Required' })).toBeChecked();
 		await linkDialog.getByRole('checkbox', { name: 'Required' }).click();
 		await expect(linkDialog.getByRole('checkbox', { name: 'Required' })).not.toBeChecked();
@@ -2271,7 +2271,7 @@ test('Functions prototype A fills the filter row and sorts detail tables', async
 	await expect(firstRow.getByRole('cell').first()).toHaveText('3');
 	await firstRow.getByRole('button', { name: 'Edit RIGHT_OPERAND' }).click();
 	await expect(
-		page.getByRole('dialog', { name: 'Edit parameter' }).getByLabel('Definition')
+		page.getByRole('dialog', { name: 'Edit Parameter' }).getByLabel('Definition')
 	).toHaveValue('RIGHT_OPERAND');
 	await page.getByRole('button', { name: 'Cancel' }).click();
 	await page.getByRole('button', { name: 'Switch to dark mode' }).click();
@@ -2472,7 +2472,7 @@ test('Functions shared CRUD preserves context validation cancellation and confir
 	const { mutations } = await mockFunctionCatalog(page);
 	await page.goto('/functions?source=DLL&function=1');
 	await page.getByRole('button', { name: 'New function', exact: true }).click();
-	let dialog = page.getByRole('dialog', { name: 'New function', exact: true });
+	let dialog = page.getByRole('dialog', { name: 'New Function', exact: true });
 	await expect(dialog.getByText('Global - shared across Devices', { exact: true })).toBeVisible();
 	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(dialog.getByText('Name is required.', { exact: true })).toBeVisible();
@@ -2486,7 +2486,7 @@ test('Functions shared CRUD preserves context validation cancellation and confir
 	).toBeVisible();
 	await page.getByRole('button', { name: 'Select TX_MULTI_VERIFICATION', exact: true }).click();
 	await page.getByRole('button', { name: 'Edit function', exact: true }).click();
-	dialog = page.getByRole('dialog', { name: 'Edit function #1', exact: true });
+	dialog = page.getByRole('dialog', { name: 'Edit Function #1', exact: true });
 	await dialog.getByRole('textbox', { name: 'Description', exact: true }).fill('Cancelled edit');
 	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 	expect(mutations.filter((call) => call.method === 'PUT')).toHaveLength(0);
@@ -2502,7 +2502,7 @@ test('Functions shared CRUD preserves context validation cancellation and confir
 	).toBeVisible();
 	expect(mutations.find((call) => call.method === 'PUT')?.path).toBe('/api/functions/1');
 	await page.getByRole('button', { name: 'Delete function', exact: true }).click();
-	const confirmation = page.getByRole('alertdialog', { name: 'Delete function', exact: true });
+	const confirmation = page.getByRole('alertdialog', { name: 'Delete Function', exact: true });
 	await expect(confirmation).toContainText('across all Devices');
 	await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
 	expect(mutations.filter((call) => call.method === 'DELETE')).toHaveLength(0);
@@ -2529,7 +2529,7 @@ test('Device Function actions edit shared identity and retain Composer and link 
 		details.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
 	).toBeVisible();
 	await details.getByRole('button', { name: 'Edit function', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'Edit function #1', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'Edit Function #1', exact: true });
 	await dialog
 		.getByRole('textbox', { name: 'Description', exact: true })
 		.fill('Updated shared Function');
@@ -2551,13 +2551,13 @@ test('Device Function actions edit shared identity and retain Composer and link 
 	await page.goto('/devices/WIFI_TEST?tab=functions&function=1');
 	await details.getByRole('button', { name: 'Delete function', exact: true }).click();
 	await page
-		.getByRole('alertdialog', { name: 'Delete function', exact: true })
+		.getByRole('alertdialog', { name: 'Delete Function', exact: true })
 		.getByRole('button', { name: 'Delete', exact: true })
 		.click();
 	await expect(page.getByRole('heading', { name: 'RX_PER', exact: true })).toBeVisible();
 	await expect(page).not.toHaveURL(/function=1(?:&|$)/);
 	await page.getByRole('button', { name: 'New function', exact: true }).click();
-	const createDialog = page.getByRole('dialog', { name: 'New function', exact: true });
+	const createDialog = page.getByRole('dialog', { name: 'New Function', exact: true });
 	await createDialog
 		.getByRole('textbox', { name: 'Name', exact: true })
 		.fill('NEW_DEVICE_SHARED_FN');
@@ -2731,7 +2731,7 @@ test('Functions catalog layout handles long content desktop mobile and dark mode
 	);
 	await page.screenshot({ path: testInfo.outputPath('functions-mobile-dark.png'), fullPage: true });
 	await page.getByRole('button', { name: 'New function', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'New function', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'New Function', exact: true });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole('button', { name: 'Save', exact: true }).scrollIntoViewIfNeeded();
 	const bounds = await dialog.boundingBox();
@@ -2762,7 +2762,7 @@ test('Functions deletion keeps errors retryable and handles the last selected re
 	});
 	await page.goto('/functions?source=DLL&function=1');
 	await page.getByRole('button', { name: 'Delete function', exact: true }).click();
-	const confirmation = page.getByRole('alertdialog', { name: 'Delete function', exact: true });
+	const confirmation = page.getByRole('alertdialog', { name: 'Delete Function', exact: true });
 	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
 	await expect(confirmation.getByRole('alert')).toContainText('Delete unavailable');
 	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
@@ -2917,7 +2917,7 @@ test('Device directory preserves sort, count links and create/delete workflows',
 	);
 	await page.goto('/devices');
 	await page.getByRole('button', { name: 'Create device', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'Create device', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'Create Device', exact: true });
 	await expect(dialog.getByRole('button', { name: 'Type', exact: true })).toHaveText('BUILT-IN');
 	await dialog.getByRole('button', { name: 'Type', exact: true }).click();
 	await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
@@ -2963,7 +2963,7 @@ test('Device Type labels and icons distinguish native, DLL and mixed Devices', a
 	expect(await nativeIcon.innerHTML()).not.toBe(await dllIcon.innerHTML());
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole('button', { name: 'Create device', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'Create device', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'Create Device', exact: true });
 	await expect(dialog.getByRole('button', { name: 'Type', exact: true })).toBeVisible();
 	await dialog.getByRole('button', { name: 'Type', exact: true }).click();
 	await expect(page.getByRole('option', { name: 'BUILT-IN', exact: true })).toBeVisible();
@@ -3758,13 +3758,13 @@ test('Device Example CRUD keeps the selected Device and list context', async ({ 
 
 	await page.goto('/devices/WIFI_TEST?tab=examples');
 	await page.getByRole('button', { name: 'New example', exact: true }).click();
-	let dialog = page.getByRole('dialog', { name: 'New example', exact: true });
+	let dialog = page.getByRole('dialog', { name: 'New Example', exact: true });
 	await expect(dialog).toContainText('Device: WIFI_TEST');
 	await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(page).toHaveURL(/\/devices\/WIFI_TEST\?tab=examples/);
 
 	await page.getByRole('button', { name: 'New example', exact: true }).click();
-	dialog = page.getByRole('dialog', { name: 'New example', exact: true });
+	dialog = page.getByRole('dialog', { name: 'New Example', exact: true });
 	await dialog.getByRole('textbox', { name: 'Function name', exact: true }).fill('CUSTOM_EXAMPLE');
 	await dialog.getByRole('textbox', { name: 'Script', exact: true }).fill('CUSTOM|FIELD=1');
 	await dialog
@@ -3784,7 +3784,7 @@ test('Device Example CRUD keeps the selected Device and list context', async ({ 
 	});
 
 	await page.getByRole('button', { name: 'Edit example 32', exact: true }).click();
-	dialog = page.getByRole('dialog', { name: 'Edit example', exact: true });
+	dialog = page.getByRole('dialog', { name: 'Edit Example', exact: true });
 	await expect(
 		dialog.getByRole('button', { name: 'Device / Interface: WIFI_TEST', exact: true })
 	).toBeEnabled();
@@ -3799,7 +3799,7 @@ test('Device Example CRUD keeps the selected Device and list context', async ({ 
 	await expect(page.getByText('Updated in Device context', { exact: true })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Delete example 32', exact: true }).click();
-	const confirmation = page.getByRole('alertdialog', { name: 'Delete example', exact: true });
+	const confirmation = page.getByRole('alertdialog', { name: 'Delete Example', exact: true });
 	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
 	await expect(page.getByRole('row').filter({ hasText: 'CUSTOM_EXAMPLE' })).toHaveCount(0);
 	expect(mutations.map((mutation) => mutation.method)).toEqual(['POST', 'PUT', 'DELETE']);
@@ -3877,7 +3877,7 @@ test('Device Function Examples prefill Function and preserve Global ownership', 
 	const functionExamples = page.getByRole('region', { name: 'Function examples', exact: true });
 	const deviceExamples = page.getByRole('region', { name: 'WIFI_TEST examples', exact: true });
 	await functionExamples.getByRole('button', { name: 'New example', exact: true }).click();
-	let dialog = page.getByRole('dialog', { name: 'New example', exact: true });
+	let dialog = page.getByRole('dialog', { name: 'New Example', exact: true });
 	await expect(dialog).toContainText('Function: DLL / TX_MULTI_VERIFICATION');
 	await expect(dialog).toContainText('Device: WIFI_TEST');
 	await dialog.getByRole('textbox', { name: 'Script', exact: true }).fill('TX|ANT=3');
@@ -3902,7 +3902,7 @@ test('Device Function Examples prefill Function and preserve Global ownership', 
 		exact: true
 	});
 	await globalExamples.getByRole('button', { name: 'Edit Global example 42', exact: true }).click();
-	dialog = page.getByRole('dialog', { name: 'Edit example', exact: true });
+	dialog = page.getByRole('dialog', { name: 'Edit Example', exact: true });
 	await expect(
 		dialog.getByRole('button', {
 			name: 'Device / Interface: Global (no Device / Interface)',
@@ -3915,7 +3915,7 @@ test('Device Function Examples prefill Function and preserve Global ownership', 
 	expect(mutations[1]).toMatchObject({ method: 'PUT', body: { device_name: '' } });
 
 	await deviceExamples.getByRole('button', { name: 'Delete example 41', exact: true }).click();
-	const confirmation = page.getByRole('alertdialog', { name: 'Delete example', exact: true });
+	const confirmation = page.getByRole('alertdialog', { name: 'Delete Example', exact: true });
 	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
 	await expect(deviceExamples.getByText('Device transmit example', { exact: true })).toHaveCount(0);
 	expect(mutations.map((mutation) => mutation.method)).toEqual(['POST', 'PUT', 'DELETE']);
@@ -4158,7 +4158,7 @@ test('Examples workspace CRUD preserves filters and selects a valid record after
 	const detail = page.getByRole('region', { name: 'Example details', exact: true });
 	await expect(detail.getByText('Original Global meaning', { exact: true })).toBeVisible();
 	await detail.getByRole('button', { name: 'Edit Global example', exact: true }).click();
-	let dialog = page.getByRole('dialog', { name: 'Edit example', exact: true });
+	let dialog = page.getByRole('dialog', { name: 'Edit Example', exact: true });
 	await dialog.getByRole('textbox', { name: 'Meaning', exact: true }).fill('Edited Global meaning');
 	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(detail.getByText('Edited Global meaning', { exact: true })).toBeVisible();
@@ -4167,7 +4167,7 @@ test('Examples workspace CRUD preserves filters and selects a valid record after
 	expect(mutations[0]).toMatchObject({ method: 'PUT', body: { device_name: '' } });
 
 	await page.getByRole('button', { name: 'New example', exact: true }).click();
-	dialog = page.getByRole('dialog', { name: 'New example', exact: true });
+	dialog = page.getByRole('dialog', { name: 'New Example', exact: true });
 	await expect(dialog).toContainText('Global - shared across Devices');
 	await dialog.getByRole('textbox', { name: 'Function name', exact: true }).fill('RX_PER');
 	await dialog.getByRole('textbox', { name: 'Script', exact: true }).fill('DLL|RX_PER|WINDOW=20');
@@ -4176,7 +4176,7 @@ test('Examples workspace CRUD preserves filters and selects a valid record after
 	await expect(page).toHaveURL(/device=_global.*function_name=RX_PER.*example=52/);
 
 	await page.getByRole('button', { name: 'New example', exact: true }).click();
-	dialog = page.getByRole('dialog', { name: 'New example', exact: true });
+	dialog = page.getByRole('dialog', { name: 'New Example', exact: true });
 	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(dialog.getByText('Function name is required.', { exact: true })).toBeVisible();
 	await dialog.getByRole('textbox', { name: 'Function name', exact: true }).fill('RX_PER');
@@ -4190,7 +4190,7 @@ test('Examples workspace CRUD preserves filters and selects a valid record after
 	});
 
 	await page.getByRole('button', { name: 'Delete Global example', exact: true }).click();
-	const confirmation = page.getByRole('alertdialog', { name: 'Delete example', exact: true });
+	const confirmation = page.getByRole('alertdialog', { name: 'Delete Example', exact: true });
 	await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
 	await expect(page).toHaveURL(/device=_global.*function_name=RX_PER.*example=52/);
 	await expect(detail.getByText('Edited Global meaning', { exact: true })).toBeVisible();
@@ -4704,7 +4704,7 @@ test('Composer adds its step to an existing sequence from the Sequence entry poi
 	);
 	await page.goto('/devices/WIFI_TEST?tab=functions');
 	await page.getByRole('button', { name: 'Compose script', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'Script composer' });
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
 	await expect(dialog).toBeVisible();
 	await dialog.getByText('Add to sequence').click();
 	await expect(dialog.getByRole('link', { name: 'sequences', exact: true })).toHaveAttribute(
@@ -5128,7 +5128,7 @@ test('Creating a missing Function for an Example refreshes the report and remove
 	await orphanRow(page, 'TX|LEGACY=1')
 		.getByRole('button', { name: 'Create missing Function', exact: true })
 		.click();
-	const dialog = page.getByRole('dialog', { name: 'Create function DLL/LEGACY_TX', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'Create Function DLL/LEGACY_TX', exact: true });
 	await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('LEGACY_TX');
 	await expect(dialog.getByText('Example', { exact: true })).toBeVisible();
 	await expect(dialog.getByText('WIFI_TEST', { exact: true })).toBeVisible();
@@ -5310,7 +5310,7 @@ test('Orphan report keeps long identities in local scrolling on desktop, mobile 
 	await orphanRow(page, store.examples[0].script)
 		.getByRole('button', { name: 'Create missing Function', exact: true })
 		.click();
-	await expect(page.getByRole('dialog', { name: /^Create function/ })).toBeVisible();
+	await expect(page.getByRole('dialog', { name: /^Create Function/ })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('orphan-repair-390-dark.png') });
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -5481,7 +5481,7 @@ test('UI controls: searchable dropdown works inside a modal without submitting i
 	await mockDeviceHub(page);
 	await page.goto('/devices');
 	await page.getByRole('button', { name: 'Create device', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'Create device', exact: true });
+	const dialog = page.getByRole('dialog', { name: 'Create Device', exact: true });
 	const trigger = dialog.getByRole('button', { name: 'Type', exact: true });
 	await trigger.click();
 	const popup = page.getByRole('dialog', { name: 'Choose Type', exact: true });
@@ -5789,7 +5789,10 @@ for (const noun of ['parameter', 'criteria'] as const) {
 		await expect.poll(() => updates.at(-1)?.required).toBe(true);
 		await expect(checkbox).toBeChecked();
 		await page.getByRole('button', { name: `Attach ${noun}`, exact: true }).click();
-		const dialog = page.getByRole('dialog', { name: `Attach ${noun}`, exact: true });
+		const dialog = page.getByRole('dialog', {
+			name: `Attach ${noun[0].toUpperCase()}${noun.slice(1)}`,
+			exact: true
+		});
 		const field = dialog.getByRole('checkbox', { name: 'Required', exact: true });
 		await expect(field).not.toBeChecked();
 		await dialog.locator('label[for="add-required"]').click();
@@ -5828,7 +5831,7 @@ for (const theme of ['light', 'dark'] as const) {
 			.press('Enter');
 		const edit = page.getByRole('button', { name: 'Edit function', exact: true });
 		await edit.press('Enter');
-		const dialog = page.getByRole('dialog', { name: 'Edit function #1', exact: true });
+		const dialog = page.getByRole('dialog', { name: 'Edit Function #1', exact: true });
 		await expect(dialog.locator(':focus')).toHaveCount(1);
 		await page.keyboard.press('Escape');
 		await expect(dialog).toHaveCount(0);
@@ -5856,12 +5859,12 @@ for (const theme of ['light', 'dark'] as const) {
 		await expect(actions).toBeVisible();
 		const attach = page.getByRole('button', { name: 'Attach parameter', exact: true });
 		await attach.press('Enter');
-		await expect(page.getByRole('dialog', { name: 'Attach parameter', exact: true })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'Attach Parameter', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(attach).toBeFocused();
 		const compose = page.getByRole('button', { name: 'Compose script', exact: true });
 		await compose.press('Enter');
-		const composer = page.getByRole('dialog', { name: 'Script composer', exact: true });
+		const composer = page.getByRole('dialog', { name: 'Script Composer', exact: true });
 		await expect(composer.locator('code')).toHaveText('SERVER_EMITTED_SCRIPT');
 		await expect(composer.getByRole('alert')).toHaveCount(0);
 		await page.screenshot({ path: test.info().outputPath(`composer-keyboard-${theme}.png`) });

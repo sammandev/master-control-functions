@@ -65,7 +65,7 @@ test('combobox: search, arrow down and Enter commit the link', async ({ page, re
 	await page.getByRole('tab', { name: 'Parameters' }).click();
 	await page.getByRole('button', { name: 'Attach parameter' }).click();
 
-	const dialog = page.getByRole('dialog', { name: 'Attach parameter' });
+	const dialog = page.getByRole('dialog', { name: 'Attach Parameter' });
 	await expect(dialog).toBeVisible();
 
 	// Click into the picker: focus opens the listbox with the first page
@@ -106,7 +106,7 @@ test('combobox: Escape dismisses the listbox but keeps the dialog', async ({ pag
 	await page.getByRole('tab', { name: 'Parameters' }).click();
 	await page.getByRole('button', { name: 'Attach parameter' }).click();
 
-	const dialog = page.getByRole('dialog', { name: 'Attach parameter' });
+	const dialog = page.getByRole('dialog', { name: 'Attach Parameter' });
 	await expect(dialog).toBeVisible();
 
 	const input = dialog.getByRole('combobox', { name: 'Definition' });
@@ -137,7 +137,7 @@ test('combobox: empty results reach inline creation without leaving the dialog',
 	await page.getByRole('tab', { name: 'Parameters' }).click();
 	await page.getByRole('button', { name: 'Attach parameter' }).click();
 
-	const dialog = page.getByRole('dialog', { name: 'Attach parameter' });
+	const dialog = page.getByRole('dialog', { name: 'Attach Parameter' });
 	await expect(dialog).toBeVisible();
 
 	const input = dialog.getByRole('combobox', { name: 'Definition' });

@@ -339,13 +339,13 @@
 			<pre class="emitted-preview"><code>{emit.text}</code></pre>
 			{#if emit.steps.some((s) => !s.resolved || Object.keys(s.errors).length > 0)}
 				<p class="muted">
-					Flagged steps were left out of the emitted text — fix or re-link them below.
+					Flagged steps were left out of the emitted text: fix or re-link them below.
 				</p>
 			{/if}
 		{:else if emitFailed}
 			<p class="muted">Emitted text could not be loaded.</p>
 		{:else}
-			<p class="muted">No step emits cleanly — fix the flagged steps below.</p>
+			<p class="muted">No step emits cleanly: fix the flagged steps below.</p>
 		{/if}
 	</section>
 
@@ -486,19 +486,19 @@
 						<dl class="step-fields">
 							<div>
 								<dt>Timeout-ms</dt>
-								<dd>{step.timeout_ms || '—'}</dd>
+								<dd>{step.timeout_ms || 'Not set'}</dd>
 							</div>
 							<div>
 								<dt>Flow</dt>
-								<dd>{step.flow || '—'}</dd>
+								<dd>{step.flow || 'Not set'}</dd>
 							</div>
 							<div>
 								<dt>On-fail</dt>
-								<dd>{step.on_fail || '—'}</dd>
+								<dd>{step.on_fail || 'Not set'}</dd>
 							</div>
 							<div>
 								<dt>Device</dt>
-								<dd>{step.device_name || '—'}</dd>
+								<dd>{step.device_name || 'Not set'}</dd>
 							</div>
 							{#if step.note}
 								<div class="step-note">
