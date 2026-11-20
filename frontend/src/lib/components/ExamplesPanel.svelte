@@ -305,7 +305,8 @@
 							{/if}
 						</TableCell>
 					{/if}
-					<TableCell class="text-muted-foreground text-xs">{row.device_name || '—'}</TableCell>
+					<TableCell class="text-muted-foreground text-xs">{row.device_name || 'Not set'}</TableCell
+					>
 					<TableCell class="max-w-[420px] font-mono text-xs break-words whitespace-pre-wrap">
 						{row.script}
 						{#if usageFields}

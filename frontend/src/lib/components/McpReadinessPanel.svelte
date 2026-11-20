@@ -266,7 +266,7 @@
 				{#if report.grammar}
 					Audited by {report.grammar.audited_by} on {report.grammar.audited_at.slice(0, 10)}.
 				{:else}
-					Not audited — script-audit-mcp will not compose this function.
+					Not audited: script-audit-mcp will not compose this function.
 				{/if}
 				Raw needs convention 1; named needs convention 2.
 			</p>

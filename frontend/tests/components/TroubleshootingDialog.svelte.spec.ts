@@ -44,6 +44,22 @@ async function renderDialog() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('TroubleshootingDialog accessibility', () => {
+	it('orders problem context fields for rapid triage', async () => {
+		await renderDialog();
+		const section = document.querySelector('.form-section');
+		const labels = Array.from(section?.querySelectorAll('label') ?? []).map((label) =>
+			label.textContent?.replace(/\s+/g, ' ').trim()
+		);
+		expect(labels).toEqual([
+			'Solution / Manifestation Title *',
+			'Error Code / Problem Tag',
+			'Device / Interface Scope',
+			'Related Function Name',
+			'Testing Stage / Category',
+			'Severity'
+		]);
+	});
+
 	it('renders structured field errors and wires every invalid control to an exact error id', async () => {
 		const fetchMock = vi.fn(
 			async () =>

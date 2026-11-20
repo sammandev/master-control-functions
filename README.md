@@ -4,38 +4,84 @@ CRUD web application over the script-definition knowledge. Go (Fiber) backend, S
 
 For the SQLite transfer, credential setup, database verification, and rollback, use [the deployment runbook](deploy/README.md#3-transfer-and-verify-sqlite-first). The agent has prepared the code; the user runs database operations on the approved Ubuntu host.
 
-For the paired backend/frontend Docker release with Bun builds and isolated blue-green switching, use [the Ubuntu deployment runbook](deploy/README.md). Transfer and verify the existing SQLite catalog before the first release; PostgreSQL is currently empty.
+For the paired backend/frontend Docker release with Bun builds and isolated blue-green switching, use [the Ubuntu deployment runbook](deploy/README.md). Before the first production release, transfer and verify the existing SQLite catalog into the approved target PostgreSQL database.
 
 See `CONTEXT.md` for domain vocabulary, `docs/adr/` for architectural decisions, and `.scratch/<feature>/` for the spec and tickets of each feature (for example `.scratch/device-vocabulary-registry/`).
 
-## Development
+## Local Development
 
-Prerequisites: Go 1.27+ (`go version`), Node 24+ (`node --version`), pnpm 12 (canonical frontend package manager, auto-pinned via the `packageManager` field + corepack). [Bun](https://bun.sh) (optional) can substitute for npm/pnpm as a *script runner* — see below.
+Prerequisites: Go 1.27+ (`go version`), Node 24+ (`node --version`), pnpm 12.6+ (`pnpm --version`), and a development PostgreSQL database.
+
+### 1. Start PostgreSQL and configure the backend
+
+The Go backend does not load `.env` files automatically. A local values file may contain the individual `DB_*` values, but `DATABASE_URL` must use Go/pgx syntax:
+
+```text
+postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=disable
+```
+
+The existing `backend/.env.dev` is suitable only as a source of local `DB_*` components. Its `postgresql+psycopg://` `DATABASE_URL` is for SQLAlchemy and is rejected by the Go backend.
+
+From the repository root in PowerShell, load the local component values and build a process-local Go URL:
 
 ```powershell
-# Build the frontend (outputs to frontend/build)
+Get-Content backend/.env.dev | ForEach-Object {
+    $line = $_.Trim()
+    if ($line -and -not $line.StartsWith('#') -and $line -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+        $value = $matches[2].Trim().Trim('"').Trim("'")
+        [Environment]::SetEnvironmentVariable($matches[1], $value, 'Process')
+    }
+}
+$user = [Uri]::EscapeDataString($env:DB_USER)
+$password = [Uri]::EscapeDataString($env:DB_PASSWORD)
+$database = [Uri]::EscapeDataString($env:DB_NAME)
+$env:DATABASE_URL = "postgresql://${user}:${password}@$($env:DB_HOST):$($env:DB_PORT)/${database}?sslmode=disable"
+```
+
+Use `sslmode=disable` only for an existing local/loopback PostgreSQL connection. Do not print, commit, or share a credential-bearing `DATABASE_URL`. The `.env*` pattern is gitignored except for examples.
+
+### 2. Start the backend
+
+Keep this terminal open:
+
+```powershell
+go -C backend run -mod=readonly ./cmd/server -addr 127.0.0.1:8088
+```
+
+The server applies embedded PostgreSQL migrations at startup. On this workstation, `DATABASE_URL` must point to the development catalog only. Check `http://127.0.0.1:8088/health`; a healthy backend returns `{"status":"ok","db":"ok"}`.
+
+### 3. Start the frontend
+
+In a second terminal:
+
+```powershell
 cd frontend
-pnpm install
-pnpm build
-
-# Type-check the frontend
-pnpm check
+pnpm install --frozen-lockfile
+pnpm dev --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-The backend requires `DATABASE_URL`, with `PGPASSWORD` or a secret-managed URL supplying the password. Verified TLS is the default; `PGSSLROOTCERT` selects a private CA certificate. Run database-backed commands only on the approved off-machine host:
+Open `http://127.0.0.1:5173`. Vite proxies `/api` to `http://127.0.0.1:8088`. Set `BACKEND_URL` before `pnpm dev` only when the API runs at a different address.
 
-```bash
-rtk proxy go -C backend build -o webprogfndb-server ./cmd/server
-export TEST_DATABASE_URL="$DATABASE_URL"
-rtk proxy go -C backend test ./...
-rtk proxy ./backend/webprogfndb-server -addr 127.0.0.1:8080 -web frontend/build
+### 4. Run local checks
+
+```powershell
+go -C backend test ./...
+go -C backend vet ./...
+pnpm --dir frontend check
+pnpm --dir frontend exec eslint .
+pnpm --dir frontend exec vitest run --project server --project client
 ```
 
-Integration tests create isolated PostgreSQL schemas. Without `TEST_DATABASE_URL` they skip, which does not establish database compatibility. Build, vet, and format checks do not execute database tests and can run on the restricted Windows host.
+For database-backed Go tests, set `TEST_DATABASE_URL` to a disposable PostgreSQL database. The tests create and drop isolated schemas, but do not use the production catalog:
 
-The SQLite transfer command and its regression fixtures require `-tags sqlite_migration`, used only on the approved Ubuntu host. Normal builds exclude the SQLite engine. The cutover procedure includes the tagged build and test commands.
+```powershell
+$env:TEST_DATABASE_URL = $env:DATABASE_URL
+go -C backend test ./internal/api ./internal/db ./tests/api -count=1 -v -run Troubleshooting
+```
 
-The server logs the schema version without logging credentials. `GET /health` returns `{"status":"ok","db":"ok"}` when the database is reachable. The old `-db` startup flag is removed.
+Full Playwright E2E tests reset data through `/api/import/reset`, so use a separate disposable database for `E2E_DATABASE_URL`; do not point that variable at the normal development catalog. The SQLite transfer suite still requires the `sqlite_migration` tag and must follow the approved [deployment runbook](deploy/README.md).
+
+The server logs the schema version without logging credentials. The old `-db` startup flag is removed.
 
 ### Bun as an optional script runner (ADR-0007)
 
@@ -61,33 +107,43 @@ sqlc (v1.31.1, run via `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generat
 
 ### End-to-end tests
 
-A Playwright suite drives the real UI served by the Go server against a disposable PostgreSQL database seeded through `/api/import/reset`. Set `E2E_DATABASE_URL` explicitly; the suite refuses an absent URL and does not reuse an existing server. Never point it at the production catalog: reset overwrites knowledge rows. Database-backed E2E runs are off-machine only. Happy paths include search, editing links, composition, orphans, sequences, and devices.
+A Playwright suite drives the real UI served by the Go server against a disposable PostgreSQL database seeded through `/api/import/reset`. Set `E2E_DATABASE_URL` explicitly; the suite refuses an absent URL and does not reuse an existing server. Never point it at the production or normal development catalog: reset overwrites knowledge rows.
 
 ```powershell
 # One-time setup
 cd frontend
-pnpm install
+pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
-pnpm build        # the suite serves frontend/build through the Go server
+pnpm build
 
-# Run the smoke suite only on the approved host with E2E_DATABASE_URL set
+# In PowerShell, point this at a separate disposable database.
+$env:E2E_DATABASE_URL = 'postgresql://USER:PASSWORD@HOST:PORT/DISPOSABLE_DATABASE?sslmode=disable'
 pnpm test:e2e
 
-# Traces are kept for failed runs:
+# Failed-run traces:
 pnpm exec playwright show-trace test-results/<failing-test>/trace.zip
 ```
 
+For the production-equivalent SQLite transfer gate, use the approved Ubuntu host and the `deploy/README.md` procedure.
+
 ### Full Verification
 
-Run on the approved host after setting `TEST_DATABASE_URL` and a separate disposable `E2E_DATABASE_URL`:
+Local database and frontend gates:
+
+```powershell
+$env:TEST_DATABASE_URL = $env:DATABASE_URL
+go -C backend test ./...
+pnpm --dir frontend check
+pnpm --dir frontend exec eslint .
+pnpm --dir frontend exec vitest run --project server --project client
+pnpm --dir frontend build
+```
+
+For the full reset-based Playwright run, add a separate disposable `E2E_DATABASE_URL` and run `pnpm --dir frontend test:e2e`. For SQLite migration coverage on the approved host:
 
 ```bash
 set -e
-rtk proxy go -C backend test -tags sqlite_migration ./...
-cd frontend
-pnpm check
-pnpm build
-pnpm test:e2e
+go -C backend test -tags sqlite_migration ./...
 ```
 
 The E2E suite serves `frontend/build`, so the build step keeps it from driving a stale UI bundle.

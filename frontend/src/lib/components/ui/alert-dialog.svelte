@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { AlertDialog } from 'bits-ui';
 	import Button from './button.svelte';
+	import { dialogTitleCase } from '#lib/utils.ts';
 	import type { Snippet } from 'svelte';
 
 	// Accessible destructive confirmation (ticket 02), replacing every
@@ -36,16 +37,20 @@
 	<AlertDialog.Portal>
 		<AlertDialog.Overlay class="bg-overlay/45 fixed inset-0 z-50" />
 		<AlertDialog.Content
-			class="border-border bg-card fixed top-12 left-1/2 z-50 w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 rounded-lg border p-5 shadow-lg"
+			class="border-border bg-card fixed top-12 left-1/2 z-50 flex max-h-[calc(100dvh-6rem)] w-[calc(100%-2rem)] max-w-[440px] -translate-x-1/2 flex-col overflow-hidden rounded-lg border p-5 shadow-lg"
 		>
-			<AlertDialog.Title class="mb-2 text-base font-semibold">{title}</AlertDialog.Title>
+			<AlertDialog.Title class="mb-2 text-base font-semibold"
+				>{dialogTitleCase(title)}</AlertDialog.Title
+			>
 			{#if description}
 				<AlertDialog.Description class="text-muted-foreground text-[13px]"
 					>{description}</AlertDialog.Description
 				>
 			{/if}
-			{@render children?.()}
-			<div class="mt-4 flex justify-end gap-2">
+			<div class="alert-dialog-body min-h-0 flex-1 overflow-y-auto overscroll-contain">
+				{@render children?.()}
+			</div>
+			<div class="mt-4 flex shrink-0 justify-end gap-2">
 				<AlertDialog.Cancel>
 					{#snippet child({ props })}
 						<Button {...props} variant="outline">{cancelLabel}</Button>

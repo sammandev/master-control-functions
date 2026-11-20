@@ -1,4 +1,4 @@
-// Typed client and AI-context formatter for the Troubleshooting Playbook & AI Knowledge Base.
+// Typed client and AI-context formatter for the Troubleshooting Guides & AI Knowledge Base.
 // Multiple guides can share the same error_code, function_name, or device_name because one
 // error code or symptom can manifest in multiple ways with distinct step-by-step solutions.
 import { ApiError, request } from './client';
@@ -329,13 +329,13 @@ export function formatTroubleshootingAiContext(
 	}
 
 	if (relatedGuides.length > 0) {
-		lines.push(`## Alternative Solutions for This Problem / Error Code (${relatedGuides.length})`);
+		lines.push(`## Alternative Solutions (${relatedGuides.length})`);
 		lines.push(
-			'> Note: This error code or function can manifest in multiple ways. If the steps above do not resolve the issue, inspect these sibling guides:'
+			'> Note: This error code or function can manifest in multiple ways. If the steps above do not resolve the issue, inspect these alternative guides:'
 		);
 		for (const sibling of relatedGuides) {
 			lines.push(
-				`- **[Guide #${sibling.id}] ${sibling.title}** (${sibling.error_code || sibling.function_name}, Device: ${sibling.device_name || 'Global'}) — Symptom: ${sibling.symptom} | Root Cause: ${sibling.root_cause}`
+				`- **[Guide #${sibling.id}] ${sibling.title}** (${sibling.error_code || sibling.function_name}, Device: ${sibling.device_name || 'Global'}): Symptom: ${sibling.symptom} | Root Cause: ${sibling.root_cause}`
 			);
 		}
 		lines.push('');

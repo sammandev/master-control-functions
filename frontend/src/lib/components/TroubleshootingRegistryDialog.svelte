@@ -275,12 +275,15 @@
 <Dialog
 	{open}
 	{onOpenChange}
-	title="Manage troubleshooting lists"
+	title="Manage Troubleshooting Lists"
 	description="Edit labels, descriptions, display order, and severity tones."
 	class="max-w-[880px]"
 >
 	<Tabs.Root bind:value={tab} activationMode="automatic">
-		<Tabs.List aria-label="Troubleshooting lists" class="mb-4 grid w-full grid-cols-2">
+		<Tabs.List
+			aria-label="Troubleshooting lists"
+			class="bg-card sticky top-0 z-10 mb-4 grid w-full grid-cols-2 py-1"
+		>
 			<Tabs.Trigger value="category">Categories</Tabs.Trigger>
 			<Tabs.Trigger value="severity">Severities</Tabs.Trigger>
 		</Tabs.List>

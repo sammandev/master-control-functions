@@ -99,7 +99,7 @@
 	const dialogDescription = $derived(
 		mode === 'alternate'
 			? 'A single error code or function can fail in multiple ways. The problem tags below are pre-filled so this guide is automatically linked as an alternative solution.'
-			: 'Document the symptom, root cause, and step-by-step verification playbook for operators and AI diagnostic context.'
+			: 'Document the symptom, root cause, and step-by-step verification guides.'
 	);
 
 	function addStep() {
@@ -246,6 +246,57 @@
 					{/if}
 				</div>
 
+				<div class="grid gap-1.5 sm:col-span-2">
+					<label for="guide-error-code" class="text-foreground text-xs font-semibold">
+						Error Code / Problem Tag
+					</label>
+					<Input
+						id="guide-error-code"
+						bind:value={errorCode}
+						class="font-mono"
+						placeholder="e.g. E00WI005638 or IoT_TX1_FIXTURE_OR_DUT_PROBLEM_POW"
+					/>
+					<span class="text-muted-foreground text-[11px]">
+						Multiple guides can share the same Error Code to document different causes.
+					</span>
+				</div>
+
+				<div class="grid gap-1.5">
+					<label for="guide-device" class="text-foreground text-xs font-semibold">
+						Device / Interface Scope
+					</label>
+					<DevicePicker
+						id="guide-device"
+						label="Device / Interface Scope"
+						blankLabel="Global (All Devices)"
+						device={deviceName}
+						summaries={deviceSummaries}
+						invalid={Boolean(fieldErrors.device_name)}
+						describedBy={fieldErrors.device_name ? 'guide-device-error' : undefined}
+						fullWidth
+						onValueChange={(d) => {
+							deviceName = d;
+						}}
+					/>
+					{#if fieldErrors.device_name}
+						<span id="guide-device-error" class="text-destructive text-xs"
+							>{fieldErrors.device_name}</span
+						>
+					{/if}
+				</div>
+
+				<div class="grid gap-1.5">
+					<label for="guide-function-name" class="text-foreground text-xs font-semibold">
+						Related Function Name
+					</label>
+					<Input
+						id="guide-function-name"
+						bind:value={functionName}
+						class="font-mono"
+						placeholder="e.g. TX_MULTI_VERIFICATION, SENDSTR_AND_WAITSTR, MAIN_FLOW"
+					/>
+				</div>
+
 				<div class="grid gap-1.5">
 					<label for="guide-category" class="text-foreground text-xs font-semibold">
 						Testing Stage / Category
@@ -287,63 +338,12 @@
 						>
 					{/if}
 				</div>
-
-				<div class="grid gap-1.5">
-					<label for="guide-device" class="text-foreground text-xs font-semibold">
-						Device / Interface Scope
-					</label>
-					<DevicePicker
-						id="guide-device"
-						label="Device / Interface Scope"
-						blankLabel="Global (All Devices)"
-						device={deviceName}
-						summaries={deviceSummaries}
-						invalid={Boolean(fieldErrors.device_name)}
-						describedBy={fieldErrors.device_name ? 'guide-device-error' : undefined}
-						fullWidth
-						onValueChange={(d) => {
-							deviceName = d;
-						}}
-					/>
-					{#if fieldErrors.device_name}
-						<span id="guide-device-error" class="text-destructive text-xs"
-							>{fieldErrors.device_name}</span
-						>
-					{/if}
-				</div>
-
-				<div class="grid gap-1.5">
-					<label for="guide-error-code" class="text-foreground text-xs font-semibold">
-						Error Code / Problem Tag
-					</label>
-					<Input
-						id="guide-error-code"
-						bind:value={errorCode}
-						class="font-mono"
-						placeholder="e.g. ERRCODE:104 or *V:Section-Key#"
-					/>
-					<span class="text-muted-foreground text-[11px]">
-						Multiple guides can share the same Error Code to document different causes.
-					</span>
-				</div>
-
-				<div class="grid gap-1.5 sm:col-span-2">
-					<label for="guide-function-name" class="text-foreground text-xs font-semibold">
-						Related Function or Flow Name (optional)
-					</label>
-					<Input
-						id="guide-function-name"
-						bind:value={functionName}
-						class="font-mono"
-						placeholder="e.g. TX_MULTI_VERIFICATION, SENDSTR_AND_WAITSTR, MAIN_FLOW"
-					/>
-				</div>
 			</div>
 		</section>
 
 		<section class="form-section border-border bg-background/50 rounded-md border p-3.5">
 			<h3 class="text-foreground text-xs font-semibold tracking-wider uppercase">
-				2. Diagnostic Summary (Used by Operators & AI Context)
+				2. Diagnostic Summary
 			</h3>
 			<div class="mt-2.5 grid gap-3">
 				<div class="grid gap-1.5">
@@ -384,7 +384,7 @@
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<div>
 					<h3 class="text-foreground text-xs font-semibold tracking-wider uppercase">
-						3. Step-by-Step Resolution Playbook ({steps.length})
+						3. Step-by-Step Resolution Guide ({steps.length})
 					</h3>
 					<p class="text-muted-foreground text-[11px]">
 						Break the fix into clear, verifiable steps. Include optional INI / script examples.

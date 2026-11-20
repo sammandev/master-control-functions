@@ -65,11 +65,12 @@
 		guide.steps.filter((step) => completedPositions.includes(step.position)).length
 	);
 
-	function severityVariant(
-		severity: TroubleshootingSeverity
-	): 'destructive' | 'warn' | 'default' | 'outline' {
+	function severityOutlineClass(severity: TroubleshootingSeverity): string {
 		const tone = severityTone(severity, severities);
-		return tone === 'destructive' || tone === 'warn' || tone === 'default' ? tone : 'outline';
+		if (tone === 'destructive') return 'severity-badge border-destructive text-destructive';
+		if (tone === 'warn') return 'severity-badge border-warn text-warn';
+		if (tone === 'default') return 'severity-badge border-primary text-primary';
+		return 'severity-badge border-border text-muted-foreground';
 	}
 
 	async function copyAiContext() {
@@ -82,7 +83,7 @@
 	<header class="detail-head border-border bg-card rounded-lg border p-4">
 		<div class="detail-head-top">
 			<div class="badge-row">
-				<Badge variant={severityVariant(guide.severity)}
+				<Badge variant="outline" class={severityOutlineClass(guide.severity)}
 					>{severityLabel(guide.severity, severities)}</Badge
 				>
 				<Badge variant="outline">{categoryLabel(guide.category, categories)}</Badge>
@@ -92,7 +93,7 @@
 						<button
 							type="button"
 							class="error-code-pill border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 focus-visible:ring-ring rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none"
-							title="Filter playbook by {guide.error_code}"
+							title="Filter Guides by {guide.error_code}"
 							onclick={() => onFilterErrorCode(guide.error_code)}
 						>
 							{guide.error_code}
@@ -141,19 +142,22 @@
 
 	{#if relatedGuides.length > 0}
 		<section
-			aria-label="Alternative solutions for this problem or error code"
+			aria-label="Alternative Solutions"
 			class="border-primary/25 bg-primary/5 rounded-lg border p-3.5"
 		>
-			<div class="flex flex-wrap items-center justify-between gap-2">
+			<div class="flex flex-col gap-1">
 				<div class="flex items-center gap-2">
 					<Layers size={15} class="text-primary shrink-0" />
-					<h3 class="text-foreground text-xs font-semibold tracking-wide uppercase">
-						Alternative Solutions for This Problem / Error Code ({relatedGuides.length})
+					<h3
+						class="alternative-solutions-title text-foreground text-xs font-semibold tracking-wide uppercase"
+					>
+						Alternative Solutions ({relatedGuides.length})
 					</h3>
 				</div>
-				<span class="text-muted-foreground text-xs">
-					One error code or symptom can have multiple causes — switch solution below if needed:
-				</span>
+				<p class="text-muted-foreground text-xs">
+					One error code or symptom can have multiple causes. Choose another solution below if
+					needed.
+				</p>
 			</div>
 			<div class="mt-2.5 grid gap-2 sm:grid-cols-2">
 				{#each relatedGuides as sibling (sibling.id)}
@@ -165,7 +169,7 @@
 						<div class="flex w-full items-center justify-between gap-2">
 							<span class="text-foreground line-clamp-1 text-xs font-semibold">{sibling.title}</span
 							>
-							<Badge variant={severityVariant(sibling.severity)}>
+							<Badge variant="outline" class={severityOutlineClass(sibling.severity)}>
 								{severityLabel(sibling.severity, severities)}
 							</Badge>
 						</div>

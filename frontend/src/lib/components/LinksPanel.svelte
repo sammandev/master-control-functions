@@ -48,7 +48,7 @@
 	// One tab of the function detail page (ticket 04): the link rows of one
 	// dictionary for one function. kind picks the link endpoint, defKind the
 	// dictionary the searchable dropdown and inline creation write to.
-	// Fully on the wrapper layer as of the polish step (ticket 08) — the
+	// Fully on the wrapper layer as of the polish step (ticket 08): the
 	// scoped style block is gone.
 	let {
 		fnId,
@@ -113,7 +113,7 @@
 	// mode 'pick': searchable dropdown over existing definitions.
 	// mode 'inline': create a new definition and link it in one flow.
 	// mode 'resolve' (ticket 05): create the missing definition behind an
-	// unresolved link row — the link itself already exists.
+	// unresolved link row: the link itself already exists.
 	let addMode = $state<'pick' | 'inline' | 'resolve'>('pick');
 	let pickName = $state('');
 	let inlineForm = $state<DefinitionInput>(emptyInlineForm());
@@ -202,7 +202,7 @@
 		addOpen = true;
 	}
 
-	// Attach by picking (name) or inline (definition object) — the server
+	// Attach by picking (name) or inline (definition object): the server
 	// validates and, for inline, creates + links atomically. In resolve
 	// mode only the definition is created.
 	async function attach() {
@@ -439,7 +439,7 @@
 					{/if}
 				{:else}
 					<TableRow>
-						<TableCell class="text-muted-foreground text-xs">{row.position ?? '—'}</TableCell>
+						<TableCell class="text-muted-foreground text-xs">{row.position ?? 'Not set'}</TableCell>
 						<TableCell>
 							{row.name}
 							{#if !row.resolved}
@@ -462,7 +462,7 @@
 									{row.device_name}
 								</a>
 							{:else}
-								—
+								:
 							{/if}
 						</TableCell>
 						<TableCell>
@@ -536,7 +536,7 @@
 	onOpenChange={(o) => (addOpen = o)}
 	title={addMode === 'resolve' ? `Create missing ${noun} definition` : `Attach ${noun}`}
 	description={addMode === 'resolve'
-		? 'Creating this definition resolves the unresolved link in place — the link row keeps its device and position.'
+		? 'Creating this definition resolves the unresolved link in place: the link row keeps its device and position.'
 		: ''}
 >
 	{#if addMode !== 'resolve'}
