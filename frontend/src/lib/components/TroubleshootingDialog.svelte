@@ -27,7 +27,6 @@
 	import Input from '#lib/components/ui/input.svelte';
 	import StructuredTextEditor from '#lib/components/StructuredTextEditor.svelte';
 	import TroubleshootingRegistryPicker from '#lib/components/TroubleshootingRegistryPicker.svelte';
-	import Textarea from '#lib/components/ui/textarea.svelte';
 
 	export type TroubleshootingDialogMode = 'create' | 'edit' | 'alternate';
 
@@ -196,7 +195,7 @@
 	{onOpenChange}
 	title={dialogTitle}
 	description={dialogDescription}
-	class="max-w-[780px]"
+	class={mode === 'create' ? 'max-w-[880px]' : 'max-w-[780px]'}
 >
 	<form class="guide-form" onsubmit={handleSubmit}>
 		{#if mode === 'alternate' && initialGuide}
@@ -346,6 +345,10 @@
 			<h3 class="text-foreground text-xs font-semibold tracking-wider uppercase">
 				2. Diagnostic Summary
 			</h3>
+			<p id="guide-list-hint" class="text-muted-foreground mt-1 text-xs">
+				Start a line with <code>-</code> or <code>1.</code> followed by a space to make a list. Press
+				Enter twice to finish the list.
+			</p>
 			<div class="mt-2.5 grid gap-3">
 				<div class="grid gap-1.5">
 					<label for="guide-symptom" class="text-foreground text-xs font-semibold">
@@ -357,7 +360,7 @@
 						bind:value={symptom}
 						placeholder="What does the test engineer see in the runner log, console, or measurement report?"
 						aria-invalid={fieldErrors.symptom ? 'true' : undefined}
-						aria-describedby={fieldErrors.symptom ? 'guide-symptom-error' : undefined}
+						aria-describedby={fieldErrors.symptom ? 'guide-symptom-error' : 'guide-list-hint'}
 						required
 					/>
 					{#if fieldErrors.symptom}
@@ -375,6 +378,7 @@
 						id="guide-root-cause"
 						rows={3}
 						bind:value={rootCause}
+						aria-describedby="guide-list-hint"
 						placeholder="Why does this happen in the MCV2 script, INI configuration, DUT firmware, or RF station?"
 					/>
 				</div>
@@ -477,7 +481,7 @@
 									aria-invalid={fieldErrors[`steps.${idx}.instruction`] ? 'true' : undefined}
 									aria-describedby={fieldErrors[`steps.${idx}.instruction`]
 										? `step-instruction-error-${idx}`
-										: undefined}
+										: 'guide-list-hint'}
 									required
 								/>
 								{#if fieldErrors[`steps.${idx}.instruction`]}
@@ -492,11 +496,12 @@
 									<label for="step-snippet-{idx}" class="text-foreground text-xs font-semibold">
 										Script Line / INI Snippet (optional)
 									</label>
-									<Textarea
+									<StructuredTextEditor
 										id="step-snippet-{idx}"
 										rows={2}
 										class="font-mono text-xs"
 										bind:value={step.script_snippet}
+										aria-describedby="guide-list-hint"
 										placeholder="DLL:WIFI_TEST,TX_MULTI_VERIFICATION,..."
 									/>
 								</div>
@@ -508,10 +513,11 @@
 									>
 										Expected Verification Result (optional)
 									</label>
-									<Textarea
+									<StructuredTextEditor
 										id="step-verification-{idx}"
 										rows={2}
 										bind:value={step.verification}
+										aria-describedby="guide-list-hint"
 										placeholder="How to confirm this step solved the problem."
 									/>
 								</div>

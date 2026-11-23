@@ -1,29 +1,26 @@
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { describe, expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import StructuredText from '../../src/lib/components/StructuredText.svelte';
 import StructuredTextEditor from '../../src/lib/components/StructuredTextEditor.svelte';
 
 describe('StructuredTextEditor', () => {
-	test('converts the selected textarea lines to bullets and numbered lists', async () => {
+	test('continues typed list markers and exits when the next item is empty', async () => {
 		await render(StructuredTextEditor, {
 			id: 'structured-notes',
-			'aria-label': 'Troubleshooting notes',
-			value: 'Inspect DUT\nRetry flow'
+			'aria-label': 'Troubleshooting notes'
 		});
 		const textarea = page.getByRole('textbox', { name: 'Troubleshooting notes' });
-		const selectAll = () => {
-			const element = textarea.element() as HTMLTextAreaElement;
-			element.setSelectionRange(0, element.value.length);
-		};
-		selectAll();
-
-		await page.getByRole('button', { name: 'Bulleted list' }).click();
-		await expect.element(textarea).toHaveValue('- Inspect DUT\n- Retry flow');
-
-		selectAll();
-		await page.getByRole('button', { name: 'Numbered list' }).click();
-		await expect.element(textarea).toHaveValue('1. Inspect DUT\n2. Retry flow');
+		await textarea.click();
+		await userEvent.keyboard('- Inspect DUT{Enter}Retry flow{Enter}{Enter}');
+		await expect.element(textarea).toHaveValue('- Inspect DUT\n- Retry flow\n');
+		await userEvent.keyboard('1. Reconnect{Enter}Retest{Enter}{Backspace}');
+		await expect
+			.element(textarea)
+			.toHaveValue('- Inspect DUT\n- Retry flow\n1. Reconnect\n2. Retest\n');
+		await expect
+			.element(page.getByRole('button', { name: /bulleted list|numbered list/i }))
+			.not.toBeInTheDocument();
 	});
 });
 

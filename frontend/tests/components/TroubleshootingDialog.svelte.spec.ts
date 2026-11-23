@@ -46,8 +46,8 @@ afterEach(() => vi.unstubAllGlobals());
 describe('TroubleshootingDialog accessibility', () => {
 	it('orders problem context fields for rapid triage', async () => {
 		await renderDialog();
-		expect(document.querySelectorAll('button[aria-label="Bulleted list"]')).toHaveLength(3);
-		expect(document.querySelectorAll('button[aria-label="Numbered list"]')).toHaveLength(3);
+		expect(document.querySelectorAll('button[aria-label="Bulleted list"]')).toHaveLength(0);
+		expect(document.querySelectorAll('button[aria-label="Numbered list"]')).toHaveLength(0);
 		const section = document.querySelector('.form-section');
 		const labels = Array.from(section?.querySelectorAll('label') ?? []).map((label) =>
 			label.textContent?.replace(/\s+/g, ' ').trim()

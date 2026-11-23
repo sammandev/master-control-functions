@@ -7,7 +7,6 @@
 		GitBranchPlus,
 		Layers,
 		Pencil,
-		RotateCcw,
 		Sparkles,
 		Trash2
 	} from '@lucide/svelte';
@@ -28,16 +27,12 @@
 	import StructuredText from '#lib/components/StructuredText.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
-	import Checkbox from '#lib/components/ui/checkbox.svelte';
 
 	let {
 		guide,
 		relatedGuides = [],
 		categories = [],
 		severities = [],
-		completedPositions = [],
-		onChecklistChange,
-		onResetChecklist,
 		onSelectGuide,
 		onFilterErrorCode,
 		onAddAlternate,
@@ -48,23 +43,12 @@
 		relatedGuides?: TroubleshootingGuideListItem[];
 		categories?: TroubleshootingCategory[];
 		severities?: RegistrySeverity[];
-		completedPositions?: number[];
-		onChecklistChange: (position: number, checked: boolean) => void;
-		onResetChecklist: () => void;
 		onSelectGuide: (id: number) => void;
 		onFilterErrorCode?: (errorCode: string) => void;
 		onAddAlternate: (guide: TroubleshootingGuideDetail) => void;
 		onEdit: (guide: TroubleshootingGuideDetail) => void;
 		onDelete: (guide: TroubleshootingGuideDetail) => void;
 	} = $props();
-
-	function isStepChecked(position: number): boolean {
-		return completedPositions.includes(position);
-	}
-
-	const completedCount = $derived(
-		guide.steps.filter((step) => completedPositions.includes(step.position)).length
-	);
 
 	function severityOutlineClass(severity: TroubleshootingSeverity): string {
 		const tone = severityTone(severity, severities);
@@ -216,100 +200,70 @@
 		</section>
 	</div>
 
-	<section class="border-border bg-card rounded-lg border p-4">
-		<div class="checklist-header">
-			<div>
-				<h3 class="text-foreground text-sm font-semibold">Step-by-Step Resolution Checklist</h3>
-				<p class="text-muted-foreground text-xs">
-					Check off each diagnostic step as you verify it on the DUT or station.
-				</p>
-			</div>
-			<div class="flex items-center gap-2">
-				<Badge variant={completedCount === guide.steps.length ? 'default' : 'outline'}>
-					<CheckCircle2 size={12} class="mr-1" />
-					{completedCount} / {guide.steps.length} completed
-				</Badge>
-				{#if completedCount > 0}
-					<Button variant="ghost" size="sm" onclick={onResetChecklist}>
-						<RotateCcw size={13} />
-						<span>Reset progress</span>
-					</Button>
-				{/if}
-			</div>
+	<section class="border-border bg-card rounded-lg border p-4" aria-labelledby="resolution-heading">
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<h3 id="resolution-heading" class="text-foreground text-sm font-semibold">
+				Step-by-Step Resolution Guide
+			</h3>
+			<span class="text-muted-foreground text-xs">
+				{guide.steps.length}
+				{guide.steps.length === 1 ? 'step' : 'steps'}
+			</span>
 		</div>
 
-		<ol class="mt-3.5 grid list-none gap-3 p-0">
+		<ol role="list" class="mt-3.5 grid list-none gap-3 p-0">
 			{#each guide.steps as step (step.position)}
-				{@const checked = isStepChecked(step.position)}
-				<li
-					class={[
-						'step-card border-border rounded-md border p-3.5 transition-colors',
-						checked ? 'bg-accent/35 border-primary/35' : 'bg-background'
-					]}
-				>
-					<div class="flex items-start gap-3">
-						<div class="pt-0.5">
-							<Checkbox
-								{checked}
-								aria-label="Mark step {step.position}: {step.title} as completed"
-								onCheckedChange={(v) => onChecklistChange(step.position, v === true)}
-							/>
-						</div>
-						<div class="min-w-0 flex-1">
-							<div class="flex flex-wrap items-center gap-2">
-								<span
-									class="bg-primary/10 text-primary inline-flex items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold"
-								>
-									Step {step.position}
-								</span>
-								<h4
-									class={[
-										'text-foreground text-sm font-semibold',
-										checked && 'text-muted-foreground line-through'
-									]}
-								>
-									{step.title}
-								</h4>
-							</div>
-
-							<StructuredText text={step.instruction} class="mt-1.5" />
-
-							{#if step.script_snippet}
-								<div class="border-border bg-card mt-2.5 overflow-hidden rounded border">
-									<div
-										class="border-border bg-muted/40 flex items-center justify-between border-b px-2.5 py-1"
-									>
-										<span class="text-muted-foreground font-mono text-[11px]">
-											Script / INI Reference
-										</span>
-										<Button
-											variant="ghost"
-											size="sm"
-											class="h-6 px-2 text-xs"
-											onclick={() => copyText(step.script_snippet)}
-										>
-											<Copy size={12} />
-											<span>Copy</span>
-										</Button>
-									</div>
-									<pre
-										class="text-foreground m-0 overflow-x-auto p-2.5 font-mono text-xs leading-relaxed">{step.script_snippet}</pre>
-								</div>
-							{/if}
-
-							{#if step.verification}
-								<div
-									class="border-border bg-accent/30 text-foreground mt-2.5 flex items-start gap-2 rounded border px-2.5 py-1.5 text-xs"
-								>
-									<CheckCircle2 size={14} class="text-primary mt-0.5 shrink-0" />
-									<div>
-										<span class="font-semibold">Expected Verification:</span>
-										<span class="text-muted-foreground ml-1">{step.verification}</span>
-									</div>
-								</div>
-							{/if}
-						</div>
+				<li class="step-card border-border bg-background min-w-0 rounded-md border p-3.5">
+					<div class="flex flex-wrap items-center gap-2">
+						<span
+							class="bg-primary/10 text-primary inline-flex items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold"
+						>
+							Step {step.position}
+						</span>
+						<h4 class="text-foreground text-sm font-semibold">
+							{step.title}
+						</h4>
 					</div>
+
+					<StructuredText text={step.instruction} class="mt-1.5" />
+
+					{#if step.script_snippet}
+						<div class="border-border bg-card mt-2.5 overflow-hidden rounded border">
+							<div
+								class="border-border bg-muted/40 flex items-center justify-between border-b px-2.5 py-1"
+							>
+								<span class="text-muted-foreground font-mono text-[11px]">
+									Script / INI Reference
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="h-6 px-2 text-xs"
+									onclick={() => copyText(step.script_snippet)}
+								>
+									<Copy size={12} />
+									<span>Copy</span>
+								</Button>
+							</div>
+							<pre
+								class="text-foreground m-0 overflow-x-auto p-2.5 font-mono text-xs leading-relaxed">{step.script_snippet}</pre>
+						</div>
+					{/if}
+
+					{#if step.verification}
+						<div
+							class="border-border bg-accent/30 text-foreground mt-2.5 flex items-start gap-2 rounded border px-2.5 py-1.5 text-xs"
+						>
+							<CheckCircle2 size={14} class="text-primary mt-0.5 shrink-0" />
+							<div class="min-w-0">
+								<p class="font-semibold">Expected Verification:</p>
+								<StructuredText
+									text={step.verification}
+									class="text-muted-foreground mt-0.5 gap-1 text-xs"
+								/>
+							</div>
+						</div>
+					{/if}
 				</li>
 			{/each}
 		</ol>
@@ -340,13 +294,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 		gap: 12px;
-	}
-	.checklist-header {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
 	}
 	.error-code-pill {
 		cursor: pointer;
