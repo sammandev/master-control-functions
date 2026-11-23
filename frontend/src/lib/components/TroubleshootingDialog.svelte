@@ -31,6 +31,7 @@
 	import Button from '#lib/components/ui/button.svelte';
 	import Dialog from '#lib/components/ui/dialog.svelte';
 	import Input from '#lib/components/ui/input.svelte';
+	import Textarea from '#lib/components/ui/textarea.svelte';
 	import StructuredTextEditor from '#lib/components/StructuredTextEditor.svelte';
 	import TroubleshootingRegistryPicker from '#lib/components/TroubleshootingRegistryPicker.svelte';
 
@@ -559,12 +560,11 @@
 									<label for="step-snippet-{idx}" class="text-foreground text-xs font-semibold">
 										Script Line / INI Snippet (optional)
 									</label>
-									<StructuredTextEditor
+									<Textarea
 										id="step-snippet-{idx}"
 										rows={2}
 										class="font-mono text-xs"
 										bind:value={step.script_snippet}
-										aria-describedby="guide-list-hint"
 										placeholder="DLL:WIFI_TEST,TX_MULTI_VERIFICATION,..."
 									/>
 								</div>
