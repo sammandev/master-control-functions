@@ -93,3 +93,42 @@ for (const [kind, title] of [
 		});
 	});
 }
+
+test('creating a function the active search excludes clears the search and selects it', async ({
+	page
+}) => {
+	await page.goto('/functions?search=TX_MULTI_VERIFICATION');
+	const details = page.getByRole('region', { name: 'Function details' });
+	await expect(details.getByRole('heading', { name: 'TX_MULTI_VERIFICATION' })).toBeVisible();
+
+	await page.getByRole('button', { name: 'New function', exact: true }).click();
+	const name = 'ZZZ_E2E_SEARCH_HIDDEN_FUNCTION';
+	await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill(name);
+	const id = await saveAndReadId(page, '/api/functions');
+
+	await expect(details.getByRole('heading', { name, level: 2 })).toBeVisible();
+	const query = new URL(page.url()).searchParams;
+	expect(query.get('search')).toBeNull();
+	expect(query.get('function')).toBe(String(id));
+});
+
+test('creating a definition outside the picked Device scope moves to its scope and selects it', async ({
+	page
+}) => {
+	await page.goto('/parameter-definitions?device=WIFI_TEST');
+	const details = page.getByRole('region', { name: 'Definition details' });
+	await expect(details.getByRole('heading', { level: 2 })).toBeVisible();
+
+	await page.getByRole('button', { name: 'New', exact: true }).click();
+	const name = 'zzz_e2e_scope_hidden_definition';
+	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('Name', { exact: true }).fill(name);
+	await dialog.getByLabel('Device / Interface').click();
+	await page.getByRole('option', { name: /^Global/ }).click();
+	const id = await saveAndReadId(page, '/api/parameter-definitions');
+
+	await expect(details.getByRole('heading', { name, level: 2 })).toBeVisible();
+	const query = new URL(page.url()).searchParams;
+	expect(query.get('device')).toBe('_global');
+	expect(query.get('definition')).toBe(String(id));
+});
