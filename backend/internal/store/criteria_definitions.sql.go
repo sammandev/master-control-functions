@@ -15,10 +15,16 @@ SELECT COUNT(*) FROM criteria_definitions
 WHERE ($1::text IS NULL
        OR lower(name) LIKE lower($1::text)
        OR lower(description) LIKE lower($1::text))
+  AND ($2::text IS NULL OR device_name = $2::text)
 `
 
-func (q *Queries) CountCriteriaDefinitions(ctx context.Context, search sql.NullString) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countCriteriaDefinitions, search)
+type CountCriteriaDefinitionsParams struct {
+	Search     sql.NullString
+	DeviceName sql.NullString
+}
+
+func (q *Queries) CountCriteriaDefinitions(ctx context.Context, arg CountCriteriaDefinitionsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCriteriaDefinitions, arg.Search, arg.DeviceName)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -164,11 +170,17 @@ SELECT id, name, description, type, unit, default_value, allowed_values, cardina
 WHERE ($1::text IS NULL
        OR lower(name) LIKE lower($1::text)
        OR lower(description) LIKE lower($1::text))
+  AND ($2::text IS NULL OR device_name = $2::text)
 ORDER BY id
 `
 
-func (q *Queries) ListCriteriaDefinitions(ctx context.Context, search sql.NullString) ([]CriteriaDefinition, error) {
-	rows, err := q.db.QueryContext(ctx, listCriteriaDefinitions, search)
+type ListCriteriaDefinitionsParams struct {
+	Search     sql.NullString
+	DeviceName sql.NullString
+}
+
+func (q *Queries) ListCriteriaDefinitions(ctx context.Context, arg ListCriteriaDefinitionsParams) ([]CriteriaDefinition, error) {
+	rows, err := q.db.QueryContext(ctx, listCriteriaDefinitions, arg.Search, arg.DeviceName)
 	if err != nil {
 		return nil, err
 	}

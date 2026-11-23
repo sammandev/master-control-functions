@@ -6,13 +6,15 @@ SELECT * FROM parameter_definitions
 WHERE (sqlc.narg('search')::text IS NULL
        OR lower(name) LIKE lower(sqlc.narg('search')::text)
        OR lower(description) LIKE lower(sqlc.narg('search')::text))
+  AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text)
 ORDER BY id;
 
 -- name: CountParameterDefinitions :one
 SELECT COUNT(*) FROM parameter_definitions
 WHERE (sqlc.narg('search')::text IS NULL
        OR lower(name) LIKE lower(sqlc.narg('search')::text)
-       OR lower(description) LIKE lower(sqlc.narg('search')::text));
+       OR lower(description) LIKE lower(sqlc.narg('search')::text))
+  AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text);
 
 -- name: InsertParameterDefinition :one
 INSERT INTO parameter_definitions (

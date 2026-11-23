@@ -54,6 +54,7 @@ export async function listDefinitions(
 	kind: DefinitionKind,
 	params: {
 		search?: string;
+		device?: string;
 		sort?: string;
 		order?: 'asc' | 'desc';
 		page?: number;
@@ -63,6 +64,7 @@ export async function listDefinitions(
 ): Promise<DefinitionListResult> {
 	const qs = new URLSearchParams();
 	if (params.search) qs.set('search', params.search);
+	if (params.device !== undefined) qs.set('device', params.device);
 	if (params.sort) qs.set('sort', params.sort);
 	if (params.order) qs.set('order', params.order);
 	if (params.page) qs.set('page', String(params.page));

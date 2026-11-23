@@ -30,8 +30,10 @@
 	let search = $derived(routePage.url.searchParams.get('search') ?? '');
 	const params = $derived.by(() => {
 		const query = routePage.url.searchParams;
+		const device = query.get('device');
 		return {
 			search: query.get('search') || undefined,
+			device: device === '_global' ? '' : (device ?? undefined),
 			sort: ['name', 'type', 'updated_at'].includes(query.get('sort') ?? '')
 				? query.get('sort')!
 				: 'name',
@@ -57,12 +59,11 @@
 	onMount(() => {
 		void loadDevices();
 	});
-	const requestKey = $derived(JSON.stringify({ kind, params, deviceFilter, retry }));
+	const requestKey = $derived(JSON.stringify({ kind, params, retry }));
 	let revision = 0;
 	const content = $derived.by(() => {
-		const request: { kind: DefinitionKind; params: typeof params; deviceFilter: string | null } =
-			JSON.parse(requestKey);
-		return load(request.kind, request.params, request.deviceFilter);
+		const request: { kind: DefinitionKind; params: typeof params } = JSON.parse(requestKey);
+		return load(request.kind, request.params);
 	});
 	function setQuery(key: string, value: string, reset = true, replaceState = false) {
 		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
@@ -93,49 +94,28 @@
 	});
 
 	onDestroy(() => clearTimeout(searchTimer));
-	async function scopedDefinitions(
-		endpoint: DefinitionKind,
-		query: Omit<typeof params, 'page'>,
-		device: string,
-		stale = () => false
-	) {
-		const first = await listDefinitions(endpoint, { ...query, page: 1, page_size: 100 });
-		const rows = [...first.items];
-		for (let next = 2; rows.length < first.total; next++) {
-			if (stale()) return null;
-			const more = await listDefinitions(endpoint, { ...query, page: next, page_size: 100 });
-			if (!more.items.length) throw new Error('The definition list changed. Please retry.');
-			rows.push(...more.items);
-		}
-		return rows.filter((row) => row.device_name === (device === '_global' ? '' : device));
-	}
 	// The page holding the definition under query and device, or null when they hide it.
-	async function definitionPage(
-		query: Omit<typeof params, 'page'>,
-		device: string | null,
-		id: number
-	) {
-		if (device === null) {
-			const result = await listDefinitions(kind, { ...query, definition_id: id });
-			return result.items.some((item) => item.id === id) ? result.page : null;
-		}
-		const rows = (await scopedDefinitions(kind, query, device)) ?? [];
-		const index = rows.findIndex((item) => item.id === id);
-		return index < 0 ? null : Math.floor(index / query.page_size) + 1;
+	async function definitionPage(query: typeof params, id: number) {
+		const result = await listDefinitions(kind, { ...query, definition_id: id });
+		return result.items.some((item) => item.id === id) ? result.page : null;
 	}
 	async function selectCreatedDefinition(row: DefinitionRow) {
 		clearTimeout(searchTimer);
 		const from = routePage.url.href;
 		const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
-		let device = deviceFilter;
-		let found = await definitionPage(params, device, row.id);
+		const query = params;
+		let found = await definitionPage(query, row.id);
 		if (found === null) {
 			location.delete('search');
-			if (device !== null) {
-				device = row.device_name || '_global';
-				location.set('device', device);
-			}
-			found = await definitionPage({ ...params, search: undefined }, device, row.id);
+			if (query.device !== undefined) location.set('device', row.device_name || '_global');
+			found = await definitionPage(
+				{
+					...query,
+					search: undefined,
+					device: query.device === undefined ? undefined : row.device_name
+				},
+				row.id
+			);
 		}
 		if (routePage.url.href !== from) return;
 		if (found === null) throw new Error('The saved definition is no longer available.');
@@ -146,16 +126,9 @@
 		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
 		await goto(resolve(`${kind}?${location.toString()}`), { reset: false });
 	}
-	async function load(endpoint: DefinitionKind, query: typeof params, device: string | null) {
+	async function load(endpoint: DefinitionKind, query: typeof params) {
 		const attempt = ++revision;
-		let result;
-		if (device === null) result = await listDefinitions(endpoint, query);
-		else {
-			const matches = await scopedDefinitions(endpoint, query, device, () => attempt !== revision);
-			if (!matches) return { items: [], total: 0 };
-			const start = (query.page - 1) * query.page_size;
-			result = { items: matches.slice(start, start + query.page_size), total: matches.length };
-		}
+		const result = await listDefinitions(endpoint, query);
 		if (attempt !== revision) return result;
 		const last = Math.max(1, Math.ceil(result.total / query.page_size));
 		if (query.page > last) {

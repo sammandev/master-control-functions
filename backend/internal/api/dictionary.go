@@ -173,8 +173,8 @@ func valueParsesAs(defType, v string) bool {
 // dictionaryRoutes bundles the shared pieces one dictionary's handlers need.
 type dictionaryRoutes[T any] struct {
 	get   func(c fiber.Ctx, id int64) (T, error)
-	list  func(c fiber.Ctx, search *string) ([]T, error)
-	count func(c fiber.Ctx, search *string) (int64, error)
+	list  func(c fiber.Ctx, search, deviceName sql.NullString) ([]T, error)
+	count func(c fiber.Ctx, search, deviceName sql.NullString) (int64, error)
 	// usage returns (total, orphaned): links referencing the definition by
 	// (name, device_name), and how many of those point at a missing
 	// Function (ADR-0003). ADR-0009 makes the count scope-aware: a scoped
@@ -256,15 +256,18 @@ func (r dictionaryRoutes[T]) create() fiber.Handler {
 func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		lq := parseListQuery(c)
-		var search *string
+		var search, deviceName sql.NullString
 		if pattern := likePattern(lq.search); pattern != "" {
-			search = &pattern
+			search = nullStrPtr(&pattern)
 		}
-		total, err := r.count(c, search)
+		if args := c.RequestCtx().QueryArgs(); args.Has("device") {
+			deviceName = sql.NullString{String: string(args.Peek("device")), Valid: true}
+		}
+		total, err := r.count(c, search, deviceName)
 		if err != nil {
 			return serverError(c, "count definitions", err)
 		}
-		items, err := r.list(c, search)
+		items, err := r.list(c, search, deviceName)
 		if err != nil {
 			return serverError(c, "list definitions", err)
 		}
@@ -397,11 +400,15 @@ func registerParameterDictionary(app *fiber.App, q *store.Queries) {
 		get: func(c fiber.Ctx, id int64) (store.ParameterDefinition, error) {
 			return q.GetParameterDefinition(c.Context(), id)
 		},
-		list: func(c fiber.Ctx, search *string) ([]store.ParameterDefinition, error) {
-			return q.ListParameterDefinitions(c.Context(), nullStrPtr(search))
+		list: func(c fiber.Ctx, search, deviceName sql.NullString) ([]store.ParameterDefinition, error) {
+			return q.ListParameterDefinitions(c.Context(), store.ListParameterDefinitionsParams{
+				Search: search, DeviceName: deviceName,
+			})
 		},
-		count: func(c fiber.Ctx, search *string) (int64, error) {
-			return q.CountParameterDefinitions(c.Context(), nullStrPtr(search))
+		count: func(c fiber.Ctx, search, deviceName sql.NullString) (int64, error) {
+			return q.CountParameterDefinitions(c.Context(), store.CountParameterDefinitionsParams{
+				Search: search, DeviceName: deviceName,
+			})
 		},
 		usage: func(c context.Context, name, deviceName string) (int64, int64, error) {
 			// ADR-0009 scope-aware count: a scoped definition (device_name !=
@@ -478,11 +485,15 @@ func registerCriteriaDictionary(app *fiber.App, q *store.Queries) {
 		get: func(c fiber.Ctx, id int64) (store.CriteriaDefinition, error) {
 			return q.GetCriteriaDefinition(c.Context(), id)
 		},
-		list: func(c fiber.Ctx, search *string) ([]store.CriteriaDefinition, error) {
-			return q.ListCriteriaDefinitions(c.Context(), nullStrPtr(search))
+		list: func(c fiber.Ctx, search, deviceName sql.NullString) ([]store.CriteriaDefinition, error) {
+			return q.ListCriteriaDefinitions(c.Context(), store.ListCriteriaDefinitionsParams{
+				Search: search, DeviceName: deviceName,
+			})
 		},
-		count: func(c fiber.Ctx, search *string) (int64, error) {
-			return q.CountCriteriaDefinitions(c.Context(), nullStrPtr(search))
+		count: func(c fiber.Ctx, search, deviceName sql.NullString) (int64, error) {
+			return q.CountCriteriaDefinitions(c.Context(), store.CountCriteriaDefinitionsParams{
+				Search: search, DeviceName: deviceName,
+			})
 		},
 		usage: func(c context.Context, name, deviceName string) (int64, int64, error) {
 			// ADR-0009 scope-aware count: see the parameter dictionary's
