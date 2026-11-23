@@ -29,6 +29,7 @@
 		updateSequence,
 		type SequenceListItem
 	} from '#lib/sequences.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 
 	// Script composer dialog (ticket 07): form generated from the
 	// function's parameter links in position order, live preview of the
@@ -204,10 +205,12 @@
 	let seqSaving = $state(false);
 	let seqNoteSaved = $state('');
 	let seqError = $state('');
+	const sequenceListGuard = createLatestRequestGuard();
 
 	// Reload on every open: a sequence may have been created since the
 	// dialog was last shown.
 	async function reloadSequences() {
+		const request = sequenceListGuard.begin();
 		try {
 			const pageSize = 100;
 			const first = await listSequences({ page: 1, page_size: pageSize });
@@ -217,9 +220,9 @@
 				const result = await listSequences({ page, page_size: pageSize });
 				items.push(...result.items);
 			}
-			seqs = items;
+			if (sequenceListGuard.isCurrent(request)) seqs = items;
 		} catch {
-			seqs = [];
+			if (sequenceListGuard.isCurrent(request)) seqs = [];
 		}
 	}
 
@@ -247,12 +250,13 @@
 		try {
 			const step = stepFromForm();
 			if (seqPick === 'new') {
-				await createSequence({
+				const created = await createSequence({
 					name: seqNewName.trim(),
 					description: seqNewDesc,
 					steps: [step]
 				});
-				seqNoteSaved = `Created sequence '${seqNewName.trim()}' with this step.`;
+				await reloadSequences();
+				seqNoteSaved = `Created sequence '${created.name}' with this step.`;
 			} else {
 				const id = Number(seqPick);
 				const current = await getSequence(id);

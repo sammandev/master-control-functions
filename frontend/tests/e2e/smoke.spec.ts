@@ -361,6 +361,58 @@ test('sequence: emit, reorder and add a composer step', async ({ page, request }
 	await expect(page).toHaveURL(/\/sequences$/);
 });
 
+test('Composer can select a sequence it just created without reopening the section', async ({
+	page,
+	request
+}) => {
+	const seqName = 'New Composer sequence';
+	const created = await request.post('/api/sequences', {
+		data: {
+			name: 'Existing Composer sequence',
+			description: '',
+			steps: [
+				{
+					function_source: 'DLL',
+					function_interface: 'WIFI_TEST',
+					function_name: 'TX_MULTI_VERIFICATION'
+				}
+			]
+		}
+	});
+	expect(created.status()).toBe(201);
+	const { id: existingId } = (await created.json()) as { id: number };
+	let newId: number | undefined;
+
+	try {
+		await page.goto(fnPath);
+		await page.getByRole('button', { name: 'Compose script' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+		await dialog.getByText('Add to sequence').click();
+		const target = dialog.getByRole('button', { name: 'Target sequence' });
+		await expect(target).toBeVisible();
+		await dialog.getByLabel('Sequence name').fill(seqName);
+
+		const creation = page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname === '/api/sequences' &&
+				response.request().method() === 'POST'
+		);
+		await dialog.getByRole('button', { name: 'Create sequence with this step' }).click();
+		const response = await creation;
+		expect(response.status()).toBe(201);
+		newId = ((await response.json()) as { id: number }).id;
+		await expect(dialog.getByText(`Created sequence '${seqName}' with this step.`)).toBeVisible();
+
+		await target.click();
+		const picker = page.getByRole('dialog', { name: 'Choose Target sequence' });
+		await picker.getByRole('option', { name: `${seqName} (1 steps)` }).click({ timeout: 5000 });
+		await expect(target).toHaveText(`${seqName} (1 steps)`);
+	} finally {
+		if (newId !== undefined) await request.delete(`/api/sequences/${newId}`);
+		await request.delete(`/api/sequences/${existingId}`);
+	}
+});
+
 test('Composer can find and append to a sequence beyond the first 100', async ({
 	page,
 	request
