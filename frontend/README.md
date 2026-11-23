@@ -8,16 +8,16 @@ For the paired Docker release, follow [the blue-green runbook](../deploy/README.
 
 - Node.js 24 or newer.
 - pnpm 12.6.0, pinned in [package.json](package.json). Use pnpm for installation and keep [pnpm-lock.yaml](pnpm-lock.yaml) as the only lockfile. Include [pnpm-workspace.yaml](pnpm-workspace.yaml), which owns transitive security overrides.
-- The [Go backend](../backend/README.md) for live `/api` workflows. It may use the explicitly configured local development PostgreSQL catalog; production still runs on Ubuntu.
-- Nginx on Ubuntu only for deployment.
+- The [Go backend](../backend/README.md) on the approved Ubuntu host for live `/api` workflows.
+- Nginx on Ubuntu for deployment.
 
-Commands in the local sections run from `frontend/` unless the command is shown with `--dir` from the repository root.
+Commands in the local sections run from `frontend/`. Server deployment and database-backed tests are operator-run on Ubuntu. Do not install or connect to a database on the restricted Windows workstation.
 
 ## Environment
 
 The browser calls same-origin `/api`. No public API URL or database environment variable is required for development/build/deployment. Never put database credentials in `PUBLIC_*` or `VITE_*` variables, which may be exposed in the client bundle.
 
-[.env.example](.env.example) is only for database-backed Playwright tests. A `localhost:5432` URL points to PostgreSQL on the machine running the Go backend. It must select a disposable E2E database because the suite resets data. This is not frontend runtime configuration. Leave database URLs in the backend terminal or protected environment file; never add them to `PUBLIC_*`/`VITE_*`, and do not copy `.env` into `build/`.
+[.env.example](.env.example) is only for database-backed Playwright tests on Ubuntu. A `localhost:5432` URL refers to PostgreSQL on that approved host and selects a disposable E2E database. It is not frontend runtime configuration. Never add database credentials to `PUBLIC_*`/`VITE_*`, and do not copy `.env` into `build/`.
 
 ## Device Workspace
 
@@ -44,24 +44,14 @@ The production workspaces share the approved Device visual language: full-width 
 
 ## Local Development
 
-First configure and start the local Go backend on `127.0.0.1:8088` using the [backend local-development steps](../backend/README.md#local-build-and-development). The backend migrates the selected development database during startup, so verify `DATABASE_URL` before running it.
-
-Then install and start Vite:
+Install dependencies and run Vite for static UI, unit, and mocked-API work:
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm dev --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-Open `http://127.0.0.1:5173`. Vite proxies `/api` to `http://127.0.0.1:8088`. To target another local backend, set `BACKEND_URL` in the Vite terminal before `pnpm dev`.
-
-For an Ubuntu development backend instead, use an SSH tunnel that exposes its API as local port `8088`:
-
-```sh
-ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:8088:127.0.0.1:8088 <ssh-user>@<ubuntu-host>
-```
-
-Keep that tunnel private and running while using Vite. If it deliberately targets a deployed backend on port `24993`, change only the tunnel's remote port; real CRUD/import operations then affect the deployed database.
+Open `http://127.0.0.1:5173`. Workflows that call `/api` require an operator-managed approved backend; the agent does not start, tunnel to, or connect that backend from this workstation.
 
 ## Dependency Maintenance
 
@@ -97,7 +87,7 @@ Production serves static files through Go/Nginx, not a SvelteKit Node server. Th
 | TypeScript 6 -> 7      | Currently blocked by `typescript-eslint` 8.72.1's declared peer range, `>=4.8.4 <6.1.0`. Wait for compatible lint/parser tooling and verify `svelte-check`, generated declarations, and build configuration; do not force past this peer constraint. |
 | `@types/node` 24 -> 26 | Keep types aligned with the documented Node 24 toolchain. Newer types can allow APIs that the actual build runtime does not provide; upgrading types alone does not upgrade Node or Bun.                                                             |
 
-Keep these two upgrades deferred until the runtime and lint toolchain support them. A latest-version install alone does not demonstrate compatibility or eliminate the unpatched `deepmerge` advisory. Run full database-backed E2E validation only with a separate disposable `E2E_DATABASE_URL`, locally or on Ubuntu.
+Keep these two upgrades deferred until the runtime and lint toolchain support them. A latest-version install alone does not demonstrate compatibility or eliminate the unpatched `deepmerge` advisory. Run full database-backed E2E validation only with a separate disposable `E2E_DATABASE_URL` on the approved Ubuntu host.
 
 ### SvelteKit 3 Compatibility
 
@@ -123,7 +113,7 @@ pnpm build
 pnpm preview --host 127.0.0.1 --port 4173 --strictPort
 ```
 
-The build is written to `build/`; preview opens at `http://127.0.0.1:4173`. Vite preview inherits the configured `/api` proxy to `127.0.0.1:8088`, so keep the same local backend or SSH tunnel running for live workflows. Do not use `pnpm dev` or `pnpm preview` as the Ubuntu production server.
+The build is written to `build/`; preview opens at `http://127.0.0.1:4173`. Vite preview does not provide a database-backed API on the restricted workstation. Use the mocked test suite for local browser validation, and do not use `pnpm dev` or `pnpm preview` as the Ubuntu production server.
 
 ## Ubuntu Deployment
 
@@ -200,18 +190,9 @@ Visual contracts check the prototype's card geometry, typography, section tabs, 
 
 For static-bundle verification, run `pnpm build`, start `pnpm preview --host 127.0.0.1 --port 4174 --strictPort`, and run the UI suite with `CI` unset. If port `4174` is occupied, choose another and set `PLAYWRIGHT_UI_PORT` to match. Restart the preview after rebuilding. API responses are mocked for this run.
 
-For the full E2E suite, configure a separate disposable database and export `E2E_DATABASE_URL`. The suite may run against a disposable local PostgreSQL catalog on this workstation, but it resets database contents. Never point it at the normal development or production catalog.
+For the full E2E suite, the approved Ubuntu operator configures a separate disposable database and exports `E2E_DATABASE_URL`. Never point it at the production catalog. The reset-based suite must not run on the restricted Windows workstation.
 
-PowerShell:
-
-```powershell
-$env:E2E_DATABASE_URL = 'postgresql://USER:PASSWORD@HOST:PORT/DISPOSABLE_DATABASE?sslmode=disable'
-pnpm exec playwright install chromium
-pnpm build
-pnpm test:e2e
-```
-
-Bash/Ubuntu equivalent:
+On Ubuntu:
 
 ```bash
 set -a
@@ -230,4 +211,4 @@ E2E starts its own backend on `127.0.0.1:8123` and resets database contents. Do 
 - Nginx `502`: check backend health on `127.0.0.1:24993` and the backend service logs.
 - Static `403` or missing scripts: check the Nginx build path, read/traverse permissions and whether the full build was published.
 - Deep-link refresh fails: retain `try_files $uri $uri/ /index.html` and the generated fallback file.
-- Browser calls fail during development/preview: check the backend or SSH tunnel on `127.0.0.1:8088`, or set `BACKEND_URL` to the actual local API address.
+- Browser `/api` calls fail during local preview: use the mocked UI suite on the restricted workstation; ask the approved operator to inspect the live Ubuntu backend when API validation is required.

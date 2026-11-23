@@ -51,6 +51,45 @@ func TestTroubleshootingCRUDAndMultiSolutionPerErrorCode(t *testing.T) {
 	if resp.StatusCode != 200 || !strings.Contains(listBody, `"total":3`) {
 		t.Fatalf("expected 3 guides for ERRCODE:104, got %d (%s)", resp.StatusCode, listBody)
 	}
+
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(createdBody), &created); err != nil {
+		t.Fatalf("decode created guide: %v (%s)", err, createdBody)
+	}
+	updatePayload := `{
+		"title":"Updated 6GHz troubleshooting guide",
+		"category":"measurement",
+		"severity":"warning",
+		"device_name":"WIFI_TEST",
+		"function_name":"TX_MULTI_VERIFICATION",
+		"error_code":"ERRCODE:104",
+		"symptom":"Updated symptom",
+		"root_cause":"Updated root cause",
+		"steps":[{"title":"Replacement step","instruction":"Run the replacement procedure","script_snippet":"[WIFI]\nCOUNTRY=US","verification":"Country includes 6GHz"}]
+	}`
+	resp, updatedBody := doJSON(t, app, "PUT", fmt.Sprintf("/api/troubleshooting/%d", created.ID), updatePayload)
+	if resp.StatusCode != 200 {
+		t.Fatalf("update guide: %d (%s)", resp.StatusCode, updatedBody)
+	}
+	for _, want := range []string{`"title":"Updated 6GHz troubleshooting guide"`, `"severity":"warning"`, `"Replacement step"`} {
+		if !strings.Contains(updatedBody, want) {
+			t.Fatalf("updated guide missing %s: %s", want, updatedBody)
+		}
+	}
+	if strings.Contains(updatedBody, "Set regulatory country code") {
+		t.Fatalf("old steps survived replacement update: %s", updatedBody)
+	}
+
+	resp, deletedBody := doRequest(t, app, "DELETE", fmt.Sprintf("/api/troubleshooting/%d", created.ID))
+	if resp.StatusCode != 204 {
+		t.Fatalf("delete guide: %d (%s)", resp.StatusCode, deletedBody)
+	}
+	resp, missingBody := doRequest(t, app, "GET", fmt.Sprintf("/api/troubleshooting/%d", created.ID))
+	if resp.StatusCode != 404 {
+		t.Fatalf("deleted guide still readable: %d (%s)", resp.StatusCode, missingBody)
+	}
 }
 
 func TestTroubleshootingRelatedEndpointReturnsMoreThanOneHundredSiblings(t *testing.T) {

@@ -1,0 +1,37 @@
+# AI agents, instructions, skills, and editor state
+.agents/
+.claude/
+.codex/
+.continue/
+.copilot/
+.cursor/
+.gemini/
+.opencode/
+.superpowers/
+.vscode/
+.github/agents/
+.github/prompts/
+.github/skills/
+.github/copilot-instructions.md
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+skills-lock.json
+opencode.json
+
+# Local build and test artifacts
+/webprogfndb-server
+/*.test
+*.out
+coverage/
+/vendor/
+
+# Local database and environment state
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*

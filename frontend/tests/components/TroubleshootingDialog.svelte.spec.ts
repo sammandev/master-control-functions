@@ -46,6 +46,8 @@ afterEach(() => vi.unstubAllGlobals());
 describe('TroubleshootingDialog accessibility', () => {
 	it('orders problem context fields for rapid triage', async () => {
 		await renderDialog();
+		expect(document.querySelectorAll('button[aria-label="Bulleted list"]')).toHaveLength(3);
+		expect(document.querySelectorAll('button[aria-label="Numbered list"]')).toHaveLength(3);
 		const section = document.querySelector('.form-section');
 		const labels = Array.from(section?.querySelectorAll('label') ?? []).map((label) =>
 			label.textContent?.replace(/\s+/g, ' ').trim()
@@ -72,8 +74,8 @@ describe('TroubleshootingDialog accessibility', () => {
 							severity: 'Severity server error',
 							device_name: 'Device server error',
 							symptom: 'Symptom server error',
-							'steps.title': 'Step title server error',
-							'steps.instruction': 'Instruction server error'
+							'steps.0.title': 'Step title server error',
+							'steps.0.instruction': 'Instruction server error'
 						}
 					}),
 					{ status: 422, headers: { 'content-type': 'application/json' } }
@@ -101,9 +103,9 @@ describe('TroubleshootingDialog accessibility', () => {
 
 		const expectations = [
 			[page.getByRole('textbox', { name: /Solution \/ Manifestation Title/ }), 'guide-title-error'],
-			[page.getByRole('combobox', { name: /^Category:/ }), 'guide-category-error'],
-			[page.getByRole('combobox', { name: /^Severity:/ }), 'guide-severity-error'],
-			[page.getByRole('combobox', { name: /^Device \/ Interface Scope:/ }), 'guide-device-error'],
+			[page.getByRole('button', { name: /^Category:/ }), 'guide-category-error'],
+			[page.getByRole('button', { name: /^Severity:/ }), 'guide-severity-error'],
+			[page.getByRole('button', { name: /^Device \/ Interface Scope:/ }), 'guide-device-error'],
 			[page.getByRole('textbox', { name: /Observed Symptom/ }), 'guide-symptom-error'],
 			[page.getByRole('textbox', { name: /Action Headline/ }), 'step-title-error-0'],
 			[page.getByRole('textbox', { name: /Detailed Instruction/ }), 'step-instruction-error-0']

@@ -71,13 +71,19 @@ func TestTroubleshootingBodyValidation(t *testing.T) {
 		DeviceName: "GLOBAL", // reserved word
 		Symptom:    "Timeout on SSH login",
 		Steps: []troubleshootingStepBody{
+			{Title: "Valid step", Instruction: "Valid instruction"},
 			{Title: "", Instruction: ""},
 		},
 	}
 	stepFields := badStep.validate()
-	for _, key := range []string{"device_name", "steps.title", "steps.instruction"} {
+	for _, key := range []string{"device_name", "steps.1.title", "steps.1.instruction"} {
 		if stepFields[key] == "" {
 			t.Fatalf("expected error on %q, got %v", key, stepFields)
+		}
+	}
+	for _, key := range []string{"steps.0.title", "steps.0.instruction"} {
+		if stepFields[key] != "" {
+			t.Fatalf("unexpected error on valid step at %q: %v", key, stepFields)
 		}
 	}
 }

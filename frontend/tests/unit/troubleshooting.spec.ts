@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import {
 	categoryLabel,
+	createLatestRequestGuard,
 	findRelatedGuides,
 	formatTroubleshootingAiContext,
 	moveDraftStep,
@@ -8,6 +9,7 @@ import {
 	severityLabel,
 	severityTone,
 	setChecklistStep,
+	validateTroubleshootingDraftSteps,
 	type TroubleshootingGuideDetail,
 	type TroubleshootingGuideListItem
 } from '../../src/lib/troubleshooting';
@@ -142,6 +144,39 @@ test('checklist state is isolated by guide and reset affects only the current gu
 	expect(unchecked).toEqual({ 4: [2], 5: [2] });
 	expect(reset).toEqual({ 5: [2] });
 	expect(state).toEqual({ 4: [1], 5: [2] });
+});
+
+test('latest request guard rejects older asynchronous responses', () => {
+	const guard = createLatestRequestGuard();
+	const first = guard.begin();
+	const second = guard.begin();
+
+	expect(guard.isCurrent(first)).toBe(false);
+	expect(guard.isCurrent(second)).toBe(true);
+});
+
+test('validateTroubleshootingDraftSteps identifies only the invalid step', () => {
+	const errors = validateTroubleshootingDraftSteps([
+		{
+			client_id: 'draft-a',
+			title: 'Valid step',
+			instruction: 'Valid instruction',
+			script_snippet: '',
+			verification: ''
+		},
+		{
+			client_id: 'draft-b',
+			title: '',
+			instruction: ' ',
+			script_snippet: '',
+			verification: ''
+		}
+	]);
+
+	expect(errors).toEqual({
+		'steps.1.title': 'Step 2: step title is required',
+		'steps.1.instruction': 'Step 2: instruction is required'
+	});
 });
 
 test('moveDraftStep moves a complete stable record without rekeying fields', () => {

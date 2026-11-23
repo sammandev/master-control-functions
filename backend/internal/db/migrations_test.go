@@ -90,6 +90,30 @@ func TestTroubleshootingRegistryMigrationDefinition(t *testing.T) {
 	}
 }
 
+func TestTroubleshootingSeedNewlineRepairMigration(t *testing.T) {
+	migrations, err := loadMigrationsFrom("postgres_migrations")
+	if err != nil {
+		t.Fatalf("loadPostgresMigrations: %v", err)
+	}
+	migration := findMigration(t, migrations, 11, "0011_troubleshooting_seed_newlines.sql")
+	migrationSQL := strings.ReplaceAll(migration.SQL, "\r\n", "\n")
+
+	for _, snippet := range []string{
+		"WHERE guide_id = 1\n  AND position = 2",
+		`E'[SSH]\nPROMPT=root@OpenWrt:~#'`,
+		"WHERE guide_id = 3\n  AND position = 1",
+		`E'[DUT]\nIP=192.168.1.1\n; Referenced in script as *V:DUT-IP#'`,
+		"WHERE guide_id = 4\n  AND position = 2",
+		`E'[TX_5G_HE20]\nPOWER=-1.5~1.5\nEVM=-99~-35'`,
+		"WHERE guide_id = 5\n  AND position = 2",
+		`E'[RF_PATH]\nPORT_ANT1=RF1A\nPATH_LOSS_2G=4.2'`,
+	} {
+		if !strings.Contains(migrationSQL, snippet) {
+			t.Errorf("0011_troubleshooting_seed_newlines.sql missing %q", snippet)
+		}
+	}
+}
+
 func TestTroubleshootingRegistryMigrationAppliesToExistingGuides(t *testing.T) {
 	migrations, err := loadMigrationsFrom("postgres_migrations")
 	if err != nil {

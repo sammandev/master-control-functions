@@ -12,7 +12,7 @@ import (
 const countFunctionsByDeviceScope = `-- name: CountFunctionsByDeviceScope :one
 SELECT COUNT(*) FROM functions f
 WHERE f.interface = $1
-	OR EXISTS (SELECT 1 FROM parameter_links pl
+  OR EXISTS (SELECT 1 FROM parameter_links pl
               WHERE pl.function_source = f.source AND pl.function_name = f.name
                 AND pl.device_name = $1)
    OR EXISTS (SELECT 1 FROM criteria_links cl
@@ -31,7 +31,7 @@ const listFunctionsByDeviceScope = `-- name: ListFunctionsByDeviceScope :many
 SELECT f.id, f.source, f.interface, f.name, f.description, f.convention, f.category, f.execution_role, f.execution_phase, f.created_at, f.updated_at
 FROM functions f
 WHERE f.interface = $1
-	OR EXISTS (SELECT 1 FROM parameter_links pl
+  OR EXISTS (SELECT 1 FROM parameter_links pl
               WHERE pl.function_source = f.source AND pl.function_name = f.name
                 AND pl.device_name = $1)
    OR EXISTS (SELECT 1 FROM criteria_links cl

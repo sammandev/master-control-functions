@@ -462,7 +462,7 @@
 									{row.device_name}
 								</a>
 							{:else}
-								:
+								Not set
 							{/if}
 						</TableCell>
 						<TableCell>

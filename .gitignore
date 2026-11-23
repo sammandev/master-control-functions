@@ -6,21 +6,34 @@
 *.bak
 *~
 
-# AI tool state
-.antigravity/
+# AI agents, instructions, skills, and editor state
+.agents/
 .claude/
-.cursor/
-.chat/
+.codex/
+.continue/
 .copilot/
+.cursor/
+.gemini/
+.antigravity/
+.chat/
 .opencode/
+.superpowers/
+.vscode/
+.github/agents/
+.github/prompts/
+.github/skills/
+.github/copilot-instructions.md
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+skills-lock.json
 opencode.json
-
-.vscode/*
 
 # Local secrets; keep example configuration publishable
 .env
 .env.*
 !.env.example
+start-server.bat
 *.pem
 *.key
 *.local
@@ -33,7 +46,9 @@ opencode.json
 .codegraph/
 .omo/
 .rtk/
-.github/
+graphify-out/
+docs/superpowers/
+
 
 # Go
 *.db
@@ -71,9 +86,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 vite.config.*.timestamp-*
-package.json
-package-lock.json
-pnpm-lock.yaml
 
 # Logs
 *.log
@@ -100,4 +112,3 @@ test-results/
 playwright-report/
 playwright/.cache/
 coverage/
-
