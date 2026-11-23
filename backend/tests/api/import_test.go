@@ -359,6 +359,48 @@ func TestImportResetClearsAndReimports(t *testing.T) {
 	}
 }
 
+func TestImportRejectsInvalidHeadersWithoutDeletingFunctions(t *testing.T) {
+	app := newImportTestApp(t)
+	const functionName = "KEEP_EXISTING"
+	if resp, body := postJSON(t, app, "/api/functions", `{"source":"BUILT-IN","interface":"CMD_CONSOLE","name":"`+functionName+`"}`); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create existing function: %d %s", resp.StatusCode, body)
+	}
+
+	file := excelize.NewFile()
+	defer file.Close()
+	for _, sheet := range []string{"function_main", "parameter_main", "criteria_main", "function_parameter", "function_criteria", "example"} {
+		if _, err := file.NewSheet(sheet); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.SetCellValue(sheet, "A1", "unrecognized_header"); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.SetCellValue(sheet, "A2", "nonempty data"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := file.DeleteSheet("Sheet1"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := file.WriteToBuffer()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, endpoint := range []string{"/api/import", "/api/import/reset"} {
+		ct, body := multipartBody(t, "file", "invalid-headers.xlsx", data.Bytes())
+		resp, result := postFile(t, app, endpoint, ct, body)
+		if resp.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(result, "sheet function_main: missing required columns: source, interface (or device_name), name") {
+			t.Errorf("%s: want 422 with missing headers, got %d %s", endpoint, resp.StatusCode, result)
+		}
+	}
+
+	resp, result := doRequest(t, app, "GET", "/api/functions?search="+functionName)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(result, `"name":"`+functionName+`"`) {
+		t.Fatalf("existing function did not survive the rejected reset: %d %s", resp.StatusCode, result)
+	}
+}
+
 func TestImportStoresOrphansAndCountsUsage(t *testing.T) {
 	app := newImportTestApp(t)
 
