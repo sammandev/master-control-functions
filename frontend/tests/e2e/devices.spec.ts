@@ -403,5 +403,29 @@ for (const [tab, kind, noun] of [
 		await expect(page.getByText('Page 2 of 2')).toBeVisible();
 		await expect(match).toBeVisible();
 		await expect(page.getByRole('heading', { name: matchName, exact: true })).toBeVisible();
+
+		const panel = page.getByRole('tabpanel', { name: new RegExp(`^${tab}`, 'i') });
+		await search.fill('off-page value');
+		await expect(panel.getByText('Page 1 of 1')).toBeVisible();
+		await page.getByRole('button', { name: 'Edit definition' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Default value').fill('Updated value');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(dialog).toBeHidden();
+		await expect(search).toHaveValue('');
+		await expect(match).toBeVisible();
+		const details = page.getByRole('region', { name: 'Definition details' });
+		await expect(details.getByText('Updated value')).toBeVisible();
+
+		await search.fill('updated value');
+		await expect(panel.getByText('Page 1 of 1')).toBeVisible();
+		await page.getByRole('button', { name: `Add ${noun.toLowerCase()} definition` }).click();
+		const addedName = `${noun} 22`;
+		await dialog.getByLabel('Name', { exact: true }).fill(addedName);
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(dialog).toBeHidden();
+		await expect(search).toHaveValue('');
+		await expect(page.getByRole('button', { name: `Inspect ${addedName} (${device})` })).toBeVisible();
+		await expect(details.getByRole('heading', { name: addedName, exact: true })).toBeVisible();
 	});
 }

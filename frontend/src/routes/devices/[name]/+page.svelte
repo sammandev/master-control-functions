@@ -324,7 +324,11 @@
 		if (event.target instanceof Element && event.target.closest('button, a')) return;
 		void selectDefinition(next, id);
 	}
-	async function inspectDefinition(next: 'parameters' | 'criteria', id: number) {
+	async function inspectDefinition(
+		next: 'parameters' | 'criteria',
+		id: number,
+		{ refresh = false } = {}
+	) {
 		const scope = device;
 		const revision = deviceRevision;
 		const filtered = next === 'parameters' ? paramTerm : critTerm;
@@ -335,7 +339,7 @@
 		}
 		const loaded =
 			next === 'parameters' ? [...paramScoped, ...paramGlobal] : [...critScoped, ...critGlobal];
-		if (!filtered && loaded.some((row) => row.id === id)) return;
+		if (!refresh && !filtered && loaded.some((row) => row.id === id)) return;
 		const size = next === 'parameters' ? paramPageSize : critPageSize;
 		const current = () =>
 			revision === deviceRevision &&
@@ -369,9 +373,13 @@
 	}
 	async function refreshDefinitions(next: 'parameters' | 'criteria', row: DefinitionRow | null) {
 		const scope = device;
-		await selectDefinition(next, row?.id, row === null);
-		if (next === 'parameters') await loadParameters();
-		else await loadCriteria();
+		if (row) {
+			await inspectDefinition(next, row.id, { refresh: true });
+		} else {
+			await selectDefinition(next, undefined, true);
+			if (next === 'parameters') await loadParameters();
+			else await loadCriteria();
+		}
 		if (scope !== device) return;
 		try {
 			summaries = (await listDevices()).items;
@@ -380,26 +388,6 @@
 			summaryError = error instanceof Error ? error.message : String(error);
 		}
 	}
-	async function reloadDefinitions(row: DefinitionRow) {
-		await selectDefinition(defTab, row.id);
-		// Back to page 1: a fresh definition may sort onto any page.
-		if (defTab === 'parameters') {
-			paramPage = 1;
-			paramLoaded = false;
-			await loadParameters();
-		} else {
-			critPage = 1;
-			critLoaded = false;
-			await loadCriteria();
-		}
-		try {
-			summaries = (await listDevices()).items;
-			summaryError = '';
-		} catch (error) {
-			summaryError = error instanceof Error ? error.message : String(error);
-		}
-	}
-
 	// Tabs load lazily on first activation and cache afterwards. Switching
 	// device clears the per-tab caches and pagination so the active tab
 	// reloads for the new device.
@@ -1442,7 +1430,7 @@
 	title={defTab === 'parameters' ? 'Parameter Definitions' : 'Criteria Definitions'}
 	prefillDevice={device}
 	lockDevice
-	onsaved={reloadDefinitions}
+	onsaved={(row) => refreshDefinitions(defTab, row)}
 />
 
 <style>
