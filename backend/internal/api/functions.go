@@ -235,7 +235,7 @@ func likePattern(search string) string {
 
 // listQuery holds the parsed query-string parameters for GET /api/functions.
 type listQuery struct {
-	search   *string
+	search   string
 	filters  map[string]*string
 	sortCol  string
 	sortDesc bool
@@ -244,12 +244,7 @@ type listQuery struct {
 }
 
 func parseListQuery(c fiber.Ctx) listQuery {
-	lq := listQuery{filters: map[string]*string{}, page: 1, pageSize: 20}
-	if s := strings.TrimSpace(c.Query("search")); s != "" {
-		if p := likePattern(s); p != "" {
-			lq.search = &p
-		}
-	}
+	lq := listQuery{search: c.Query("search"), filters: map[string]*string{}, page: 1, pageSize: 20}
 	for _, f := range []string{"source", "interface", "category", "execution_role", "execution_phase"} {
 		if v := strings.TrimSpace(c.Query(f)); v != "" {
 			lq.filters[f] = &v
@@ -274,7 +269,7 @@ func parseListQuery(c fiber.Ctx) listQuery {
 
 func (lq *listQuery) storeParams() store.ListFunctionsParams {
 	return store.ListFunctionsParams{
-		Search:         nullStrPtr(lq.search),
+		Search:         nullStrPtr(&lq.search),
 		Source:         nullStrPtr(lq.filters["source"]),
 		Interface:      nullStrPtr(lq.filters["interface"]),
 		Category:       nullStrPtr(lq.filters["category"]),
@@ -285,7 +280,7 @@ func (lq *listQuery) storeParams() store.ListFunctionsParams {
 
 func (lq *listQuery) countParams() store.CountFunctionsParams {
 	return store.CountFunctionsParams{
-		Search:         nullStrPtr(lq.search),
+		Search:         nullStrPtr(&lq.search),
 		Source:         nullStrPtr(lq.filters["source"]),
 		Interface:      nullStrPtr(lq.filters["interface"]),
 		Category:       nullStrPtr(lq.filters["category"]),

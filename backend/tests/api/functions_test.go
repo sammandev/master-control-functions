@@ -267,6 +267,19 @@ func TestListFunctionsSearch(t *testing.T) {
 	}
 }
 
+func TestListFunctionsSearchAcrossNameAndDescription(t *testing.T) {
+	app := newFunctionsTestApp(t)
+	if resp, body := postJSON(t, app, "/api/functions", `{"source":"BUILT-IN","interface":"TEST PROGRAM","name":"ARITHMETIC","description":"Performs arithmetic at 100% using C:\\TEMP"}`); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("seed failed: %s", body)
+	}
+
+	wantNames(t, app, "?search=%20aRiThMeTiC%20Performs%20", "ARITHMETIC")
+	wantNames(t, app, "?search=arithmetic%20%20performs")
+	wantNames(t, app, "?search=ARITHMETI_%20Performs")
+	wantNames(t, app, "?search=Performs%25")
+	wantNames(t, app, "?search=100%25%20using%20C%3A%5CTEMP", "ARITHMETIC")
+}
+
 func TestListFunctionsFilter(t *testing.T) {
 	app := newFunctionsTestApp(t)
 	seedFunctions(t, app)
