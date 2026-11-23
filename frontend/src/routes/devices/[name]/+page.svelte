@@ -151,6 +151,7 @@
 	let exampleLoaded = $state(false);
 	let exampleLoading = $state(false);
 	let exampleError = $state('');
+	let exampleRevision = 0;
 	let copiedExample = $state<number | null>(null);
 	let deviceCopyStatus = $state('');
 	let exampleDialogOpen = $state(false);
@@ -227,6 +228,12 @@
 	let exSearch = $state('');
 	const paramTerm = $derived(paramSearch.trim());
 	const critTerm = $derived(critSearch.trim());
+	const exTerm = $derived(exSearch.trim());
+
+	function setExampleSearch(value: string) {
+		if (value.trim() !== exTerm) examplePage = 1;
+		exSearch = value;
+	}
 
 	function setDefinitionSearch(next: 'parameters' | 'criteria', value: string) {
 		const term = value.trim();
@@ -280,17 +287,10 @@
 	const selectedParameter = $derived(selectedDefinition(paramScoped, paramGlobal, paramTerm));
 	const selectedCriterion = $derived(selectedDefinition(critScoped, critGlobal, critTerm));
 
-	const exampleMatches = $derived(
-		exampleItems.filter((row) =>
-			`${row.function_source} ${row.function_name} ${row.script} ${row.meaning || ''}`
-				.toLowerCase()
-				.includes(exSearch.trim().toLowerCase())
-		)
-	);
 	const exampleView = $derived(
 		exSortKey === ''
-			? exampleMatches
-			: sortRows(exampleMatches, EX_SORT_KEYS[exSortKey]!, exSortDir)
+			? exampleItems
+			: sortRows(exampleItems, EX_SORT_KEYS[exSortKey]!, exSortDir)
 	);
 
 	// ---- definition shortcuts (ticket 05) -----------------------------------
@@ -430,7 +430,7 @@
 		critPage = 1;
 		examplePage = 1;
 	});
-	// Pagination and definition search invalidate the lazy tab caches.
+	// Pagination and search invalidate the lazy tab caches.
 	$effect(() => {
 		void paramPage;
 		void paramPageSize;
@@ -446,6 +446,7 @@
 	$effect(() => {
 		void examplePage;
 		void examplePageSize;
+		void exTerm;
 		exampleLoaded = false;
 	});
 	$effect(() => {
@@ -603,21 +604,31 @@
 	async function loadExamples() {
 		const scope = device;
 		const revision = deviceRevision;
+		const attempt = ++exampleRevision;
 		const requestedPage = examplePage;
 		const requestedSize = examplePageSize;
+		const search = exTerm;
 		const current = () =>
 			revision === deviceRevision &&
+			attempt === exampleRevision &&
 			requestedPage === examplePage &&
-			requestedSize === examplePageSize;
+			requestedSize === examplePageSize &&
+			search === exTerm;
 		exampleLoading = true;
 		exampleError = '';
 		try {
 			const res = await listExamples({
 				device: scope,
 				page: requestedPage,
-				page_size: requestedSize
+				page_size: requestedSize,
+				search
 			});
 			if (!current()) return;
+			const last = Math.max(1, Math.ceil(res.total / requestedSize));
+			if (requestedPage > last) {
+				examplePage = last;
+				return;
+			}
 			exampleItems = res.items;
 			exampleTotal = res.total;
 			exampleLoaded = true;
@@ -1290,7 +1301,8 @@
 					<div class="section-actions">
 						<div class="section-search">
 							<Search size={16} /><Input
-								bind:value={exSearch}
+								value={exSearch}
+								oninput={(event) => setExampleSearch(event.currentTarget.value)}
 								aria-label="Search device examples"
 								placeholder="Search function, script or meaning"
 							/>
@@ -1381,8 +1393,8 @@
 									<TableCell colspan={4} class="banner-empty text-center" aria-live="polite">
 										{exampleLoading
 											? 'Loading…'
-											: exSearch
-												? 'No examples on this page match your search.'
+											: exTerm
+												? 'No examples match your search.'
 												: 'No examples carry this device.'}
 									</TableCell>
 								</TableRow>
