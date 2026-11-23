@@ -190,28 +190,53 @@ func (q *Queries) ListExampleFunctionNames(ctx context.Context) ([]string, error
 
 const listExamples = `-- name: ListExamples :many
 
+WITH matching_examples AS MATERIALIZED (
+    SELECT e.id, e.device_name
+    FROM examples e
+    WHERE ($1::text IS NULL OR e.function_source = $1::text)
+      AND ($2::text IS NULL OR e.function_name = $2::text)
+      AND ($3::text IS NULL OR e.device_name = $3::text)
+      AND ($4::text IS NULL
+         OR lower(e.function_source) LIKE lower($4::text)
+         OR lower(e.function_name) LIKE lower($4::text)
+         OR lower(e.function_source || ' ' || e.function_name) LIKE lower($4::text)
+         OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower($4::text)
+         OR lower(e.script) LIKE lower($4::text)
+         OR lower(e.meaning) LIKE lower($4::text))
+), page_start AS (
+    SELECT COALESCE(
+        -- Round the matched example's zero-based position down to its page start.
+        (SELECT (SELECT COUNT(*) FROM matching_examples preceding
+                 WHERE (preceding.device_name, preceding.id) < (target.device_name, target.id))
+                / $5::bigint * $5::bigint
+         FROM matching_examples target
+         WHERE target.id = $6::bigint),
+        $7::bigint
+    )::bigint AS page_offset
+), page AS (
+    SELECT id, device_name
+    FROM matching_examples
+    ORDER BY device_name, id
+    LIMIT $5::bigint
+    OFFSET (SELECT page_offset FROM page_start)
+)
 SELECT e.id, e.function_source, e.function_name, e.device_name, e.script, e.meaning, e.created_at, e.updated_at,
        EXISTS (SELECT 1 FROM functions f
-               WHERE f.source = e.function_source AND f.name = e.function_name) AS function_exists
-FROM examples e
-WHERE ($1::text IS NULL OR e.function_source = $1::text)
-  AND ($2::text IS NULL OR e.function_name = $2::text)
-  AND ($3::text IS NULL OR e.device_name = $3::text)
-  AND ($4::text IS NULL
-     OR lower(e.function_source) LIKE lower($4::text)
-     OR lower(e.function_name) LIKE lower($4::text)
-     OR lower(e.function_source || ' ' || e.function_name) LIKE lower($4::text)
-     OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower($4::text)
-       OR lower(e.script) LIKE lower($4::text)
-       OR lower(e.meaning) LIKE lower($4::text))
-ORDER BY e.device_name, e.id
+               WHERE f.source = e.function_source AND f.name = e.function_name) AS function_exists,
+       (SELECT page_offset FROM page_start) AS page_offset
+FROM page
+JOIN examples e ON e.id = page.id
+ORDER BY page.device_name, page.id
 `
 
 type ListExamplesParams struct {
-	FunctionSource sql.NullString
-	FunctionName   sql.NullString
-	Device         sql.NullString
-	Search         sql.NullString
+	FunctionSource  sql.NullString
+	FunctionName    sql.NullString
+	Device          sql.NullString
+	Search          sql.NullString
+	PageSize        int64
+	ExampleID       sql.NullInt64
+	RequestedOffset int64
 }
 
 type ListExamplesRow struct {
@@ -224,6 +249,7 @@ type ListExamplesRow struct {
 	CreatedAt      string
 	UpdatedAt      string
 	FunctionExists bool
+	PageOffset     int64
 }
 
 // Examples CRUD queries (ticket 06). Examples are keyed naturally by
@@ -237,6 +263,9 @@ func (q *Queries) ListExamples(ctx context.Context, arg ListExamplesParams) ([]L
 		arg.FunctionName,
 		arg.Device,
 		arg.Search,
+		arg.PageSize,
+		arg.ExampleID,
+		arg.RequestedOffset,
 	)
 	if err != nil {
 		return nil, err
@@ -255,6 +284,7 @@ func (q *Queries) ListExamples(ctx context.Context, arg ListExamplesParams) ([]L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.FunctionExists,
+			&i.PageOffset,
 		); err != nil {
 			return nil, err
 		}
