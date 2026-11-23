@@ -81,7 +81,8 @@ func TestTroubleshootingGuideImportRequestOrigin(t *testing.T) {
 
 func TestTroubleshootingGuideTransferImport(t *testing.T) {
 	app, db := newLinksTestApp(t)
-	create := `{"title":"Transfer create","category":"connection","severity":"high","symptom":"- first\n- second","steps":[{"title":"First","instruction":"Run"}]}`
+	const snippet = `"script_snippet":"    first line\n\tsecond line"`
+	create := `{"title":"Transfer create","category":"connection","severity":"high","symptom":"- first\n- second","steps":[{"title":"First","instruction":"Run",` + snippet + `}]}`
 	single := `{"guides":[` + create + `]}`
 	bad := `{"guides":[` + create + `,{"id":999999,"category":"unknown","severity":"unknown","steps":[{}]}]}`
 	assertUpload := func(operation, payload string, want int, fragments ...string) {
@@ -96,7 +97,7 @@ func TestTroubleshootingGuideTransferImport(t *testing.T) {
 			}
 		}
 	}
-	assertUpload("single", single, 200, `"title":"Transfer create"`)
+	assertUpload("single", single, 200, `"title":"Transfer create"`, snippet)
 	assertUpload("single", bad, 422, "bulk import")
 	assertUpload("preview", bad, 200, `"action":"create"`, `"action":"error"`, "unknown category", "unknown severity", "id not found", "title is required", "instruction is required")
 	assertUpload("commit", bad, 422, "id not found")
@@ -126,6 +127,9 @@ func TestTroubleshootingGuideTransferImport(t *testing.T) {
 	_, body = doRequest(t, app, "GET", fmt.Sprintf("/api/troubleshooting/%d", id))
 	if !strings.Contains(body, `"title":"Replacement"`) || strings.Contains(body, `"title":"First"`) {
 		t.Fatalf("existing steps were not replaced: %s", body)
+	}
+	if !strings.Contains(body, snippet) {
+		t.Fatalf("import did not preserve script snippet indentation: %s", body)
 	}
 }
 
