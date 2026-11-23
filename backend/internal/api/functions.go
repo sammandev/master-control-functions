@@ -49,18 +49,36 @@ func cmpBy(key func(store.Function) string) func(a, b store.Function) int {
 	}
 }
 
-// registerFunctionRoutes wires the /api/functions CRUD endpoints.
-// registerFunctionRoutes mounts the function endpoints. The facets route
-// is registered BEFORE the :id route so it is not shadowed by it; the
-// facets.sql queries return one DISTINCT list per enum column.
+// registerFunctionRoutes mounts static paths before :id so they are not shadowed.
 func registerFunctionRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Post("/api/functions", createFunction(q))
 	app.Get("/api/functions", listFunctions(q))
-	// Facets before :id so "facets" is not captured as an id.
 	app.Get("/api/functions/facets", functionFacets(q))
+	app.Get("/api/functions/options", listFunctionOptions(q))
 	app.Get("/api/functions/:id", getFunction(q))
 	app.Put("/api/functions/:id", updateFunction(q, d))
 	app.Delete("/api/functions/:id", deleteFunction(q))
+}
+
+type functionOption struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	Interface string `json:"interface"`
+}
+
+func listFunctionOptions(q *store.Queries) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		rows, err := q.ListFunctionOptions(c.Context())
+		if err != nil {
+			return serverError(c, "list function options", err)
+		}
+		items := make([]functionOption, 0, len(rows))
+		for _, row := range rows {
+			items = append(items, functionOption(row))
+		}
+		return c.JSON(fiber.Map{"items": items})
+	}
 }
 
 // functionFacets serves the distinct enum values for the functions list
