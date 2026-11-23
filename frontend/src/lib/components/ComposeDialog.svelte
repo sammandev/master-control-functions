@@ -29,7 +29,6 @@
 		updateSequence,
 		type SequenceListItem
 	} from '#lib/sequences.ts';
-	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 
 	// Script composer dialog (ticket 07): form generated from the
 	// function's parameter links in position order, live preview of the
