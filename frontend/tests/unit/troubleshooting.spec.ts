@@ -5,10 +5,8 @@ import {
 	findRelatedGuides,
 	formatTroubleshootingAiContext,
 	moveDraftStep,
-	resetChecklistProgress,
 	severityLabel,
 	severityTone,
-	setChecklistStep,
 	validateTroubleshootingDraftSteps,
 	type TroubleshootingGuideDetail,
 	type TroubleshootingGuideListItem
@@ -133,17 +131,6 @@ test('categoryLabel uses registry metadata and preserves legacy one-argument cal
 	expect(categoryLabel('measurement')).toBe('Measurement & Criteria');
 	expect(categoryLabel('signal_quality')).toBe('Signal Quality');
 	expect(categoryLabel('')).toBe('');
-});
-
-test('checklist state is isolated by guide and reset affects only the current guide', () => {
-	const state = { 4: [1], 5: [2] };
-	const checked = setChecklistStep(state, 4, 2, true);
-	const unchecked = setChecklistStep(checked, 4, 1, false);
-	const reset = resetChecklistProgress(unchecked, 4);
-
-	expect(unchecked).toEqual({ 4: [2], 5: [2] });
-	expect(reset).toEqual({ 5: [2] });
-	expect(state).toEqual({ 4: [1], 5: [2] });
 });
 
 test('latest request guard rejects older asynchronous responses', () => {

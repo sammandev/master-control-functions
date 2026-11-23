@@ -10,9 +10,6 @@
 		getTroubleshootingGuide,
 		listRelatedTroubleshootingGuides,
 		listTroubleshootingGuides,
-		resetChecklistProgress,
-		setChecklistStep,
-		type TroubleshootingChecklistState,
 		type TroubleshootingGuideDetail,
 		type TroubleshootingGuideListItem
 	} from '#lib/troubleshooting.ts';
@@ -60,7 +57,6 @@
 	let severityError = $state('');
 	let relatedGuides = $state<TroubleshootingGuideListItem[]>([]);
 	let relatedError = $state('');
-	let checklistState = $state<TroubleshootingChecklistState>({});
 	const listRequestGuard = createLatestRequestGuard();
 	const detailRequestGuard = createLatestRequestGuard();
 
@@ -445,7 +441,6 @@
 					</div>
 					<span class="sr-only">Select guide </span>
 					<strong>{row.title}</strong>
-					<small>{row.symptom}</small>
 					<span class="meta-line">
 						{categoryLabel(row.category, categories)}
 						· {row.step_count}
@@ -501,13 +496,6 @@
 				{relatedGuides}
 				{categories}
 				{severities}
-				completedPositions={checklistState[selectedDetail.id] ?? []}
-				onChecklistChange={(position, checked) => {
-					checklistState = setChecklistStep(checklistState, selectedDetail!.id, position, checked);
-				}}
-				onResetChecklist={() => {
-					checklistState = resetChecklistProgress(checklistState, selectedDetail!.id);
-				}}
 				onSelectGuide={(id) => selectGuide(id)}
 				onFilterErrorCode={(code) => {
 					errorCodeFilter = code;
@@ -712,16 +700,6 @@
 		font-weight: 600;
 		line-height: 1.4;
 		color: var(--foreground);
-		overflow-wrap: anywhere;
-	}
-	.guide-list small {
-		font-size: 12px;
-		color: var(--muted-foreground);
-		display: -webkit-box;
-		line-clamp: 2;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
 		overflow-wrap: anywhere;
 	}
 	.guide-list .meta-line {

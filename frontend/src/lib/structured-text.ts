@@ -5,7 +5,7 @@ export type StructuredTextBlock =
 
 const bulletPattern = /^\s*[-*+]\s+(.+?)\s*$/;
 const orderedPattern = /^\s*\d+[.)]\s+(.+?)\s*$/;
-const anyListPattern = /^(\s*)(?:[-*+]\s+|\d+[.)]\s+)/;
+const listPrefixPattern = /^([\t ]*)([-*+]|(\d+)([.)]))[\t ]+/;
 
 export function parseStructuredText(value: string): StructuredTextBlock[] {
 	const blocks: StructuredTextBlock[] = [];
@@ -61,44 +61,24 @@ export function parseStructuredText(value: string): StructuredTextBlock[] {
 	return blocks;
 }
 
-export interface ListMarkupResult {
-	value: string;
-	selectionStart: number;
-	selectionEnd: number;
-}
-
-export function applyListMarkup(
+export function getListEdit(
 	value: string,
-	selectionStart: number,
-	selectionEnd: number,
-	kind: 'bullet' | 'ordered'
-): ListMarkupResult {
-	const lineStart = value.lastIndexOf('\n', Math.max(0, selectionStart - 1)) + 1;
-	const effectiveEnd =
-		selectionEnd > selectionStart && value[selectionEnd - 1] === '\n'
-			? selectionEnd - 1
-			: selectionEnd;
-	const nextLineBreak = value.indexOf('\n', effectiveEnd);
-	const lineEnd = nextLineBreak === -1 ? value.length : nextLineBreak;
-	const lines = value.slice(lineStart, lineEnd).split('\n');
-	const markerMatches = (line: string) =>
-		kind === 'bullet' ? /^\s*[-*+]\s+/.test(line) : /^\s*\d+[.)]\s+/.test(line);
-	const allMarked = lines.every((line) => !line.trim() || markerMatches(line));
+	caret: number,
+	key: 'Enter' | 'Backspace'
+): { start: number; end: number; text: string } | undefined {
+	const start = value.slice(0, caret).lastIndexOf('\n') + 1;
+	const nextBreak = value.indexOf('\n', caret);
+	const end = nextBreak === -1 ? value.length : nextBreak;
+	const line = value.slice(start, end);
+	const prefix = listPrefixPattern.exec(line);
+	if (!prefix || caret < start + prefix[0].length) return;
 
-	const transformed = lines.map((line, index) => {
-		if (!line.trim()) return line;
-		const indentation = line.match(/^\s*/)?.[0] ?? '';
-		if (allMarked) {
-			return line.replace(anyListPattern, '$1');
-		}
-		const content = line.replace(anyListPattern, '$1').slice(indentation.length);
-		const marker = kind === 'bullet' ? '- ' : `${index + 1}. `;
-		return `${indentation}${marker}${content}`;
-	});
-	const replacement = transformed.join('\n');
-	return {
-		value: value.slice(0, lineStart) + replacement + value.slice(lineEnd),
-		selectionStart: lineStart,
-		selectionEnd: lineStart + replacement.length
-	};
+	if (!line.slice(prefix[0].length).trim()) {
+		return { start, end, text: '' };
+	}
+	if (key === 'Backspace') return;
+
+	const [, indent, marker, number, delimiter] = prefix;
+	const nextMarker = number ? `${BigInt(number) + 1n}${delimiter}` : marker;
+	return { start: caret, end: caret, text: `\n${indent}${nextMarker} ` };
 }
