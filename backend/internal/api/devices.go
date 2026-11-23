@@ -204,9 +204,13 @@ func deleteDevice(db *sql.DB) fiber.Handler {
 		if body.Confirmation != "DELETE "+name {
 			return validationError(c, map[string]string{"confirmation": "must exactly match DELETE " + name})
 		}
-		err := store.DeleteDevice(c.Context(), db, name, time.Now().UTC().Format(time.RFC3339))
+		err := store.DeleteDevice(c.Context(), db, name)
 		if errors.Is(err, store.ErrDeviceNotFound) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "device not found"})
+		}
+		var inUse *store.DeviceInUseError
+		if errors.As(err, &inUse) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": inUse.Error(), "sequences": inUse.Sequences})
 		}
 		if err != nil {
 			return serverError(c, "delete device", err)

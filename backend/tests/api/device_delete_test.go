@@ -46,16 +46,11 @@ func TestDeviceDeleteCascadesAndPreservesSharedData(t *testing.T) {
 					(function_source, function_interface, function_name, kind, name, scope, audited_by, audited_at, created_at, updated_at)
 					VALUES ('DLL', 'WIFI_TEST', 'DELETE_ONLY', 'parameter', 'ANT', 'line', 'test', 'old', 'old', 'old'),
 					       ('DLL', 'OTHER', 'TX_MULTI_VERIFICATION', 'parameter', 'ANT', 'line', 'test', 'old', 'old', 'old')`,
-				`INSERT INTO sequences (name, created_at, updated_at)
-					VALUES ('mixed', 'old', 'old'), ('untouched', 'old', 'old'), ('device-only', 'old', 'old')`,
+				`INSERT INTO sequences (name, created_at, updated_at) VALUES ('untouched', 'old', 'old')`,
 				`INSERT INTO sequence_steps
 					(sequence_id, position, function_source, function_interface, function_name, device_name)
-					VALUES (1, 1, 'DLL', 'WIFI_TEST', 'TX_MULTI_VERIFICATION', 'OTHER'),
-					       (1, 2, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', 'OTHER'),
-					       (1, 3, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', 'WIFI_TEST'),
-					       (1, 4, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', ''),
-					       (2, 1, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', 'OTHER'),
-					       (3, 1, 'DLL', 'WIFI_TEST', 'RX_SENSITIVITY', '')`,
+					VALUES (1, 1, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', 'OTHER'),
+					       (1, 2, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', '')`,
 			} {
 				if _, err := database.Exec(statement); err != nil {
 					t.Fatal(err)
@@ -102,12 +97,8 @@ func TestDeviceDeleteCascadesAndPreservesSharedData(t *testing.T) {
 				`SELECT COUNT(*) FROM examples WHERE function_name = 'RX_SENSITIVITY'`:                  0,
 				`SELECT COUNT(*) FROM function_grammars WHERE function_interface = 'OTHER'`:             1,
 				`SELECT COUNT(*) FROM script_key_audits WHERE function_interface = 'OTHER'`:             1,
-				`SELECT COUNT(*) FROM sequences`:                                                        3,
-				`SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = 3`:                             0,
 				`SELECT COUNT(*) FROM sequences WHERE name = 'untouched' AND updated_at = 'old'`:        1,
-				`SELECT COUNT(*) FROM sequences WHERE name <> 'untouched' AND updated_at <> 'old'`:      2,
-				`SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = 1 AND id = 2 AND position = 1`: 1,
-				`SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = 1 AND id = 4 AND position = 2`: 1,
+				`SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = 1`:                             2,
 			} {
 				if err := database.QueryRow(query).Scan(&count); err != nil || count != want {
 					t.Fatalf("%s: count=%d want=%d err=%v", query, count, want, err)
@@ -117,6 +108,55 @@ func TestDeviceDeleteCascadesAndPreservesSharedData(t *testing.T) {
 				t.Fatalf("deleted device still listed: %s", body)
 			}
 		})
+	}
+}
+
+func TestDeviceDeleteRefusedWhileSequenceStepsUseIt(t *testing.T) {
+	app, database := newDictionaryTestApp(t)
+	if resp, body := registerDevice(t, app, "WIFI_TEST"); resp.StatusCode != 201 {
+		t.Fatalf("register: %d %s", resp.StatusCode, body)
+	}
+	seedDeviceData(t, func(path, body string) {
+		if resp, result := postJSON(t, app, path, body); resp.StatusCode != 201 {
+			t.Fatalf("seed %s: %d %s", path, resp.StatusCode, result)
+		}
+	})
+	for _, statement := range []string{
+		`INSERT INTO sequences (name, created_at, updated_at)
+			VALUES ('Smoke run', 'old', 'old'), ('Unrelated', 'old', 'old'), ('Device scoped', 'old', 'old')`,
+		`INSERT INTO sequence_steps
+			(sequence_id, position, function_source, function_interface, function_name, device_name)
+			VALUES (1, 1, 'DLL', 'WIFI_TEST', 'TX_MULTI_VERIFICATION', ''),
+			       (1, 2, 'DLL', 'WIFI_TEST', 'RX_SENSITIVITY', ''),
+			       (2, 1, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', 'OTHER'),
+			       (3, 1, 'DLL', 'OTHER', 'TX_MULTI_VERIFICATION', 'WIFI_TEST')`,
+	} {
+		if _, err := database.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	resp, body := doJSON(t, app, "DELETE", "/api/devices/WIFI_TEST", `{"confirmation":"DELETE WIFI_TEST"}`)
+	if resp.StatusCode != 409 {
+		t.Fatalf("delete of a device used by Sequences: %d %s", resp.StatusCode, body)
+	}
+	want := `{"error":"WIFI_TEST is used by Sequences: Device scoped, Smoke run. Remove those steps first.","sequences":["Device scoped","Smoke run"]}`
+	if body != want {
+		t.Fatalf("refusal body:\n got %s\nwant %s", body, want)
+	}
+	for query, want := range map[string]int{
+		`SELECT COUNT(*) FROM devices WHERE name = 'WIFI_TEST'`:                      1,
+		`SELECT COUNT(*) FROM functions WHERE interface = 'WIFI_TEST'`:               2,
+		`SELECT COUNT(*) FROM parameter_definitions WHERE device_name = 'WIFI_TEST'`: 2,
+		`SELECT COUNT(*) FROM parameter_links WHERE device_name = 'WIFI_TEST'`:       3,
+		`SELECT COUNT(*) FROM examples WHERE device_name = 'WIFI_TEST'`:              1,
+		`SELECT COUNT(*) FROM sequence_steps`:                                        4,
+		`SELECT COUNT(*) FROM sequences WHERE updated_at = 'old'`:                    3,
+	} {
+		var count int
+		if err := database.QueryRow(query).Scan(&count); err != nil || count != want {
+			t.Fatalf("refused delete changed %s: count=%d want=%d err=%v", query, count, want, err)
+		}
 	}
 }
 
