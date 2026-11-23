@@ -37,6 +37,10 @@ type troubleshootingBody struct {
 }
 
 func (b *troubleshootingBody) validate() map[string]string {
+	return b.validateWithTextNormalization(true)
+}
+
+func (b *troubleshootingBody) validateWithTextNormalization(trimText bool) map[string]string {
 	fields := map[string]string{}
 	b.Title = strings.TrimSpace(b.Title)
 	b.Category = strings.ToLower(strings.TrimSpace(b.Category))
@@ -44,8 +48,10 @@ func (b *troubleshootingBody) validate() map[string]string {
 	b.DeviceName = normalizeDeviceName(b.DeviceName)
 	b.FunctionName = strings.TrimSpace(b.FunctionName)
 	b.ErrorCode = strings.ToUpper(strings.TrimSpace(b.ErrorCode))
-	b.Symptom = strings.TrimSpace(b.Symptom)
-	b.RootCause = strings.TrimSpace(b.RootCause)
+	if trimText {
+		b.Symptom = strings.TrimSpace(b.Symptom)
+		b.RootCause = strings.TrimSpace(b.RootCause)
+	}
 
 	if b.Title == "" {
 		fields["title"] = "is required"
@@ -59,7 +65,7 @@ func (b *troubleshootingBody) validate() map[string]string {
 	if problem := validateDeviceName(b.DeviceName); problem != "" {
 		fields["device_name"] = problem
 	}
-	if b.Symptom == "" {
+	if strings.TrimSpace(b.Symptom) == "" {
 		fields["symptom"] = "is required"
 	}
 	if len(b.Steps) == 0 {
@@ -68,13 +74,14 @@ func (b *troubleshootingBody) validate() map[string]string {
 	for i := range b.Steps {
 		s := &b.Steps[i]
 		s.Title = strings.TrimSpace(s.Title)
-		s.Instruction = strings.TrimSpace(s.Instruction)
-		s.ScriptSnippet = strings.TrimSpace(s.ScriptSnippet)
-		s.Verification = strings.TrimSpace(s.Verification)
+		if trimText {
+			s.Instruction = strings.TrimSpace(s.Instruction)
+			s.Verification = strings.TrimSpace(s.Verification)
+		}
 		if s.Title == "" {
 			fields["steps."+strconv.Itoa(i)+".title"] = "step " + strconv.Itoa(i+1) + ": title is required"
 		}
-		if s.Instruction == "" {
+		if strings.TrimSpace(s.Instruction) == "" {
 			fields["steps."+strconv.Itoa(i)+".instruction"] = "step " + strconv.Itoa(i+1) + ": instruction is required"
 		}
 	}
@@ -212,32 +219,35 @@ func writeTroubleshootingSteps(c fiber.Ctx, q *store.Queries, guideID int64, ste
 	return nil
 }
 
+func troubleshootingFilters(c fiber.Ctx) (search, category, deviceName, errorCode sql.NullString) {
+	if s := strings.TrimSpace(c.Query("search")); s != "" {
+		if p := likePattern(s); p != "" {
+			search = sql.NullString{String: p, Valid: true}
+		}
+	}
+	if cat := strings.ToLower(strings.TrimSpace(c.Query("category"))); cat != "" && cat != "_all" {
+		category = sql.NullString{String: cat, Valid: true}
+	}
+	if c.RequestCtx().QueryArgs().Has("device") {
+		dev := strings.TrimSpace(string(c.RequestCtx().QueryArgs().Peek("device")))
+		if dev != "_all" {
+			if dev == "_global" {
+				dev = ""
+			} else {
+				dev = normalizeDeviceName(dev)
+			}
+			deviceName = sql.NullString{String: dev, Valid: true}
+		}
+	}
+	if ec := strings.TrimSpace(c.Query("error_code")); ec != "" {
+		errorCode = sql.NullString{String: ec, Valid: true}
+	}
+	return
+}
+
 func listTroubleshootingGuides(q *store.Queries) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		var search, category, deviceName, errorCode sql.NullString
-		if s := strings.TrimSpace(c.Query("search")); s != "" {
-			if p := likePattern(s); p != "" {
-				search = sql.NullString{String: p, Valid: true}
-			}
-		}
-		if cat := strings.ToLower(strings.TrimSpace(c.Query("category"))); cat != "" && cat != "_all" {
-			category = sql.NullString{String: cat, Valid: true}
-		}
-		if c.RequestCtx().QueryArgs().Has("device") {
-			dev := strings.TrimSpace(string(c.RequestCtx().QueryArgs().Peek("device")))
-			if dev != "_all" {
-				if dev == "_global" {
-					dev = ""
-				} else {
-					dev = normalizeDeviceName(dev)
-				}
-				deviceName = sql.NullString{String: dev, Valid: true}
-			}
-		}
-		if ec := strings.TrimSpace(c.Query("error_code")); ec != "" {
-			errorCode = sql.NullString{String: ec, Valid: true}
-		}
-
+		search, category, deviceName, errorCode := troubleshootingFilters(c)
 		lq := parseListQuery(c)
 		total, err := q.CountTroubleshootingGuides(c.Context(), store.CountTroubleshootingGuidesParams{
 			Search:     search,

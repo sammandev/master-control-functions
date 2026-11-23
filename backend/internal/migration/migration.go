@@ -54,7 +54,7 @@ func Migrate(ctx context.Context, source, target *sql.DB, verifyOnly bool) error
 		return err
 	}
 	if !verifyOnly {
-		if err := db.MigratePostgres(target); err != nil {
+		if err := db.MigratePostgresTransferBaseline(target); err != nil {
 			return err
 		}
 	}
@@ -69,8 +69,8 @@ func Migrate(ctx context.Context, source, target *sql.DB, verifyOnly bool) error
 	if err != nil {
 		return err
 	}
-	if version != 6 {
-		return fmt.Errorf("target schema must be version 6, got %d", version)
+	if version != db.LegacyTransferVersion {
+		return fmt.Errorf("target schema must be version %d, got %d", db.LegacyTransferVersion, version)
 	}
 	options := &sql.TxOptions{Isolation: sql.LevelSerializable}
 	if verifyOnly {
@@ -176,8 +176,8 @@ func validateSource(ctx context.Context, source *sql.Tx) error {
 	if err := source.QueryRowContext(ctx, "SELECT COALESCE(MAX(version), 0) FROM schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version != 6 {
-		return fmt.Errorf("source schema must be version 6; got %d (upgrade with the old server before backing up)", version)
+	if version != db.LegacyTransferVersion {
+		return fmt.Errorf("source schema must be version %d; got %d (upgrade with the old server before backing up)", db.LegacyTransferVersion, version)
 	}
 	foreignKeys, err := source.QueryContext(ctx, "PRAGMA foreign_key_check")
 	if err != nil {

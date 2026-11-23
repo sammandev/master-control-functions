@@ -21,11 +21,17 @@
 	} from '#lib/troubleshooting-registry.ts';
 	import type { DeviceSummary } from '#lib/devices.ts';
 	import { trimEmptyListItems } from '#lib/structured-text.ts';
+	import { formatApiError } from '#lib/client.ts';
+	import {
+		getTroubleshootingImportDraft,
+		troubleshootingTransferFileTypes
+	} from '#lib/troubleshooting-transfer.ts';
 	import DevicePicker from '#lib/components/DevicePicker.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
 	import Dialog from '#lib/components/ui/dialog.svelte';
 	import Input from '#lib/components/ui/input.svelte';
+	import Textarea from '#lib/components/ui/textarea.svelte';
 	import StructuredTextEditor from '#lib/components/StructuredTextEditor.svelte';
 	import TroubleshootingRegistryPicker from '#lib/components/TroubleshootingRegistryPicker.svelte';
 
@@ -87,6 +93,8 @@
 	);
 
 	let busy = $state(false);
+	let importing = $state(false);
+	let importMessage = $state('');
 	let generalError = $state('');
 	let fieldErrors = $state<Record<string, string>>({});
 	const firstStepError = $derived(
@@ -148,14 +156,41 @@
 		return created;
 	}
 
+	async function importGuide(event: Event & { currentTarget: HTMLInputElement }) {
+		const file = event.currentTarget.files?.[0];
+		event.currentTarget.value = '';
+		if (!file || busy || importing) return;
+		importing = true;
+		importMessage = '';
+		generalError = '';
+		try {
+			const draft = await getTroubleshootingImportDraft(file);
+			title = draft.title;
+			category = draft.category;
+			severity = draft.severity;
+			deviceName = draft.device_name;
+			functionName = draft.function_name;
+			errorCode = draft.error_code;
+			symptom = draft.symptom;
+			rootCause = draft.root_cause;
+			steps = draft.steps?.length ? draft.steps.map(makeDraftStep) : [makeDraftStep()];
+			fieldErrors = {};
+			importMessage = 'Guide loaded. Review it before saving.';
+		} catch (err) {
+			generalError = formatApiError(err);
+		} finally {
+			importing = false;
+		}
+	}
+
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
+		if (busy || importing) return;
 		generalError = '';
 		const normalizedSymptom = trimEmptyListItems(symptom);
 		const normalizedSteps = steps.map((s) => ({
 			...s,
 			instruction: trimEmptyListItems(s.instruction),
-			script_snippet: trimEmptyListItems(s.script_snippet),
 			verification: trimEmptyListItems(s.verification)
 		}));
 		const errs = validateClient(normalizedSymptom, normalizedSteps);
@@ -209,6 +244,24 @@
 	class={mode === 'create' ? 'max-w-[880px]' : 'max-w-[780px]'}
 >
 	<form class="guide-form" onsubmit={handleSubmit}>
+		{#if mode !== 'alternate'}
+			<div class="border-border flex flex-wrap items-center gap-2 rounded-md border p-3">
+				<label for="single-guide-file" class="text-sm font-semibold">Import from file</label>
+				<input
+					id="single-guide-file"
+					type="file"
+					accept={troubleshootingTransferFileTypes}
+					onchange={importGuide}
+					disabled={busy || importing}
+					class="file:bg-muted file:text-foreground block max-w-full text-xs file:mr-2 file:rounded file:border-0 file:px-2 file:py-1"
+				/>
+				{#if importing || importMessage}
+					<span class="text-muted-foreground text-xs" role="status">
+						{importing ? 'Loading guide…' : importMessage}
+					</span>
+				{/if}
+			</div>
+		{/if}
 		{#if mode === 'alternate' && initialGuide}
 			<div
 				class="border-primary/30 bg-primary/5 text-foreground flex items-start gap-2.5 rounded-md border p-3 text-xs"
@@ -507,12 +560,11 @@
 									<label for="step-snippet-{idx}" class="text-foreground text-xs font-semibold">
 										Script Line / INI Snippet (optional)
 									</label>
-									<StructuredTextEditor
+									<Textarea
 										id="step-snippet-{idx}"
 										rows={2}
 										class="font-mono text-xs"
 										bind:value={step.script_snippet}
-										aria-describedby="guide-list-hint"
 										placeholder="DLL:WIFI_TEST,TX_MULTI_VERIFICATION,..."
 									/>
 								</div>
@@ -541,7 +593,7 @@
 
 		<div class="dialog-actions">
 			<Button type="button" variant="secondary" onclick={() => onOpenChange(false)}>Cancel</Button>
-			<Button type="submit" disabled={busy}>
+			<Button type="submit" disabled={busy || importing}>
 				{busy
 					? 'Saving…'
 					: mode === 'edit'

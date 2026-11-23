@@ -48,9 +48,21 @@ func OpenPostgres(dsn string) (*sql.DB, error) {
 }
 
 func MigratePostgres(database *sql.DB) error {
+	return migratePostgres(database, 0)
+}
+
+func migratePostgres(database *sql.DB, throughVersion int) error {
 	migrations, err := loadMigrationsFrom("postgres_migrations")
 	if err != nil {
 		return err
+	}
+	if throughVersion > 0 {
+		for len(migrations) > 0 && migrations[len(migrations)-1].Version > throughVersion {
+			migrations = migrations[:len(migrations)-1]
+		}
+		if len(migrations) == 0 || migrations[len(migrations)-1].Version != throughVersion {
+			return fmt.Errorf("missing PostgreSQL migration %d", throughVersion)
+		}
 	}
 	transaction, err := database.Begin()
 	if err != nil {

@@ -192,23 +192,31 @@ export function severityTone(severity: string, severities: RegistrySeverity[] = 
 	return severities.find((item) => item.key === severity)?.tone || 'outline';
 }
 
-export interface ListTroubleshootingQuery {
+export interface TroubleshootingFilters {
 	search?: string;
 	category?: string;
 	device?: string;
 	error_code?: string;
+}
+
+export interface ListTroubleshootingQuery extends TroubleshootingFilters {
 	page?: number;
 	page_size?: number;
 }
 
-export async function listTroubleshootingGuides(
-	q: ListTroubleshootingQuery = {}
-): Promise<TroubleshootingListResult> {
+export function troubleshootingFilterParams(q: TroubleshootingFilters): URLSearchParams {
 	const params = new URLSearchParams();
 	if (q.search) params.set('search', q.search);
 	if (q.category && q.category !== '_all') params.set('category', q.category);
 	if (q.device !== undefined && q.device !== '_all') params.set('device', q.device);
 	if (q.error_code) params.set('error_code', q.error_code);
+	return params;
+}
+
+export async function listTroubleshootingGuides(
+	q: ListTroubleshootingQuery = {}
+): Promise<TroubleshootingListResult> {
+	const params = troubleshootingFilterParams(q);
 	if (q.page) params.set('page', String(q.page));
 	if (q.page_size) params.set('page_size', String(q.page_size));
 	const qs = params.toString();

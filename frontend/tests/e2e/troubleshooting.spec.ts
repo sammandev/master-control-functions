@@ -24,6 +24,156 @@ const severities = [
 
 const refreshes = { list: 0, detail: 0 };
 
+test('downloads templates, previews bulk imports, and exports selected or matching guides', async ({
+	page
+}) => {
+	await mockTroubleshooting(page);
+	const exports: Array<{ scope: string; format: string; ids?: number[]; search: string | null }> =
+		[];
+	let commits = 0;
+	await page.route('**/api/troubleshooting/templates/json', (route) =>
+		route.fulfill({
+			json: { guides: [{ title: 'Example' }] },
+			headers: {
+				'Content-Disposition': 'attachment; filename="troubleshooting-guide-template.json"'
+			}
+		})
+	);
+	await page.route('**/api/troubleshooting/templates/xlsx', (route) =>
+		route.fulfill({
+			body: 'template workbook',
+			headers: {
+				'Content-Disposition': 'attachment; filename="troubleshooting-guide-template.xlsx"'
+			}
+		})
+	);
+	await page.route('**/api/troubleshooting/import/preview', (route) => {
+		const invalid = route.request().postData()?.includes('invalid.json');
+		return route.fulfill({
+			json: {
+				valid: !invalid,
+				rows: [
+					{ index: 1, title: 'Imported guide', action: 'create' },
+					invalid
+						? { index: 2, title: 'Rejected guide', action: 'error', reasons: ['unknown category'] }
+						: { index: 2, id: 2, title: 'Updated guide', action: 'update' }
+				]
+			}
+		});
+	});
+	await page.route('**/api/troubleshooting/import/commit', (route) => {
+		commits++;
+		return route.fulfill({ json: { created: 1, updated: 1 } });
+	});
+	await page.route(/\/api\/troubleshooting\/export/, (route) => {
+		const req = route.request();
+		exports.push({ ...req.postDataJSON(), search: new URL(req.url()).searchParams.get('search') });
+		return route.fulfill({ body: 'export file' });
+	});
+
+	await page.goto('/troubleshooting');
+	const sheet = process.env.TROUBLESHOOTING_SCREENSHOT_DIR;
+	async function capture(name: string) {
+		if (sheet) await page.screenshot({ path: `${sheet}/troubleshooting-${name}.png` });
+	}
+	await page.getByRole('button', { name: 'Import', exact: true }).click();
+	await capture('template-download');
+	const template = page.waitForEvent('download');
+	await page.getByRole('menuitem', { name: 'Download JSON template' }).click();
+	expect((await template).suggestedFilename()).toBe('troubleshooting-guide-template.json');
+	await page.getByRole('button', { name: 'Import', exact: true }).click();
+	const workbook = page.waitForEvent('download');
+	await page.getByRole('menuitem', { name: 'Download XLSX template' }).click();
+	expect((await workbook).suggestedFilename()).toBe('troubleshooting-guide-template.xlsx');
+	await page.getByRole('button', { name: 'Import', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Bulk import' }).click();
+	const bulk = page.getByRole('dialog', { name: 'Bulk Import Guides' });
+	const upload = bulk.getByLabel('Guide file');
+	const confirm = bulk.getByRole('button', { name: 'Confirm import' });
+	await upload.setInputFiles({
+		name: 'invalid.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from('{}')
+	});
+	await bulk.getByRole('button', { name: 'Preview import' }).click();
+	await expect(bulk.getByText('unknown category')).toBeVisible();
+	await expect(confirm).toBeDisabled();
+	await capture('preview-errors');
+	await upload.setInputFiles({
+		name: 'clean.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from('{}')
+	});
+	await bulk.getByRole('button', { name: 'Preview import' }).click();
+	await expect(bulk.getByText('Updated guide')).toBeVisible();
+	await expect(confirm).toBeEnabled();
+	expect(commits).toBe(0);
+	await capture('preview-clean');
+	await confirm.click();
+	await expect(bulk).toBeHidden();
+	expect(commits).toBe(1);
+
+	await page.getByRole('checkbox', { name: 'Select First guide for export' }).check();
+	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	const exportDialog = page.getByRole('dialog', { name: 'Export Guides' });
+	await expect(exportDialog.getByText('1 selected guide')).toBeVisible();
+	await exportDialog.getByRole('radio', { name: /Both/ }).check();
+	await capture('export-dialog');
+	const selected = page.waitForEvent('download');
+	await exportDialog.getByRole('button', { name: 'Download export' }).click();
+	expect((await selected).suggestedFilename()).toBe('troubleshooting-guides.zip');
+	expect(exports[0]).toEqual({ scope: 'selected', format: 'both', ids: [1], search: null });
+	await page.getByRole('checkbox', { name: 'Select page' }).check();
+	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	await expect(exportDialog.getByText('2 selected guides')).toBeVisible();
+	await exportDialog.getByRole('radio', { name: 'XLSX', exact: true }).check();
+	await exportDialog.getByRole('button', { name: 'Download export' }).click();
+	await expect(exportDialog).toBeHidden();
+	expect(exports[1]).toEqual({ scope: 'selected', format: 'xlsx', ids: [1, 2], search: null });
+	await page.getByRole('searchbox', { name: 'Search troubleshooting guides' }).fill('prompt');
+	await page.getByRole('button', { name: 'Select all matching filters' }).click();
+	await expect(
+		exportDialog.getByRole('radio', { name: 'All matching current filters' })
+	).toBeChecked();
+	await exportDialog.getByRole('button', { name: 'Download export' }).click();
+	await expect(exportDialog).toBeHidden();
+	await expect
+		.poll(() => exports[2])
+		.toEqual({ scope: 'matching', format: 'json', search: 'prompt' });
+	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	await exportDialog.getByRole('radio', { name: 'All guides', exact: true }).check();
+	await exportDialog.getByRole('button', { name: 'Download export' }).click();
+	await expect(exportDialog).toBeHidden();
+	expect(exports[3]).toEqual({ scope: 'all', format: 'json', search: null });
+});
+
+test('single import prefills an existing edit without saving or changing its target', async ({
+	page
+}) => {
+	await mockTroubleshooting(page);
+	await page.route('**/api/troubleshooting/import/single', (route) =>
+		route.fulfill({
+			json: { ...seedGuides[0], id: 2, title: 'Imported edit', symptom: '- One\n- Two' }
+		})
+	);
+	await page.goto('/troubleshooting');
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const edit = page.getByRole('dialog', { name: 'Edit Troubleshooting Guide' });
+	await edit.getByLabel('Import from file').setInputFiles({
+		name: 'guide.xlsx',
+		mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+		buffer: Buffer.from('workbook')
+	});
+	await expect(edit.getByRole('textbox', { name: /Solution \/ Manifestation Title/ })).toHaveValue(
+		'Imported edit'
+	);
+	await expect(edit.getByRole('textbox', { name: /Observed Symptom/ })).toHaveValue('- One\n- Two');
+	await expect(page.getByRole('heading', { name: 'First guide' })).toBeVisible();
+	const saved = page.waitForRequest((req) => req.method() === 'PUT');
+	await edit.getByRole('button', { name: 'Save Changes' }).click();
+	expect(new URL((await saved).url()).pathname).toBe('/api/troubleshooting/1');
+});
+
 async function assertDialogChromeIsSeparated(
 	dialog: ReturnType<Page['getByRole']>,
 	stickyTabs = false
@@ -62,6 +212,7 @@ async function assertDialogChromeIsSeparated(
 }
 
 async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh?: boolean } = {}) {
+	const guides = structuredClone(seedGuides);
 	categories.splice(
 		0,
 		categories.length,
@@ -232,7 +383,7 @@ async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh
 	});
 }
 
-const guides = [
+const seedGuides = [
 	{
 		id: 1,
 		title: 'First guide',
@@ -424,6 +575,8 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 	await createDialog
 		.getByRole('textbox', { name: /Detailed Instruction/ })
 		.fill('Run fixture check');
+	const snippet = '    first line\n\tsecond line';
+	await createDialog.getByRole('textbox', { name: /Script Line \/ INI Snippet/ }).fill(snippet);
 	const verification = createDialog.getByRole('textbox', { name: /Expected Verification Result/ });
 	await verification.pressSequentially('- Passes');
 	await verification.press('Enter');
@@ -435,6 +588,7 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 		'Fixture log'
 	]);
 	await expect(page.locator('.step-card ul li')).toHaveText(['Passes', 'Is stable']);
+	expect(await page.locator('.step-card pre').textContent()).toBe(snippet);
 
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
 	const editDialog = page.getByRole('dialog', { name: 'Edit Troubleshooting Guide' });
@@ -443,6 +597,7 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 		.fill('CRUD fixture updated');
 	await editDialog.getByRole('button', { name: 'Save Changes' }).click();
 	await expect(page.getByRole('heading', { name: 'CRUD fixture updated' })).toBeVisible();
+	expect(await page.locator('.step-card pre').textContent()).toBe(snippet);
 
 	await page.getByRole('button', { name: 'Delete', exact: true }).click();
 	const deleteDialog = page.getByRole('alertdialog', { name: 'Delete Troubleshooting Guide?' });
