@@ -125,6 +125,26 @@ func TestExamplesFunctionFilterAndSearch(t *testing.T) {
 	}
 }
 
+func TestExamplesLocatePageByID(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedTwoFunctionsWithExamples(t, app)
+
+	// Device ordering puts example 2 (IOT) before example 1 (WIFI_TEST).
+	resp, body := doRequest(t, app, "GET", "/api/examples?page=1&page_size=1&example_id=1")
+	if resp.StatusCode != 200 || !strings.Contains(body, `"page":2`) ||
+		!strings.Contains(body, `"total":2`) || !strings.Contains(body, `"id":1`) ||
+		strings.Contains(body, `"id":2`) {
+		t.Fatalf("located page: %d (body: %s)", resp.StatusCode, body)
+	}
+
+	resp, body = doRequest(t, app, "GET", "/api/examples?device=IOT&page=1&page_size=1&example_id=1")
+	if resp.StatusCode != 200 || !strings.Contains(body, `"page":1`) ||
+		!strings.Contains(body, `"total":1`) || !strings.Contains(body, `"id":2`) ||
+		strings.Contains(body, `"id":1`) {
+		t.Fatalf("excluded example changed the requested page or filters: %d (body: %s)", resp.StatusCode, body)
+	}
+}
+
 // TestExamplesDeviceParamPresentButEmpty: an absent device param means no
 // filter, while a present-but-empty one filters blank-scope (global)
 // examples — /api/devices/_global reuses this endpoint for its examples tab.
