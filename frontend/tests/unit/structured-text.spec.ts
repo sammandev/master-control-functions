@@ -28,9 +28,25 @@ describe('parseStructuredText', () => {
 			{ kind: 'paragraph', text: '<img src=x onerror=alert(1)>' }
 		]);
 	});
+
+	test('keeps existing guides with repeated numbered markers as one list', () => {
+		expect(parseStructuredText('1. Inspect\n1. Retry')).toEqual([
+			{ kind: 'ordered-list', items: ['Inspect', 'Retry'] }
+		]);
+	});
 });
 
 describe('getListEdit', () => {
+	test('keeps a blank boundary so a numbered list started after exiting renders separately', () => {
+		const value = '1. Inspect\n2. Retry\n3. ';
+		const edit = getListEdit(value, value.length, 'Enter')!;
+		const next = value.slice(0, edit.start) + edit.text + value.slice(edit.end);
+		expect(parseStructuredText(next + '1. Reconnect')).toEqual([
+			{ kind: 'ordered-list', items: ['Inspect', 'Retry'] },
+			{ kind: 'ordered-list', items: ['Reconnect'] }
+		]);
+	});
+
 	test('increments a numbered marker on the current line', () => {
 		expect(getListEdit('Before\n  9. Inspect DUT\nAfter', 23, 'Enter')).toEqual({
 			start: 23,
@@ -39,8 +55,8 @@ describe('getListEdit', () => {
 		});
 	});
 
-	test.each(['Enter', 'Backspace'] as const)('%s removes only an empty marker', (key) => {
-		expect(getListEdit('Keep\n- \nDone', 7, key)).toEqual({
+	test('Backspace removes only the empty marker', () => {
+		expect(getListEdit('Keep\n- \nDone', 7, 'Backspace')).toEqual({
 			start: 5,
 			end: 7,
 			text: ''

@@ -83,7 +83,7 @@ export function getListEdit(
 	if (!prefix || caret < start + prefix[0].length) return;
 
 	if (!line.slice(prefix[0].length).trim()) {
-		return { start, end, text: '' };
+		return { start, end, text: key === 'Enter' && start > 0 ? '\n' : '' };
 	}
 	if (key === 'Backspace') return;
 
