@@ -213,24 +213,15 @@ func serverError(c fiber.Ctx, action string, err error) error {
 	})
 }
 
-// likePattern wraps the search term for a substring LIKE match. The query
-// cannot use an ESCAPE clause (sqlc's SQLite grammar rejects it), so
-// multi-character wildcards are neutralized by stripping them; `_`
-// remains and behaves as a single-character wildcard — which still
-// matches the literal character, and domain names are underscore-heavy
-// (e.g. TX_MULTI_VERIFICATION stays searchable).
+// likePattern wraps the search term for a substring LIKE match. PostgreSQL
+// uses backslash as LIKE's default escape character, so a literal backslash
+// is doubled. User-supplied % is stripped; _ remains a single-character wildcard.
 func likePattern(search string) string {
-	cleaned := strings.Map(func(r rune) rune {
-		switch r {
-		case '\\', '%':
-			return -1
-		}
-		return r
-	}, strings.TrimSpace(search))
+	cleaned := strings.ReplaceAll(strings.TrimSpace(search), "%", "")
 	if cleaned == "" {
 		return ""
 	}
-	return "%" + cleaned + "%"
+	return "%" + strings.ReplaceAll(cleaned, `\`, `\\`) + "%"
 }
 
 // listQuery holds the parsed query-string parameters for GET /api/functions.
