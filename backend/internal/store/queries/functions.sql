@@ -12,6 +12,11 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (sqlc.narg('execution_phase')::text IS NULL OR execution_phase = sqlc.narg('execution_phase')::text)
 ORDER BY id;
 
+-- name: ListFunctionOptions :many
+-- Match the catalog's ascending name sort, including its bytewise tiebreak.
+SELECT id, name, source, interface FROM functions
+ORDER BY name COLLATE "C", (source || interface || name) COLLATE "C", id;
+
 -- name: CountFunctions :one
 SELECT COUNT(*) FROM functions
 WHERE (sqlc.narg('search')::text IS NULL

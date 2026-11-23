@@ -72,6 +72,14 @@ export async function listFunctions(params: ListParams = {}): Promise<ListResult
 	return request<ListResult>(`/api/functions${withQuery(params)}`);
 }
 
+export type FunctionOption = Pick<FunctionRow, 'id' | 'name' | 'source' | 'interface'>;
+
+export async function listFunctionOptions(
+	signal: AbortSignal
+): Promise<{ items: FunctionOption[] }> {
+	return request('/api/functions/options', { signal });
+}
+
 // Distinct enum values for the functions list filter bar (ticket 09).
 export interface FunctionFacets {
 	sources: string[];
