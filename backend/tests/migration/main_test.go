@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"webprogfndb/internal/db"
@@ -22,7 +23,7 @@ func sourceFixture(t *testing.T) (string, *sql.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Migrate(writable); err != nil {
+	if err := db.MigrateSQLiteTransferBaseline(writable); err != nil {
 		writable.Close()
 		t.Fatal(err)
 	}
@@ -131,8 +132,8 @@ func TestTransferFailureRollsBackAndCanBeRetried(t *testing.T) {
 	}
 	writable.Close()
 	ctx := context.Background()
-	if err := migration.Migrate(ctx, source, target, false); err == nil {
-		t.Fatal("PostgreSQL must reject NUL text after the earlier table was copied")
+	if err := migration.Migrate(ctx, source, target, false); err == nil || !strings.Contains(err.Error(), "table parameter_definitions:") {
+		t.Fatalf("PostgreSQL must reject NUL text after the earlier table was copied: %v", err)
 	}
 	var count int64
 	if err := target.QueryRow("SELECT COUNT(*) FROM functions").Scan(&count); err != nil {
@@ -161,15 +162,15 @@ func TestTransferRefusesNonemptyTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, source := sourceFixture(t)
-	if err := db.MigratePostgres(target); err != nil {
+	if err := db.MigratePostgresTransferBaseline(target); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := target.Exec(`INSERT INTO functions (id, source, interface, name, created_at, updated_at)
 		VALUES (900, 'DLL', 'WIFI_TEST', 'KEEP', 't', 't')`); err != nil {
 		t.Fatal(err)
 	}
-	if err := migration.Migrate(context.Background(), source, target, false); err == nil {
-		t.Fatal("nonempty target must be rejected")
+	if err := migration.Migrate(context.Background(), source, target, false); err == nil || !strings.Contains(err.Error(), "target table functions is not empty") {
+		t.Fatalf("nonempty target must be rejected: %v", err)
 	}
 	var name string
 	if err := target.QueryRow("SELECT name FROM functions WHERE id = 900").Scan(&name); err != nil {
