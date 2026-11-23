@@ -3,6 +3,7 @@
 	import ExampleFieldUsage from '#lib/components/ExampleFieldUsage.svelte';
 	import { getComposeFields } from '#lib/compose.ts';
 	import { copyText } from '#lib/clipboard.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import {
 		listExamples,
 		deleteExample,
@@ -46,6 +47,7 @@
 	let pageSize = $state(20);
 	let loading = $state(false);
 	let loadError = $state('');
+	const listRequestGuard = createLatestRequestGuard();
 	const usageFields = $derived(
 		functionId === undefined
 			? null
@@ -71,18 +73,21 @@
 	}
 
 	async function load(filters: ExampleListParams) {
+		const request = listRequestGuard.begin();
 		loading = true;
 		loadError = '';
 		try {
 			const result = await listExamples({ ...filters, page_size: pageSize });
+			if (!listRequestGuard.isCurrent(request)) return;
 			items = result.items;
 			total = result.total;
 		} catch (error) {
+			if (!listRequestGuard.isCurrent(request)) return;
 			items = [];
 			total = 0;
 			loadError = error instanceof Error ? error.message : String(error);
 		} finally {
-			loading = false;
+			if (listRequestGuard.isCurrent(request)) loading = false;
 		}
 	}
 
