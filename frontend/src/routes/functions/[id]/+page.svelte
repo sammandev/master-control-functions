@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -16,10 +15,6 @@
 	import Button from '#lib/components/ui/button.svelte';
 	import Breadcrumb from '#lib/components/ui/breadcrumb.svelte';
 	import { RefreshCw } from '@lucide/svelte';
-
-	const previousTitle = document.title || 'Web Program Functions Database';
-	onDestroy(() => (document.title = previousTitle));
-
 	const fnId = $derived(Number(page.params.id));
 	let functions = $state.raw<FunctionOption[] | null>(null);
 	let switchError = $state('');
@@ -51,11 +46,11 @@
 
 <svelte:head>
 	{#await content}
-		<title>{previousTitle}</title>
+		<title>Functions | MasterControl Functions Database</title>
 	{:then fn}
 		<title>{fn.name} | Functions | MasterControl Functions Database</title>
 	{:catch}
-		<title>{previousTitle}</title>
+		<title>Functions | MasterControl Functions Database</title>
 	{/await}
 </svelte:head>
 
