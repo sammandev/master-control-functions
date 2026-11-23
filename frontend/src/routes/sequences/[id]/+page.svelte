@@ -7,6 +7,7 @@
 	import {
 		getSequence,
 		updateSequence,
+		updateSequenceMeta,
 		deleteSequence,
 		emitSequence,
 		type SequenceDetail,
@@ -24,7 +25,7 @@
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import { RefreshCw } from '@lucide/svelte';
 
-	// The steps array is the source of truth; every mutation is a full-replace PUT.
+	// Step edits are full-replace PUTs; metadata is saved separately.
 	// Reorder stays button-driven and gives no toast; durable saves and deletes toast.
 	let seqId = $derived(Number(page.params.id));
 
@@ -105,11 +106,24 @@
 	}
 
 	// Returns the failure message ('' on success) so each form shows its own error.
-	async function put(body: SequenceInput): Promise<string> {
-		if (!seq) return 'Sequence is not loaded.';
+	async function save(
+		update: Promise<SequenceDetail>,
+		{ reconcileDraft = false } = {}
+	): Promise<string> {
 		try {
-			seq = await updateSequence(seq.id, body);
+			const updated = await update;
 			actionError = '';
+			if (reconcileDraft && editingIndex !== null) {
+				const stepId = seq?.steps[editingIndex]?.id;
+				const index = updated.steps.findIndex((step) => step.id === stepId);
+				if (index === -1) {
+					cancelStep();
+					actionError = 'Steps changed. Reopen the step to continue editing.';
+				} else {
+					editingIndex = index;
+				}
+			}
+			seq = updated;
 			await refreshEmit();
 			return '';
 		} catch (e) {
@@ -119,10 +133,10 @@
 
 	async function saveMeta() {
 		if (!seq || !nameDraft.trim()) return;
-		const body = toInput();
-		body.name = nameDraft.trim();
-		body.description = descDraft;
-		const error = await put(body);
+		const error = await save(
+			updateSequenceMeta(seq.id, { name: nameDraft.trim(), description: descDraft }),
+			{ reconcileDraft: true }
+		);
 		if (error) {
 			actionError = error;
 			return;
@@ -177,7 +191,7 @@
 		target.on_fail = editOnFail;
 		target.device_name = editDevice;
 		target.note = editNote;
-		const error = await put(body);
+		const error = await save(updateSequence(seq.id, body));
 		if (error) {
 			stepError = error;
 			return;
@@ -199,7 +213,7 @@
 		const body = toInput();
 		const [step] = body.steps.splice(i, 1);
 		body.steps.splice(j, 0, step);
-		const error = await put(body);
+		const error = await save(updateSequence(seq.id, body));
 		if (error) {
 			actionError = error;
 			return;
@@ -212,7 +226,7 @@
 		if (!seq || seq.steps.length <= 1) return;
 		const body = toInput();
 		body.steps.splice(i, 1);
-		const error = await put(body);
+		const error = await save(updateSequence(seq.id, body));
 		if (error) {
 			actionError = error;
 			return;
