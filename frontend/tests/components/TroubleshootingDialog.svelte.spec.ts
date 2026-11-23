@@ -1,4 +1,4 @@
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import TroubleshootingDialog from '../../src/lib/components/TroubleshootingDialog.svelte';
@@ -60,6 +60,35 @@ describe('TroubleshootingDialog accessibility', () => {
 			'Testing Stage / Category',
 			'Severity'
 		]);
+	});
+
+	it('does not save empty list items left at the end of a field', async () => {
+		const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () =>
+			Response.json({ id: 1 })
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		await renderDialog();
+		await page.getByRole('textbox', { name: /Solution \/ Manifestation Title/ }).fill('Title');
+		await page.getByRole('textbox', { name: /Action Headline/ }).fill('Action');
+		const symptom = page.getByRole('textbox', { name: /Observed Symptom/ });
+		await symptom.click();
+		await userEvent.keyboard('1. Inspect logs{Enter}');
+		await expect.element(symptom).toHaveValue('1. Inspect logs\n2. ');
+		await page
+			.getByRole('textbox', { name: /Root Cause Explanation/ })
+			.fill('- Check configuration\n- ');
+		await page.getByRole('textbox', { name: /Detailed Instruction/ }).fill('Retry\n1.');
+		await page
+			.getByRole('textbox', { name: /Expected Verification Result/ })
+			.fill('Confirm the result\n-');
+		await page.getByRole('textbox', { name: /Script Line/ }).fill('RUN\n- ');
+		await page.getByRole('button', { name: 'Create Guide' }).click();
+		await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
+		expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+			symptom: '1. Inspect logs',
+			root_cause: '- Check configuration',
+			steps: [{ instruction: 'Retry', verification: 'Confirm the result', script_snippet: 'RUN' }]
+		});
 	});
 
 	it('renders structured field errors and wires every invalid control to an exact error id', async () => {

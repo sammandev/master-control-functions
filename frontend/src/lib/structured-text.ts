@@ -6,6 +6,15 @@ export type StructuredTextBlock =
 const bulletPattern = /^\s*[-*+]\s+(.+?)\s*$/;
 const orderedPattern = /^\s*\d+[.)]\s+(.+?)\s*$/;
 const listPrefixPattern = /^([\t ]*)([-*+]|(\d+)([.)]))[\t ]+/;
+const emptyListMarkerPattern = /^(?:[-*+]|\d+[.)])?$/;
+
+export function trimEmptyListItems(value: string): string {
+	const lines = value.split('\n');
+	while (lines.length && emptyListMarkerPattern.test(lines[lines.length - 1].trim())) {
+		lines.pop();
+	}
+	return lines.join('\n').trim();
+}
 
 export function parseStructuredText(value: string): StructuredTextBlock[] {
 	const blocks: StructuredTextBlock[] = [];

@@ -20,6 +20,7 @@
 		type TroubleshootingSeverity as RegistrySeverity
 	} from '#lib/troubleshooting-registry.ts';
 	import type { DeviceSummary } from '#lib/devices.ts';
+	import { trimEmptyListItems } from '#lib/structured-text.ts';
 	import DevicePicker from '#lib/components/DevicePicker.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
@@ -121,12 +122,15 @@
 		steps = moveDraftStep(steps, index, delta);
 	}
 
-	function validateClient(): Record<string, string> {
+	function validateClient(
+		normalizedSymptom: string,
+		normalizedSteps: TroubleshootingDraftStep[]
+	): Record<string, string> {
 		const errs: Record<string, string> = {};
 		if (!title.trim()) errs.title = 'Title is required';
-		if (!symptom.trim()) errs.symptom = 'Observed symptom is required';
-		if (steps.length === 0) errs.steps = 'At least one resolution step is required';
-		Object.assign(errs, validateTroubleshootingDraftSteps(steps));
+		if (!normalizedSymptom) errs.symptom = 'Observed symptom is required';
+		if (normalizedSteps.length === 0) errs.steps = 'At least one resolution step is required';
+		Object.assign(errs, validateTroubleshootingDraftSteps(normalizedSteps));
 		return errs;
 	}
 
@@ -147,7 +151,14 @@
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		generalError = '';
-		const errs = validateClient();
+		const normalizedSymptom = trimEmptyListItems(symptom);
+		const normalizedSteps = steps.map((s) => ({
+			...s,
+			instruction: trimEmptyListItems(s.instruction),
+			script_snippet: trimEmptyListItems(s.script_snippet),
+			verification: trimEmptyListItems(s.verification)
+		}));
+		const errs = validateClient(normalizedSymptom, normalizedSteps);
 		if (Object.keys(errs).length > 0) {
 			fieldErrors = errs;
 			return;
@@ -161,13 +172,13 @@
 			device_name: deviceName,
 			function_name: functionName.trim(),
 			error_code: errorCode.trim().toUpperCase(),
-			symptom: symptom.trim(),
-			root_cause: rootCause.trim(),
-			steps: steps.map((s) => ({
+			symptom: normalizedSymptom,
+			root_cause: trimEmptyListItems(rootCause),
+			steps: normalizedSteps.map((s) => ({
 				title: s.title.trim(),
-				instruction: s.instruction.trim(),
-				script_snippet: s.script_snippet.trim(),
-				verification: s.verification.trim()
+				instruction: s.instruction,
+				script_snippet: s.script_snippet,
+				verification: s.verification
 			}))
 		};
 		try {
