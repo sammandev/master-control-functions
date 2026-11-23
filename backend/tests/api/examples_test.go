@@ -152,6 +152,18 @@ func TestExamplesFunctionFilterAndSearch(t *testing.T) {
 	}
 }
 
+func TestExamplesSearchByFunctionLabel(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedTwoFunctionsWithExamples(t, app)
+
+	resp, body := doRequest(t, app, "GET", "/api/examples?search=dll%20fn_one")
+	if resp.StatusCode != 200 || !strings.Contains(body, `"total":1`) ||
+		!strings.Contains(body, `"meaning":"resets the DUT"`) ||
+		strings.Contains(body, `"meaning":"locks the tester"`) {
+		t.Fatalf("function label search: %d (body: %s)", resp.StatusCode, body)
+	}
+}
+
 func TestExamplesLocatePageByID(t *testing.T) {
 	app, _ := newLinksTestApp(t)
 	seedTwoFunctionsWithExamples(t, app)
