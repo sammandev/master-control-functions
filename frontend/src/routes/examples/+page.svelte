@@ -1,12 +1,18 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { resolve } from '$app/paths';
 	import ExamplesWorkspace from '#lib/components/ExamplesWorkspace.svelte';
+
+	const previousTitle = document.title || 'Web Program Functions Database';
+	onDestroy(() => (document.title = previousTitle));
 
 	// Global Examples catalog (catalog-workspace ticket 04): the same
 	// filterable list/detail workspace the Functions and dictionary pages
 	// use, with search and Function/Device filters beside complete script
 	// details and explicit CRUD.
 </script>
+
+<svelte:head><title>Examples | MasterControl Functions Database</title></svelte:head>
 
 <h1 class="mt-2 mb-4 text-xl font-semibold">Examples</h1>
 
