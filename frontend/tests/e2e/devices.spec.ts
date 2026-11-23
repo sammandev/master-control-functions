@@ -395,5 +395,13 @@ for (const [tab, kind, noun] of [
 			await page.evaluate(() => window.scrollTo(0, 0));
 			await page.screenshot({ path: join(evidence, `${tab}.png`) });
 		}
+
+		const previousSelection = page.url();
+		await match.click();
+		await expect(page).not.toHaveURL(previousSelection);
+		await search.clear();
+		await expect(page.getByText('Page 2 of 2')).toBeVisible();
+		await expect(match).toBeVisible();
+		await expect(page.getByRole('heading', { name: matchName, exact: true })).toBeVisible();
 	});
 }

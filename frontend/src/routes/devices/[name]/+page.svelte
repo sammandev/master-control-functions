@@ -229,11 +229,23 @@
 	const critTerm = $derived(critSearch.trim());
 
 	function setDefinitionSearch(next: 'parameters' | 'criteria', value: string) {
+		const term = value.trim();
+		const previousTerm = next === 'parameters' ? paramTerm : critTerm;
+		const selected = next === 'parameters' ? selectedParameter : selectedCriterion;
+		if (
+			!term &&
+			previousTerm &&
+			selected &&
+			page.url.searchParams.get('definition') === String(selected.id)
+		) {
+			void inspectDefinition(next, selected.id);
+			return;
+		}
 		if (next === 'parameters') {
-			if (value.trim() !== paramTerm) paramPage = 1;
+			if (term !== previousTerm) paramPage = 1;
 			paramSearch = value;
 		} else {
-			if (value.trim() !== critTerm) critPage = 1;
+			if (term !== previousTerm) critPage = 1;
 			critSearch = value;
 		}
 	}
@@ -318,7 +330,9 @@
 		const filtered = next === 'parameters' ? paramTerm : critTerm;
 		if (next === 'parameters') paramSearch = '';
 		else critSearch = '';
-		await selectDefinition(next, id);
+		if (tab !== next || page.url.searchParams.get('definition') !== String(id)) {
+			await selectDefinition(next, id);
+		}
 		const loaded =
 			next === 'parameters' ? [...paramScoped, ...paramGlobal] : [...critScoped, ...critGlobal];
 		if (!filtered && loaded.some((row) => row.id === id)) return;
