@@ -211,8 +211,8 @@
 		<div class="directory-title">
 			<h1>Functions</h1>
 			<span role="status"
-				>{#await content}Loading functions...{:then result}{result.total} functions{:catch}0
-					functions{/await}</span
+				>{#await content}Loading functions...{:then result}{result.total} functions{:catch}Count
+					unavailable{/await}</span
 			>
 		</div>
 	</div>
@@ -312,7 +312,7 @@
 		<div class="rail-controls">
 			<div class="rail-heading">
 				<h2>Functions</h2>
-				<span>{#await content}...{:then result}{result.total}{:catch}0{/await}</span>
+				{#await content}<span>...</span>{:then result}<span>{result.total}</span>{:catch}{/await}
 			</div>
 			<div class="catalog-controls">
 				<div class="function-search">

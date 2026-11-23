@@ -2618,7 +2618,13 @@ test('Functions catalog retries failed discovery without stale details', async (
 			: route.fulfill({ json: { items: [functions[0]], total: 1, page: 1, page_size: 20 } });
 	});
 	await page.goto('/functions?function=1');
+	const railCount = page
+		.getByRole('complementary', { name: 'Functions list', exact: true })
+		.locator('.rail-heading span');
 	await expect(page.getByRole('alert')).toContainText('Catalog unavailable');
+	await expect(page.getByText('Count unavailable', { exact: true })).toBeVisible();
+	await expect(page.getByText('0 functions', { exact: true })).toHaveCount(0);
+	await expect(railCount).toHaveCount(0);
 	await expect(
 		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
 	).toHaveCount(0);
@@ -2626,6 +2632,8 @@ test('Functions catalog retries failed discovery without stale details', async (
 	await expect(
 		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
 	).toBeVisible();
+	await expect(page.getByText('1 functions', { exact: true })).toBeVisible();
+	await expect(railCount).toHaveText('1');
 	expect(attempts).toBe(2);
 });
 
