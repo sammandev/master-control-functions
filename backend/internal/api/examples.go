@@ -153,6 +153,14 @@ func listExamples(q *store.Queries) fiber.Handler {
 		}
 		// Go-side pagination over the SQL-sorted rows (device, id).
 		lq := parseListQuery(c)
+		if id, err := strconv.ParseInt(c.Query("example_id"), 10, 64); err == nil && id > 0 {
+			for index, row := range rows {
+				if row.ID == id {
+					lq.page = int64(index)/lq.pageSize + 1
+					break
+				}
+			}
+		}
 		start := (lq.page - 1) * lq.pageSize
 		if start > int64(len(rows)) {
 			start = int64(len(rows))

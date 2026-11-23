@@ -86,16 +86,27 @@
 		void loadFunctionNames();
 	});
 
-	const requestKey = $derived(JSON.stringify({ params, deviceFilter, retry }));
+	const viewKey = $derived(JSON.stringify({ params, deviceFilter }));
+	const requestKey = $derived({ viewKey, retry });
+	let createdSelection: { row: ExampleRow; viewKey: string } | null = null;
 	let revision = 0;
 	const content = $derived.by(() => {
-		const request: { params: typeof params; deviceFilter: string | null } = JSON.parse(requestKey);
-		return load(request.params, request.deviceFilter);
+		const { viewKey: key } = requestKey;
+		const request: { params: typeof params; deviceFilter: string | null } = JSON.parse(key);
+		if (createdSelection?.viewKey !== key) createdSelection = null;
+		return load(request.params, request.deviceFilter, createdSelection?.row);
 	});
-	function setQuery(key: string, value: string, reset = true, replaceState = false) {
+	function navigateQuery(query: SvelteURLSearchParams, replaceState = false) {
 		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
-		const query = new SvelteURLSearchParams(routePage.url.searchParams.toString());
 		query.delete('source');
+
+		return goto(resolve(`examples?${query.toString()}`), {
+			reset: false,
+			replace: replaceState
+		});
+	}
+	function setQuery(key: string, value: string, reset = true, replaceState = false) {
+		const query = new SvelteURLSearchParams(routePage.url.searchParams.toString());
 		if (value) query.set(key, value);
 		else query.delete(key);
 		if (reset) {
@@ -103,10 +114,7 @@
 			query.delete('example');
 		}
 
-		return goto(resolve(`examples?${query.toString()}`), {
-			reset: false,
-			replace: replaceState
-		});
+		return navigateQuery(query, replaceState);
 	}
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	function scheduleSearch(term: string) {
@@ -120,9 +128,9 @@
 		revision++;
 		clearTimeout(searchTimer);
 	});
-	async function load(query: typeof params, device: string | null) {
+	async function load(query: typeof params, device: string | null, created?: ExampleRow) {
 		const attempt = ++revision;
-		const result = await listExamples({
+		let result = await listExamples({
 			function_name: query.function_name,
 			search: query.search,
 			// Absent = every Device; '' = Global-only (the API sends the key
@@ -130,9 +138,35 @@
 			// examples instead of meaning "no filter").
 			device: device === null ? undefined : device === '_global' ? '' : device,
 			page: query.page,
-			page_size: query.page_size
+			page_size: query.page_size,
+			example_id: created?.id
 		});
 		if (attempt !== revision) return result;
+		if (created) {
+			const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
+			if (!result.items.some((row) => row.id === created.id)) {
+				const functionName =
+					query.function_name === created.function_name ? query.function_name : undefined;
+				result = await listExamples({
+					function_name: functionName,
+					device: device === null ? undefined : created.device_name,
+					page_size: query.page_size,
+					example_id: created.id
+				});
+				if (attempt !== revision) return result;
+				if (!result.items.some((row) => row.id === created.id))
+					throw new Error('The saved example is no longer available.');
+				location.delete('search');
+				if (!functionName) location.delete('function_name');
+				if (device !== null) location.set('device', created.device_name || '_global');
+			}
+			if (result.page > 1) location.set('page', String(result.page));
+			else location.delete('page');
+			location.set('example', String(created.id));
+			createdSelection = null;
+			await navigateQuery(location);
+			return result;
+		}
 		const last = Math.max(1, Math.ceil(result.total / query.page_size));
 		if (query.page > last) {
 			await setQuery('page', String(last), false, true);
@@ -312,7 +346,11 @@
 	editRow={editTarget}
 	prefillDevice={deviceFilter && deviceFilter !== '_global' ? deviceFilter : ''}
 	onsaved={async (row) => {
-		await setQuery('example', String(row.id), false);
+		if (editTarget) await setQuery('example', String(row.id), false);
+		else {
+			clearTimeout(searchTimer);
+			createdSelection = { row, viewKey };
+		}
 		retry++;
 		void loadFunctionNames();
 	}}

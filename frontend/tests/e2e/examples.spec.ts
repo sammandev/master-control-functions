@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 
 // Examples page happy path (ticket 01 tracer). The /examples surface is
 // the thinnest full-CRUD screen and proves the new UI wrappers end-to-end.
@@ -74,4 +74,81 @@ test('examples list renders and search filters it', async ({ page, request }) =>
 	await expect(page.getByText('No examples yet.')).toBeVisible();
 	await search.fill('e2e seeded example');
 	await expect(page.getByRole('row', { name: /TX_MULTI_VERIFICATION/ })).toBeVisible();
+});
+
+async function createWifiExample(page: Page, script: string, meaning: string) {
+	await page.getByRole('button', { name: 'New example', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'New Example', exact: true });
+	await expect(dialog).toContainText('Device: WIFI_TEST');
+	await dialog
+		.getByRole('textbox', { name: 'Function name', exact: true })
+		.fill('TX_MULTI_VERIFICATION');
+	await dialog.getByRole('textbox', { name: 'Script', exact: true }).fill(script);
+	await dialog.getByRole('textbox', { name: 'Meaning', exact: true }).fill(meaning);
+	const saved = page.waitForResponse(
+		(response) => response.url().endsWith('/api/examples') && response.request().method() === 'POST'
+	);
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	const response = await saved;
+	expect(response.status()).toBe(201);
+	const { id } = await response.json();
+	await expect(dialog).toBeHidden();
+	await expect(page.getByText('Example created', { exact: true })).toBeVisible();
+	return id as number;
+}
+
+test('creating an example selects it even when it sorts onto a later page', async ({
+	page,
+	request
+}) => {
+	const firstPage = await request.get('/api/examples?device=WIFI_TEST&page_size=10');
+	expect(firstPage.ok()).toBe(true);
+	const { total } = await firstPage.json();
+	expect(total).toBeGreaterThanOrEqual(10);
+
+	await page.goto('/examples?device=WIFI_TEST&page_size=10');
+	const details = page.getByRole('region', { name: 'Example details' });
+	await expect(details.getByRole('button', { name: /^Copy example \d+$/ })).toBeVisible();
+
+	const script = 'DLLWIFI_TEST|TX_MULTI_VERIFICATION|ANT=15|12345|NEXT|FAIL';
+	const meaning = 'Verify that the newly saved WIFI_TEST script stays selected.';
+	const id = await createWifiExample(page, script, meaning);
+	await expect(
+		details.getByRole('button', { name: `Copy example ${id}`, exact: true })
+	).toBeVisible();
+
+	await expect(details.getByText(script, { exact: true })).toBeVisible();
+	await expect(details.getByText(meaning, { exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('button', {
+			name: 'Select example of TX_MULTI_VERIFICATION (WIFI_TEST)',
+			pressed: true
+		})
+	).toHaveText(/Verify that the newly saved/);
+	expect(Object.fromEntries(new URL(page.url()).searchParams)).toMatchObject({
+		device: 'WIFI_TEST',
+		page: String(Math.floor(total / 10) + 1),
+		page_size: '10',
+		example: String(id)
+	});
+	await page.reload();
+	await expect(
+		details.getByRole('button', { name: `Copy example ${id}`, exact: true })
+	).toBeVisible();
+});
+
+test('creating an example reveals it when the active search excludes it', async ({ page }) => {
+	await page.goto('/examples?device=WIFI_TEST&search=not-a-matching-script');
+	await expect(page.getByText('No examples match.', { exact: false })).toBeVisible();
+
+	const script = 'DLLWIFI_TEST|TX_MULTI_VERIFICATION|ANT=15|12346|NEXT|FAIL';
+	const meaning = 'Verify that a search cannot hide the newly saved script.';
+	const id = await createWifiExample(page, script, meaning);
+	const details = page.getByRole('region', { name: 'Example details' });
+	await expect(
+		details.getByRole('button', { name: `Copy example ${id}`, exact: true })
+	).toBeVisible();
+	await expect(details.getByText(meaning, { exact: true })).toBeVisible();
+	await expect(page.getByLabel('Search examples')).toHaveValue('');
+	expect(new URL(page.url()).searchParams.get('device')).toBe('WIFI_TEST');
 });
