@@ -101,6 +101,17 @@ export async function updateSequence(id: number, body: SequenceInput): Promise<S
 	});
 }
 
+export async function updateSequenceMeta(
+	id: number,
+	body: Pick<SequenceInput, 'name' | 'description'>
+): Promise<SequenceDetail> {
+	return request<SequenceDetail>(`/api/sequences/${id}`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
+	});
+}
+
 export async function deleteSequence(id: number): Promise<void> {
 	await request<void>(`/api/sequences/${id}`, { method: 'DELETE' });
 }

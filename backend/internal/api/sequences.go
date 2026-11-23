@@ -36,20 +36,25 @@ type sequenceStepBody struct {
 	Note              string            `json:"note"`
 }
 
-// sequenceBody is the JSON shape of a Sequence on create/PUT. PUT is a
-// full replace: the submitted step array becomes the whole sequence.
+// sequenceBody is the write payload. PUT replaces the entire sequence;
+// PATCH updates only its name and description.
 type sequenceBody struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
 	Steps       []sequenceStepBody `json:"steps"`
 }
 
-func (b *sequenceBody) validate() map[string]string {
+func (b *sequenceBody) validateMeta() map[string]string {
 	fields := map[string]string{}
 	b.Name = strings.TrimSpace(b.Name)
 	if b.Name == "" {
 		fields["name"] = "is required"
 	}
+	return fields
+}
+
+func (b *sequenceBody) validate() map[string]string {
+	fields := b.validateMeta()
 	if len(b.Steps) == 0 {
 		fields["steps"] = "at least one step is required"
 	}
@@ -144,7 +149,7 @@ func sequenceStepResponseFromRow(r store.ListSequenceStepsRow) (sequenceStepResp
 }
 
 // sequenceDetail loads the sequence and its ordered steps and builds the
-// shared response shape for GET, POST and PUT.
+// shared response shape for GET, POST, PUT and PATCH.
 func sequenceDetail(c fiber.Ctx, q *store.Queries, id int64) (sequenceResponse, error) {
 	row, err := q.GetSequence(c.Context(), id)
 	if err != nil {
@@ -220,7 +225,8 @@ func registerSequenceRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Get("/api/sequences", listSequences(q))
 	app.Post("/api/sequences", createSequence(q, d))
 	app.Get("/api/sequences/:id", getSequence(q))
-	app.Put("/api/sequences/:id", updateSequence(q, d))
+	app.Put("/api/sequences/:id", updateSequence(q, d, true))
+	app.Patch("/api/sequences/:id", updateSequence(q, d, false))
 	app.Delete("/api/sequences/:id", deleteSequence(q))
 	app.Post("/api/sequences/:id/emit", emitSequence(q))
 }
@@ -341,9 +347,7 @@ func getSequence(q *store.Queries) fiber.Handler {
 	}
 }
 
-// updateSequence is a full replace: meta + the whole step array in one
-// transaction (last-write-wins concurrency per spec).
-func updateSequence(q *store.Queries, d *sql.DB) fiber.Handler {
+func updateSequence(q *store.Queries, d *sql.DB, replaceSteps bool) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 		if err != nil {
@@ -353,7 +357,13 @@ func updateSequence(q *store.Queries, d *sql.DB) fiber.Handler {
 		if err := c.Bind().Body(&b); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
 		}
-		if fields := b.validate(); len(fields) > 0 {
+		var fields map[string]string
+		if replaceSteps {
+			fields = b.validate()
+		} else {
+			fields = b.validateMeta()
+		}
+		if len(fields) > 0 {
 			return validationError(c, fields)
 		}
 		if _, err := q.GetSequence(c.Context(), id); err != nil {
@@ -379,8 +389,10 @@ func updateSequence(q *store.Queries, d *sql.DB) fiber.Handler {
 			}); err != nil {
 				return err
 			}
-			if err := writeSteps(c, tq, id, b.Steps); err != nil {
-				return err
+			if replaceSteps {
+				if err := writeSteps(c, tq, id, b.Steps); err != nil {
+					return err
+				}
 			}
 			return tx.Commit()
 		}()

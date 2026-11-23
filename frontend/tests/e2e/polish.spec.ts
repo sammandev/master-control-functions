@@ -4373,8 +4373,8 @@ function emitSequenceText(sequence: SequenceDetail) {
 	};
 }
 
-// Stateful fake of the sequences API: records every request and applies
-// PUT as a full replace, so tests can assert the exact write payload.
+// Stateful fake of the sequences API: PUT replaces the sequence;
+// PATCH updates only the metadata.
 async function mockSequenceStore(
 	page: Page,
 	initial: SequenceDetail[],
@@ -4433,7 +4433,7 @@ async function mockSequenceStore(
 			}
 			return route.fulfill({ json: sequence });
 		}
-		if (request.method() === 'PUT') {
+		if (request.method() === 'PUT' || request.method() === 'PATCH') {
 			if (rejectSave) {
 				const { error, fields } = rejectSave;
 				rejectSave = undefined;
@@ -4442,15 +4442,17 @@ async function mockSequenceStore(
 			const input = body as SequenceInput;
 			sequence.name = input.name;
 			sequence.description = input.description;
-			sequence.steps = input.steps.map((step, index) => {
-				const stored = step as Partial<SequenceStep>;
-				return {
-					...step,
-					id: stored.id ?? nextStepId++,
-					position: index + 1,
-					function_exists: stored.function_exists ?? true
-				};
-			});
+			if (request.method() === 'PUT') {
+				sequence.steps = input.steps.map((step, index) => {
+					const stored = step as Partial<SequenceStep>;
+					return {
+						...step,
+						id: stored.id ?? nextStepId++,
+						position: index + 1,
+						function_exists: stored.function_exists ?? true
+					};
+				});
+			}
 			sequence.updated_at = '2026-10-08';
 			return route.fulfill({ json: sequence });
 		}
@@ -4655,10 +4657,12 @@ test('Sequence rename keeps the ordered steps unchanged', async ({ page }) => {
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByText('Sequence updated', { exact: true })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'TRANSMIT_CHECK_V2', exact: true })).toBeVisible();
-	const renamed = store.requests.filter((r) => r.method === 'PUT').at(-1)!.body as SequenceInput;
-	expect(renamed.name).toBe('TRANSMIT_CHECK_V2');
-	expect(renamed.description).toBe('bench sequence');
-	expect(renamed.steps.map((step) => step.function_name)).toEqual([
+	const renames = store.requests.filter((r) => r.method === 'PATCH' || r.method === 'PUT');
+	expect(renames).toMatchObject([
+		{ method: 'PATCH', body: { name: 'TRANSMIT_CHECK_V2', description: 'bench sequence' } }
+	]);
+	expect(renames[0].body).not.toHaveProperty('steps');
+	expect(store.sequences[0].steps.map((step) => step.function_name)).toEqual([
 		'TX_MULTI_VERIFICATION',
 		'RX_PER'
 	]);
