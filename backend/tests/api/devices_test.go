@@ -728,6 +728,7 @@ func registryScopeCounts(t *testing.T, d *sql.DB) (registered, scopes int) {
 				UNION SELECT device_name FROM parameter_definitions
 				UNION SELECT device_name FROM criteria_definitions
 				UNION SELECT device_name FROM examples
+				UNION SELECT interface FROM functions
 			) v WHERE v.device_name <> '')`).Scan(&registered, &scopes)
 	if err != nil {
 		t.Fatalf("registry/scope counts: %v", err)
