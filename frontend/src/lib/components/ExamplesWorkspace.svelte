@@ -8,7 +8,12 @@
 	import { resolve } from '$app/paths';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { Plus, RefreshCw, ChevronRight, Search } from '@lucide/svelte';
-	import { listExamples, deleteExample, type ExampleRow } from '#lib/examples.ts';
+	import {
+		listExamples,
+		listExampleFunctionNames,
+		deleteExample,
+		type ExampleRow
+	} from '#lib/examples.ts';
 	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
@@ -57,16 +62,7 @@
 		functionLoading = true;
 		functionError = '';
 		try {
-			const result = await listExamples({ page: 1, page_size: 100 });
-			const names = result.items.map((row) => row.function_name);
-			let loaded = result.items.length;
-			for (let next = 2; loaded < result.total; next++) {
-				const more = await listExamples({ page: next, page_size: 100 });
-				if (!more.items.length) throw new Error('The example list changed. Please retry.');
-				names.push(...more.items.map((row) => row.function_name));
-				loaded += more.items.length;
-			}
-			functionNames = names;
+			functionNames = (await listExampleFunctionNames()).items;
 		} catch (error) {
 			functionError = error instanceof Error ? error.message : String(error);
 		} finally {

@@ -20,6 +20,15 @@ WHERE (sqlc.narg('function_source')::text IS NULL OR e.function_source = sqlc.na
        OR lower(e.meaning) LIKE lower(sqlc.narg('search')::text))
 ORDER BY e.device_name, e.id;
 
+-- name: ListExampleFunctionNames :many
+SELECT function_name
+FROM (
+    SELECT DISTINCT ON (function_name) function_name, device_name, id
+    FROM examples
+    ORDER BY function_name, device_name, id
+) first_examples
+ORDER BY device_name, id;
+
 -- name: CountExamples :one
 SELECT COUNT(*)
 FROM examples e

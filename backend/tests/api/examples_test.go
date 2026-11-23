@@ -28,6 +28,33 @@ func seedTwoFunctionsWithExamples(t *testing.T, app *fiber.App) {
 	}
 }
 
+func TestExampleFunctionNames(t *testing.T) {
+	app, d := newLinksTestApp(t)
+	const path = "/api/examples/function-names"
+	if resp, body := doRequest(t, app, "GET", path); resp.StatusCode != 200 || body != `{"items":[]}` {
+		t.Fatalf("empty names: %d (body: %s)", resp.StatusCode, body)
+	}
+
+	seedTwoFunctionsWithExamples(t, app)
+	if resp, body := postJSON(t, app, "/api/functions",
+		`{"source":"DLL","interface":"TELNET","name":"NO_EXAMPLES"}`); resp.StatusCode != 201 {
+		t.Fatalf("seed function without examples: %d (body: %s)", resp.StatusCode, body)
+	}
+	_, err := d.Exec(`INSERT INTO examples
+		(function_source, function_name, device_name, script, meaning, created_at, updated_at)
+		VALUES
+			('EXE', 'FN_ONE', '', 'duplicate name script', 'duplicate name meaning', '', ''),
+			('DLL', 'ORPHAN_FN', 'TELNET', 'orphan script', 'orphan meaning', '', '')`)
+	if err != nil {
+		t.Fatalf("seed duplicate and orphan names: %v", err)
+	}
+
+	if resp, body := doRequest(t, app, "GET", path); resp.StatusCode != 200 ||
+		body != `{"items":["FN_ONE","FN_TWO","ORPHAN_FN"]}` {
+		t.Fatalf("distinct example names: %d (body: %s)", resp.StatusCode, body)
+	}
+}
+
 // TestExamplesCRUDRoundTrip: create, get, full-replace update, delete.
 func TestExamplesCRUDRoundTrip(t *testing.T) {
 	app, _ := newLinksTestApp(t)
