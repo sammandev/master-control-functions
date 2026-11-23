@@ -326,7 +326,7 @@
 			label="Device / Interface"
 			compact
 			comfortable
-			blankLabel="Global (All Devices)"
+			blankLabel="Global only (no Device assigned)"
 			allowAll
 			{device}
 			summaries={deviceSummaries}
