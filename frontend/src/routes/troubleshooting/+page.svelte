@@ -2,7 +2,6 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import {
-		ChevronDown,
 		ChevronRight,
 		Download,
 		Layers,
@@ -37,14 +36,9 @@
 	import TroubleshootingRegistryDialog from '#lib/components/TroubleshootingRegistryDialog.svelte';
 	import TroubleshootingBulkImportDialog from '#lib/components/TroubleshootingBulkImportDialog.svelte';
 	import TroubleshootingExportDialog from '#lib/components/TroubleshootingExportDialog.svelte';
-	import {
-		troubleshootingTemplateUrl,
-		type TroubleshootingExportSelection
-	} from '#lib/troubleshooting-transfer.ts';
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import Input from '#lib/components/ui/input.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
 	import Select from '#lib/components/ui/select.svelte';
@@ -61,18 +55,8 @@
 	let total = $state(0);
 	let loadingList = $state(true);
 	let listError = $state('');
-	let exportIds = $state<number[]>([]);
 	let bulkImportOpen = $state(false);
-	let exportScope = $state<TroubleshootingExportSelection['scope']>();
-	let visibleSelected = $derived(
-		items.length > 0 && items.every((row) => exportIds.includes(row.id))
-	);
-
-	function toggleExportSelection(ids: number[], checked: boolean) {
-		exportIds = checked
-			? [...exportIds, ...ids.filter((id) => !exportIds.includes(id))]
-			: exportIds.filter((id) => !ids.includes(id));
-	}
+	let exportSelection = $state<{ guideId?: number }>();
 
 	let selectedId = $state<number | null>(null);
 	let selectedDetail = $state<TroubleshootingGuideDetail | null>(null);
@@ -268,7 +252,6 @@
 		deleteBusy = true;
 		try {
 			await deleteTroubleshootingGuide(deleteTarget.id);
-			toggleExportSelection([deleteTarget.id], false);
 			toast.success(`Deleted guide "${deleteTarget.title}"`);
 			deleteTarget = null;
 			selectedId = null;
@@ -303,43 +286,16 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
-		<Button variant="secondary" onclick={() => (manageOpen = true)}>Manage Lists</Button>
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				{#snippet child({ props })}
-					<Button {...props} variant="outline">
-						<Upload size={16} /> Import <ChevronDown size={14} />
-					</Button>
-				{/snippet}
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="end" class="min-w-44">
-				<DropdownMenu.Item onclick={() => (bulkImportOpen = true)}>Bulk import</DropdownMenu.Item>
-				{#each ['json', 'xlsx'] as format (format)}
-					<DropdownMenu.Item textValue={`Download ${format.toUpperCase()} template`}>
-						{#snippet child({ props })}
-							<!-- eslint-disable svelte/no-navigation-without-resolve -->
-							<a
-								{...props}
-								href={troubleshootingTemplateUrl(format === 'json' ? 'json' : 'xlsx')}
-								download={`troubleshooting-guide-template.${format}`}
-							>
-								Download {format.toUpperCase()} template
-							</a>
-							<!-- eslint-enable svelte/no-navigation-without-resolve -->
-						{/snippet}
-					</DropdownMenu.Item>
-				{/each}
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
-		<Button
-			variant="outline"
-			onclick={() => (exportScope = exportIds.length ? 'selected' : 'matching')}
-		>
-			<Download size={16} /> Export
+		<Button variant="secondary" onclick={() => (manageOpen = true)}>Manage Labels</Button>
+		<Button variant="outline" onclick={() => (bulkImportOpen = true)}>
+			<Upload size={16} /> Import
+		</Button>
+		<Button variant="outline" onclick={() => (exportSelection = {})}>
+			<Download size={16} /> Export Guides
 		</Button>
 		<Button onclick={openCreate}>
 			<Plus size={16} />
-			<span>New Troubleshooting Guide</span>
+			<span>New Guide</span>
 		</Button>
 	</div>
 </div>
@@ -413,17 +369,17 @@
 
 {#if categoryError || severityError}
 	<div class="metadata-error banner-error" role="alert">
-		<span
-			>{[
+		<span>
+			{[
 				categoryError && `Categories: ${categoryError}`,
 				severityError && `Severities: ${severityError}`
 			]
 				.filter(Boolean)
-				.join(' · ')}</span
-		>
-		<Button variant="outline" size="sm" onclick={retryMetadata}
-			><RefreshCw size={14} />Retry metadata</Button
-		>
+				.join(' · ')}
+		</span>
+		<Button variant="outline" size="sm" onclick={retryMetadata}>
+			<RefreshCw size={14} />Retry metadata
+		</Button>
 	</div>
 {/if}
 
@@ -446,39 +402,6 @@
 					/>
 				</div>
 			</div>
-			{#if items.length && !loadingList && !listError}
-				<div class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-2 text-xs">
-					<label class="flex items-center gap-2">
-						<input
-							type="checkbox"
-							checked={visibleSelected}
-							indeterminate={!visibleSelected && items.some((row) => exportIds.includes(row.id))}
-							onchange={(event) =>
-								toggleExportSelection(
-									items.map((row) => row.id),
-									event.currentTarget.checked
-								)}
-						/>
-						Select page
-					</label>
-					<button
-						type="button"
-						class="text-primary hover:underline"
-						onclick={() => (exportScope = 'matching')}
-					>
-						Select all matching filters
-					</button>
-					{#if exportIds.length}
-						<button
-							type="button"
-							class="text-primary hover:underline"
-							onclick={() => (exportIds = [])}
-						>
-							Clear {exportIds.length} selected
-						</button>
-					{/if}
-				</div>
-			{/if}
 		</div>
 
 		{#if loadingList}
@@ -507,12 +430,6 @@
 		{:else}
 			{#each items as row (row.id)}
 				<div class="catalog-row">
-					<input
-						type="checkbox"
-						aria-label={`Select ${row.title} for export`}
-						checked={exportIds.includes(row.id)}
-						onchange={(event) => toggleExportSelection([row.id], event.currentTarget.checked)}
-					/>
 					<button
 						type="button"
 						class={[
@@ -610,6 +527,7 @@
 				}}
 				onAddAlternate={openAddAlternate}
 				onEdit={openEdit}
+				onExport={(guide) => (exportSelection = { guideId: guide.id })}
 				onDelete={(guide) => {
 					deleteTarget = guide;
 				}}
@@ -632,12 +550,12 @@
 	/>
 {/if}
 
-{#if exportScope}
+{#if exportSelection}
 	<TroubleshootingExportDialog
-		ids={exportIds}
-		initialScope={exportScope}
+		initialGuideId={exportSelection.guideId}
+		{severities}
 		filters={{ search: search.trim(), category, device, error_code: errorCodeFilter }}
-		onClose={() => (exportScope = undefined)}
+		onClose={() => (exportSelection = undefined)}
 	/>
 {/if}
 
@@ -811,11 +729,6 @@
 		position: relative;
 		flex-shrink: 0;
 	}
-	.catalog-row > input {
-		position: absolute;
-		z-index: 1;
-		inset: 16px auto auto 15px;
-	}
 	.catalog-row > button {
 		flex-shrink: 0;
 		display: grid;
@@ -824,7 +737,7 @@
 		width: 100%;
 		min-width: 0;
 		text-align: left;
-		padding: 14px 28px 14px 38px;
+		padding: 14px 28px 14px 14px;
 		border-left: 3px solid transparent;
 		border-top: 1px solid var(--border);
 		cursor: pointer;

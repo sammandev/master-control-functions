@@ -77,18 +77,17 @@ test('downloads templates, previews bulk imports, and exports selected or matchi
 		if (sheet) await page.screenshot({ path: `${sheet}/troubleshooting-${name}.png` });
 	}
 	await page.getByRole('button', { name: 'Import', exact: true }).click();
-	await capture('template-download');
+	const bulk = page.getByRole('dialog', { name: 'Import Guides' });
+	await capture('transfer-polish-import');
 	const template = page.waitForEvent('download');
-	await page.getByRole('menuitem', { name: 'Download JSON template' }).click();
+	await bulk.getByRole('button', { name: 'Download JSON template' }).click();
 	expect((await template).suggestedFilename()).toBe('troubleshooting-guide-template.json');
-	await page.getByRole('button', { name: 'Import', exact: true }).click();
+	expect(await (await template).failure()).toBeNull();
 	const workbook = page.waitForEvent('download');
-	await page.getByRole('menuitem', { name: 'Download XLSX template' }).click();
+	await bulk.getByRole('button', { name: 'Download XLSX template' }).click();
 	expect((await workbook).suggestedFilename()).toBe('troubleshooting-guide-template.xlsx');
-	await page.getByRole('button', { name: 'Import', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Bulk import' }).click();
-	const bulk = page.getByRole('dialog', { name: 'Bulk Import Guides' });
-	const upload = bulk.getByLabel('Guide file');
+	expect(await (await workbook).failure()).toBeNull();
+	const upload = bulk.getByLabel('Guide file', { exact: true });
 	const confirm = bulk.getByRole('button', { name: 'Confirm import' });
 	await upload.setInputFiles({
 		name: 'invalid.json',
@@ -97,54 +96,84 @@ test('downloads templates, previews bulk imports, and exports selected or matchi
 	});
 	await bulk.getByRole('button', { name: 'Preview import' }).click();
 	await expect(bulk.getByText('unknown category')).toBeVisible();
+	await expect(bulk.getByText('Error: 1')).toBeVisible();
 	await expect(confirm).toBeDisabled();
-	await capture('preview-errors');
-	await upload.setInputFiles({
-		name: 'clean.json',
-		mimeType: 'application/json',
-		buffer: Buffer.from('{}')
+	await capture('transfer-polish-preview-errors');
+	await bulk.getByRole('button', { name: 'Remove', exact: true }).click();
+	await expect(bulk.getByText('unknown category')).toBeHidden();
+	await expect(bulk.getByRole('button', { name: 'Preview import' })).toBeDisabled();
+	const droppedFile = await page.evaluateHandle(() => {
+		const data = new DataTransfer();
+		data.items.add(new File(['{}'], 'clean.json', { type: 'application/json' }));
+		return data;
 	});
+	await upload.dispatchEvent('drop', { dataTransfer: droppedFile });
+	await expect(bulk.getByText('clean.json', { exact: true })).toBeVisible();
 	await bulk.getByRole('button', { name: 'Preview import' }).click();
 	await expect(bulk.getByText('Updated guide')).toBeVisible();
+	await expect(bulk.getByText('Create: 1')).toBeVisible();
+	await expect(bulk.getByText('Update: 1')).toBeVisible();
 	await expect(confirm).toBeEnabled();
 	expect(commits).toBe(0);
-	await capture('preview-clean');
+	await capture('transfer-polish-preview-clean');
 	await confirm.click();
 	await expect(bulk).toBeHidden();
 	expect(commits).toBe(1);
 
-	await page.getByRole('checkbox', { name: 'Select First guide for export' }).check();
+	await expect(page.getByRole('checkbox')).toHaveCount(0);
+	await capture('transfer-polish-aside-and-detail');
 	await page.getByRole('button', { name: 'Export', exact: true }).click();
 	const exportDialog = page.getByRole('dialog', { name: 'Export Guides' });
 	await expect(exportDialog.getByText('1 selected guide')).toBeVisible();
+	await expect(exportDialog.getByRole('checkbox', { name: /First guide/ })).toBeChecked();
 	await exportDialog.getByRole('radio', { name: /Both/ }).check();
-	await capture('export-dialog');
 	const selected = page.waitForEvent('download');
 	await exportDialog.getByRole('button', { name: 'Download export' }).click();
 	expect((await selected).suggestedFilename()).toBe('troubleshooting-guides.zip');
 	expect(exports[0]).toEqual({ scope: 'selected', format: 'both', ids: [1], search: null });
-	await page.getByRole('checkbox', { name: 'Select page' }).check();
-	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	await page.getByRole('button', { name: 'Export Guides', exact: true }).click();
+	await expect(exportDialog.getByRole('button', { name: 'Download export' })).toBeDisabled();
+	const searchExport = exportDialog.getByRole('searchbox', { name: 'Search guides to export' });
+	await searchExport.fill('second');
+	await expect(exportDialog.getByRole('checkbox')).toHaveCount(1);
+	await exportDialog.getByRole('button', { name: 'Select all shown' }).click();
+	await expect(exportDialog.getByText('1 selected guide')).toBeVisible();
+	await exportDialog.getByRole('button', { name: 'Clear selection' }).click();
+	await expect(exportDialog.getByRole('button', { name: 'Download export' })).toBeDisabled();
+	await exportDialog.getByRole('checkbox', { name: /Second guide/ }).check();
+	await searchExport.fill('first');
+	await exportDialog.getByRole('checkbox', { name: /First guide/ }).check();
 	await expect(exportDialog.getByText('2 selected guides')).toBeVisible();
+	await capture('transfer-polish-export-search');
 	await exportDialog.getByRole('radio', { name: 'XLSX', exact: true }).check();
 	await exportDialog.getByRole('button', { name: 'Download export' }).click();
 	await expect(exportDialog).toBeHidden();
-	expect(exports[1]).toEqual({ scope: 'selected', format: 'xlsx', ids: [1, 2], search: null });
+	expect(exports[1]).toEqual({ scope: 'selected', format: 'xlsx', ids: [2, 1], search: null });
 	await page.getByRole('searchbox', { name: 'Search troubleshooting guides' }).fill('prompt');
-	await page.getByRole('button', { name: 'Select all matching filters' }).click();
-	await expect(
-		exportDialog.getByRole('radio', { name: 'All matching current filters' })
-	).toBeChecked();
+	await page.getByRole('button', { name: 'Export Guides', exact: true }).click();
+	await exportDialog.getByRole('radio', { name: 'All matching current filters' }).check();
 	await exportDialog.getByRole('button', { name: 'Download export' }).click();
 	await expect(exportDialog).toBeHidden();
 	await expect
 		.poll(() => exports[2])
 		.toEqual({ scope: 'matching', format: 'json', search: 'prompt' });
-	await page.getByRole('button', { name: 'Export', exact: true }).click();
+	await page.getByRole('button', { name: 'Export Guides', exact: true }).click();
 	await exportDialog.getByRole('radio', { name: 'All guides', exact: true }).check();
 	await exportDialog.getByRole('button', { name: 'Download export' }).click();
 	await expect(exportDialog).toBeHidden();
 	expect(exports[3]).toEqual({ scope: 'all', format: 'json', search: null });
+});
+
+test('shows the server error when a template cannot be downloaded', async ({ page }) => {
+	await mockTroubleshooting(page);
+	await page.route('**/api/troubleshooting/templates/json', (route) =>
+		route.fulfill({ status: 404, json: { error: 'Template is unavailable' } })
+	);
+	await page.goto('/troubleshooting');
+	await page.getByRole('button', { name: 'Import', exact: true }).click();
+	const importer = page.getByRole('dialog', { name: 'Import Guides' });
+	await importer.getByRole('button', { name: 'Download JSON template' }).click();
+	await expect(importer.getByRole('alert')).toHaveText('Template is unavailable');
 });
 
 test('single import prefills an existing edit without saving or changing its target', async ({
@@ -188,7 +217,7 @@ async function assertDialogChromeIsSeparated(
 	expect(bodyBox!.y).toBeGreaterThanOrEqual(headingBox!.y + headingBox!.height - 0.5);
 
 	if (stickyTabs) {
-		const tabs = dialog.getByRole('tablist', { name: 'Troubleshooting lists' });
+		const tabs = dialog.getByRole('tablist', { name: 'Troubleshooting labels' });
 		await body.evaluate((element) => {
 			element.scrollTop = element.scrollHeight;
 		});
@@ -495,13 +524,16 @@ test('troubleshooting shows compact guides and supports registry controls', asyn
 
 	const listRefreshes = refreshes.list;
 	const detailRefreshes = refreshes.detail;
-	await page.getByRole('button', { name: 'Manage Lists' }).click();
-	const manager = page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' });
+	await page.getByRole('button', { name: 'Manage Labels' }).click();
+	const manager = page.getByRole('dialog', { name: 'Manage Labels' });
 	await expect(manager).toBeVisible();
 	await assertDialogChromeIsSeparated(manager, true);
 	await manager.screenshot({
 		path: test.info().outputPath('troubleshooting-manager.png')
 	});
+	const sheet = process.env.TROUBLESHOOTING_SCREENSHOT_DIR;
+	if (sheet)
+		await manager.screenshot({ path: `${sheet}/troubleshooting-transfer-polish-labels.png` });
 	await manager
 		.getByRole('textbox', { name: 'Measurement & Criteria label' })
 		.fill('Renamed Measurement');
@@ -519,7 +551,7 @@ test('troubleshooting shows compact guides and supports registry controls', asyn
 	await assertDialogChromeIsSeparated(alternate);
 	await alternate.getByRole('button', { name: 'Close dialog' }).click();
 
-	await page.getByRole('button', { name: 'New Troubleshooting Guide' }).click();
+	await page.getByRole('button', { name: 'New Guide' }).click();
 	const editor = page.getByRole('dialog', { name: 'New Troubleshooting Guide' });
 	await expect(editor.getByText('Testing Stage / Category', { exact: true })).toBeVisible();
 	await expect(editor.getByText('Severity', { exact: true })).toBeVisible();
@@ -561,7 +593,7 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 	await mockTroubleshooting(page);
 	await page.goto('/troubleshooting');
 
-	await page.getByRole('button', { name: 'New Troubleshooting Guide' }).click();
+	await page.getByRole('button', { name: 'New Guide' }).click();
 	const createDialog = page.getByRole('dialog', { name: 'New Troubleshooting Guide' });
 	await createDialog
 		.getByRole('textbox', { name: /Solution \/ Manifestation Title/ })
@@ -615,8 +647,8 @@ test('metadata refresh failure preserves the current guide list and detail', asy
 
 	const listRefreshes = refreshes.list;
 	const detailRefreshes = refreshes.detail;
-	await page.getByRole('button', { name: 'Manage Lists' }).click();
-	const manager = page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' });
+	await page.getByRole('button', { name: 'Manage Labels' }).click();
+	const manager = page.getByRole('dialog', { name: 'Manage Labels' });
 	await manager
 		.getByRole('textbox', { name: 'Measurement & Criteria label' })
 		.fill('Refresh Draft');

@@ -30,8 +30,19 @@ export type TroubleshootingExportSelection =
 
 const transferBase = '/api/troubleshooting';
 
-export function troubleshootingTemplateUrl(format: 'json' | 'xlsx'): string {
-	return `${transferBase}/templates/${format}`;
+export async function downloadTroubleshootingTemplate(format: 'json' | 'xlsx'): Promise<void> {
+	const response = await fetch(`${transferBase}/templates/${format}`);
+	if (!response.ok) {
+		const body: { error?: string } = await response.json().catch(() => ({}));
+		throw new ApiError(
+			response.status,
+			body.error ?? `Template download failed (${response.status})`
+		);
+	}
+	if (!response.headers.get('Content-Disposition')?.startsWith('attachment')) {
+		throw new ApiError(response.status, 'The server did not return a troubleshooting template.');
+	}
+	saveDownload(await response.blob(), `troubleshooting-guide-template.${format}`);
 }
 
 function upload<T>(file: File, operation: 'single' | 'preview' | 'commit'): Promise<T> {
@@ -95,10 +106,14 @@ export async function requestTroubleshootingExport(
 }
 
 export function downloadTroubleshootingExport(blob: Blob, format: TroubleshootingExportFormat) {
+	saveDownload(blob, `troubleshooting-guides.${format === 'both' ? 'zip' : format}`);
+}
+
+function saveDownload(blob: Blob, filename: string) {
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement('a');
 	link.href = url;
-	link.download = `troubleshooting-guides.${format === 'both' ? 'zip' : format}`;
+	link.download = filename;
 	link.click();
 	setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
