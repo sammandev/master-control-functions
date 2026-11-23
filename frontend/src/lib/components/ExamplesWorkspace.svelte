@@ -86,15 +86,11 @@
 		void loadFunctionNames();
 	});
 
-	const viewKey = $derived(JSON.stringify({ params, deviceFilter }));
-	const requestKey = $derived({ viewKey, retry });
-	let createdSelection: { row: ExampleRow; viewKey: string } | null = null;
+	const requestKey = $derived(JSON.stringify({ params, deviceFilter, retry }));
 	let revision = 0;
 	const content = $derived.by(() => {
-		const { viewKey: key } = requestKey;
-		const request: { params: typeof params; deviceFilter: string | null } = JSON.parse(key);
-		if (createdSelection?.viewKey !== key) createdSelection = null;
-		return load(request.params, request.deviceFilter, createdSelection?.row);
+		const request: { params: typeof params; deviceFilter: string | null } = JSON.parse(requestKey);
+		return load(request.params, request.deviceFilter);
 	});
 	function navigateQuery(query: SvelteURLSearchParams, replaceState = false) {
 		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
@@ -128,45 +124,13 @@
 		revision++;
 		clearTimeout(searchTimer);
 	});
-	async function load(query: typeof params, device: string | null, created?: ExampleRow) {
+	function apiDevice(device: string | null) {
+		return device === null ? undefined : device === '_global' ? '' : device;
+	}
+	async function load(query: typeof params, device: string | null) {
 		const attempt = ++revision;
-		let result = await listExamples({
-			function_name: query.function_name,
-			search: query.search,
-			// Absent = every Device; '' = Global-only (the API sends the key
-			// whenever it is defined, so the blank string filters blank-scope
-			// examples instead of meaning "no filter").
-			device: device === null ? undefined : device === '_global' ? '' : device,
-			page: query.page,
-			page_size: query.page_size,
-			example_id: created?.id
-		});
+		const result = await listExamples({ ...query, device: apiDevice(device) });
 		if (attempt !== revision) return result;
-		if (created) {
-			const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
-			if (!result.items.some((row) => row.id === created.id)) {
-				const functionName =
-					query.function_name === created.function_name ? query.function_name : undefined;
-				result = await listExamples({
-					function_name: functionName,
-					device: device === null ? undefined : created.device_name,
-					page_size: query.page_size,
-					example_id: created.id
-				});
-				if (attempt !== revision) return result;
-				if (!result.items.some((row) => row.id === created.id))
-					throw new Error('The saved example is no longer available.');
-				location.delete('search');
-				if (!functionName) location.delete('function_name');
-				if (device !== null) location.set('device', created.device_name || '_global');
-			}
-			if (result.page > 1) location.set('page', String(result.page));
-			else location.delete('page');
-			location.set('example', String(created.id));
-			createdSelection = null;
-			await navigateQuery(location);
-			return result;
-		}
 		const last = Math.max(1, Math.ceil(result.total / query.page_size));
 		if (query.page > last) {
 			await setQuery('page', String(last), false, true);
@@ -178,6 +142,35 @@
 		)
 			await setQuery('example', result.items[0] ? String(result.items[0].id) : '', false, true);
 		return result;
+	}
+
+	async function selectCreatedExample(row: ExampleRow) {
+		clearTimeout(searchTimer);
+		const from = routePage.url.href;
+		const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
+		const lookup = { page_size: params.page_size, example_id: row.id };
+		const device = deviceFilter;
+		let result = await listExamples({ ...params, ...lookup, device: apiDevice(device) });
+		if (!result.items.some((item) => item.id === row.id)) {
+			const functionName =
+				location.get('function_name') === row.function_name ? row.function_name : undefined;
+			location.delete('search');
+			if (!functionName) location.delete('function_name');
+			if (device !== null) location.set('device', row.device_name || '_global');
+			result = await listExamples({
+				...lookup,
+				function_name: functionName,
+				device: device === null ? undefined : row.device_name
+			});
+		}
+		if (routePage.url.href !== from) return;
+		if (!result.items.some((item) => item.id === row.id))
+			throw new Error('The saved example is no longer available.');
+
+		if (result.page > 1) location.set('page', String(result.page));
+		else location.delete('page');
+		location.set('example', String(row.id));
+		await navigateQuery(location);
 	}
 
 	// ---- dialog + confirm state -------------------------------------------
@@ -348,8 +341,13 @@
 	onsaved={async (row) => {
 		if (editTarget) await setQuery('example', String(row.id), false);
 		else {
-			clearTimeout(searchTimer);
-			createdSelection = { row, viewKey };
+			try {
+				await selectCreatedExample(row);
+			} catch (error) {
+				toast.error('Example saved, but could not open it', {
+					description: error instanceof Error ? error.message : String(error)
+				});
+			}
 		}
 		retry++;
 		void loadFunctionNames();
