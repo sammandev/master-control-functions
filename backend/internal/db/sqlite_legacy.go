@@ -9,6 +9,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const LegacyTransferVersion = 6
+
+func MigratePostgresTransferBaseline(database *sql.DB) error {
+	return migratePostgres(database, LegacyTransferVersion)
+}
+
 func Open(path string) (*sql.DB, error) {
 	dsn := "file:" + path +
 		"?_pragma=journal_mode(WAL)" +
@@ -22,7 +28,7 @@ func Open(path string) (*sql.DB, error) {
 	return database, nil
 }
 
-func Migrate(database *sql.DB) error {
+func MigrateSQLiteTransferBaseline(database *sql.DB) error {
 	if _, err := database.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
 		version INTEGER PRIMARY KEY,
 		name TEXT NOT NULL,
@@ -39,6 +45,9 @@ func Migrate(database *sql.DB) error {
 		return err
 	}
 	for _, migration := range migrations {
+		if migration.Version > LegacyTransferVersion {
+			break
+		}
 		if migration.Version <= current {
 			continue
 		}
