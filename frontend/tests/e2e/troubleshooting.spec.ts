@@ -461,6 +461,35 @@ const seedGuides = [
 	}
 ];
 
+test('troubleshooting distinguishes Global-only from All Devices', async ({ page }) => {
+	await mockTroubleshooting(page);
+	await page.goto('/troubleshooting');
+
+	const allDevices = page.getByRole('button', { name: 'Device / Interface: All Devices' });
+	await allDevices.click();
+	await expect(page.getByRole('option', { name: 'All Devices', exact: true })).toBeVisible();
+	const globalOnly = 'Global only (no Device assigned)';
+	const globalOption = page.getByRole('option', { name: globalOnly, exact: true });
+	await expect(globalOption).toBeVisible();
+
+	const isListResponse = (url: URL) => url.pathname === '/api/troubleshooting';
+	const globalList = page.waitForResponse((response) => {
+		const url = new URL(response.url());
+		return isListResponse(url) && url.searchParams.get('device') === '';
+	});
+	await globalOption.click();
+	await globalList;
+
+	await page.getByRole('button', { name: `Device / Interface: ${globalOnly}` }).click();
+	const unfilteredList = page.waitForResponse((response) => {
+		const url = new URL(response.url());
+		return isListResponse(url) && !url.searchParams.has('device');
+	});
+	await page.getByRole('option', { name: 'All Devices', exact: true }).click();
+	await unfilteredList;
+	await expect(allDevices).toBeVisible();
+});
+
 test('troubleshooting shows compact guides and supports registry controls', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
