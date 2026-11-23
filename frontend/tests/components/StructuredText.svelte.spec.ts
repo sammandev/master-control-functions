@@ -5,6 +5,16 @@ import StructuredText from '../../src/lib/components/StructuredText.svelte';
 import StructuredTextEditor from '../../src/lib/components/StructuredTextEditor.svelte';
 
 describe('StructuredTextEditor', () => {
+	test('undoes an automatic numbered-list continuation without undoing the item text', async () => {
+		await render(StructuredTextEditor, { 'aria-label': 'Troubleshooting notes' });
+		const textarea = page.getByRole('textbox', { name: 'Troubleshooting notes' });
+		await textarea.click();
+		await userEvent.keyboard('1. Inspect DUT{Enter}');
+		await expect.element(textarea).toHaveValue('1. Inspect DUT\n2. ');
+		await userEvent.keyboard('{Control>}z{/Control}');
+		expect((textarea.element() as HTMLTextAreaElement).value).toBe('1. Inspect DUT');
+	});
+
 	test('continues typed list markers and exits when the next item is empty', async () => {
 		await render(StructuredTextEditor, {
 			id: 'structured-notes',

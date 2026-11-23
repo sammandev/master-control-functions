@@ -28,7 +28,11 @@
 		const edit = getListEdit(textarea.value, textarea.selectionStart, event.key);
 		if (!edit) return;
 		event.preventDefault();
-		textarea.setRangeText(edit.text, edit.start, edit.end, 'end');
+		textarea.setSelectionRange(edit.start, edit.end);
+		const command = edit.text ? 'insertText' : 'delete';
+		if (!textarea.ownerDocument.execCommand(command, false, edit.text)) {
+			textarea.setRangeText(edit.text, edit.start, edit.end, 'end');
+		}
 		value = textarea.value;
 	};
 </script>
