@@ -13,6 +13,7 @@
 		type SequenceInput,
 		type EmitResult
 	} from '#lib/sequences.ts';
+	import { parseAssignments } from '#lib/sequence-assignments.ts';
 	import { formatApiError } from '#lib/client.ts';
 	import { toast } from 'svelte-sonner';
 	import Breadcrumb from '#lib/components/ui/breadcrumb.svelte';
@@ -151,27 +152,16 @@
 		editNote = s.note;
 	}
 
-	// name=value lines → map. This edits the stored name-keyed values; the
-	// pipe script grammar is never parsed (steps are the source of truth).
-	function parseAssignments(text: string): Record<string, string> {
-		const out: Record<string, string> = {};
-		for (const line of text.split('\n')) {
-			const t = line.trim();
-			if (!t) continue;
-			const eq = t.indexOf('=');
-			if (eq <= 0) continue;
-			out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
-		}
-		return out;
-	}
-
 	async function saveStep() {
 		if (!seq || editingIndex === null) return;
-		const malformed = [editParams, editCriteria]
-			.flatMap((text) => text.split('\n'))
-			.find((line) => line.trim() !== '' && !line.includes('='));
-		if (malformed !== undefined) {
-			stepError = `Use name=value on each line: "${malformed.trim()}"`;
+		const parameters = parseAssignments(editParams);
+		if ('error' in parameters) {
+			stepError = parameters.error;
+			return;
+		}
+		const criteria = parseAssignments(editCriteria);
+		if ('error' in criteria) {
+			stepError = criteria.error;
 			return;
 		}
 		const body = toInput();
@@ -180,8 +170,8 @@
 		target.function_source = editFnSource.trim();
 		target.function_interface = editFnInterface.trim();
 		target.function_name = editFnName.trim();
-		target.parameters = parseAssignments(editParams);
-		target.criteria = parseAssignments(editCriteria);
+		target.parameters = parameters.values;
+		target.criteria = criteria.values;
 		target.timeout_ms = editTimeout;
 		target.flow = editFlow;
 		target.on_fail = editOnFail;
