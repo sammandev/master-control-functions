@@ -15,6 +15,7 @@
 	} from '#lib/sequences.ts';
 	import { parseAssignments } from '#lib/sequence-assignments.ts';
 	import { formatApiError } from '#lib/client.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import { toast } from 'svelte-sonner';
 	import Breadcrumb from '#lib/components/ui/breadcrumb.svelte';
 	import Button from '#lib/components/ui/button.svelte';
@@ -36,6 +37,7 @@
 	let emit = $state<EmitResult | null>(null);
 	let emitLoading = $state(false);
 	let emitFailed = $state(false);
+	const emitGuard = createLatestRequestGuard();
 
 	// ---- header edit -------------------------------------------------------
 	let editMeta = $state(false);
@@ -79,16 +81,20 @@
 
 	async function refreshEmit() {
 		if (!seq) return;
+		const request = emitGuard.begin();
 		emitLoading = true;
 		try {
-			emit = await emitSequence(seq.id);
+			const result = await emitSequence(seq.id);
+			if (!emitGuard.isCurrent(request)) return;
+			emit = result;
 			emitFailed = false;
 		} catch (e) {
+			if (!emitGuard.isCurrent(request)) return;
 			emit = null;
 			emitFailed = true;
 			actionError = e instanceof Error ? e.message : String(e);
 		} finally {
-			emitLoading = false;
+			if (emitGuard.isCurrent(request)) emitLoading = false;
 		}
 	}
 
@@ -234,7 +240,7 @@
 	}
 
 	async function copyAll() {
-		if (!emit?.text) return;
+		if (emitLoading || !emit?.text) return;
 		await copyText(emit.text);
 	}
 </script>
@@ -320,7 +326,9 @@
 		<div class="section-heading">
 			<h2 id="emitted-heading">Emitted text</h2>
 			{#if emit?.text}
-				<Button type="button" variant="outline" size="sm" onclick={copyAll}>Copy all</Button>
+				<Button type="button" variant="outline" size="sm" disabled={emitLoading} onclick={copyAll}>
+					Copy all
+				</Button>
 			{/if}
 		</div>
 		{#if emitLoading}
