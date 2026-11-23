@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -234,17 +235,45 @@ func registerSequenceRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 }
 
 // sequenceSortColumns whitelists the list's sortable columns; any other
-// sort value keeps the default (name, id) order. Text columns compare
-// case-insensitively, as the page's former client-side sort did.
+// sort value keeps the default (name, id) order. Text columns use
+// naturalCompare, matching the page's former client-side sort.
 var sequenceSortColumns = map[string]func(a, b store.ListSequencesRow) int{
-	"name":        func(a, b store.ListSequencesRow) int { return foldCompare(a.Name, b.Name) },
-	"description": func(a, b store.ListSequencesRow) int { return foldCompare(a.Description, b.Description) },
+	"name":        func(a, b store.ListSequencesRow) int { return naturalCompare(a.Name, b.Name) },
+	"description": func(a, b store.ListSequencesRow) int { return naturalCompare(a.Description, b.Description) },
 	"steps":       func(a, b store.ListSequencesRow) int { return cmp.Compare(a.StepCount, b.StepCount) },
 	"updated_at":  func(a, b store.ListSequencesRow) int { return strings.Compare(a.UpdatedAt, b.UpdatedAt) },
 }
 
-func foldCompare(a, b string) int {
-	return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+// naturalCompare orders text case-insensitively with digit runs compared
+// by value, so "Run 2" sorts before "Run 10".
+func naturalCompare(a, b string) int {
+	a, b = strings.ToLower(a), strings.ToLower(b)
+	for a != "" && b != "" {
+		da, db := digitPrefix(a), digitPrefix(b)
+		if da != "" && db != "" {
+			na, nb := strings.TrimLeft(da, "0"), strings.TrimLeft(db, "0")
+			if c := cmp.Or(cmp.Compare(len(na), len(nb)), strings.Compare(na, nb)); c != 0 {
+				return c
+			}
+			a, b = a[len(da):], b[len(db):]
+			continue
+		}
+		ra, sa := utf8.DecodeRuneInString(a)
+		rb, sb := utf8.DecodeRuneInString(b)
+		if c := cmp.Compare(ra, rb); c != 0 {
+			return c
+		}
+		a, b = a[sa:], b[sb:]
+	}
+	return cmp.Compare(len(a), len(b))
+}
+
+func digitPrefix(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return s[:i]
 }
 
 func listSequences(q *store.Queries) fiber.Handler {
