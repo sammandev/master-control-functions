@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
+import { createLatestRequestGuard } from '../../src/lib/request-guard';
 import {
 	categoryLabel,
-	createLatestRequestGuard,
 	findRelatedGuides,
 	formatTroubleshootingAiContext,
 	moveDraftStep,

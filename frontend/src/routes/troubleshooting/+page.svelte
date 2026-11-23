@@ -12,9 +12,9 @@
 		X
 	} from '@lucide/svelte';
 	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import {
 		categoryLabel,
-		createLatestRequestGuard,
 		deleteTroubleshootingGuide,
 		getTroubleshootingGuide,
 		listRelatedTroubleshootingGuides,

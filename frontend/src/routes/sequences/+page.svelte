@@ -6,6 +6,7 @@
 	import Input from '#lib/components/ui/input.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
 	import SortHead from '#lib/components/SortHead.svelte';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import { nextSort, sortRows, type SortDir } from '#lib/table-sort.ts';
 	import {
 		Table,
@@ -26,6 +27,7 @@
 	let page = $state(1);
 	let pageSize = $state(20);
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	const listRequestGuard = createLatestRequestGuard();
 
 	// Reload whenever any list parameter changes; the search term enters
 	// through its debounced snapshot so typing does not fire a request
@@ -38,18 +40,21 @@
 	});
 
 	async function load() {
+		const request = listRequestGuard.begin();
 		loading = true;
 		loadError = '';
 		try {
 			const res = await listSequences({ search: searchDebounced, page, page_size: pageSize });
+			if (!listRequestGuard.isCurrent(request)) return;
 			items = res.items;
 			total = res.total;
 		} catch (e) {
+			if (!listRequestGuard.isCurrent(request)) return;
 			items = [];
 			total = 0;
 			loadError = e instanceof Error ? e.message : String(e);
 		} finally {
-			loading = false;
+			if (listRequestGuard.isCurrent(request)) loading = false;
 		}
 	}
 
