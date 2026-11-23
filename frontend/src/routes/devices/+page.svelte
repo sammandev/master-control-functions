@@ -423,7 +423,7 @@
 		if (!deleting) confirmOpen = next;
 	}}
 	title={`Delete ${confirmName}?`}
-	description="Permanently deletes this device, its Functions, scoped definitions, links, Examples, grammar/key audits, and related Sequence steps. Shared data belonging to other devices is preserved. This cannot be undone."
+	description="Permanently deletes this device, its Functions, scoped definitions, links, Examples, and grammar/key audits. Shared data belonging to other devices is preserved. A device used by Sequence steps cannot be deleted. This cannot be undone."
 >
 	{#if deleteError}<div class="banner-error" role="alert">{deleteError}</div>{/if}
 	<form

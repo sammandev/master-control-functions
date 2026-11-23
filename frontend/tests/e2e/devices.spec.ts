@@ -248,6 +248,51 @@ test('devices: populated devices offer deletion but Cancel preserves content', a
 	expect(functions.total).toBeGreaterThan(0);
 });
 
+test('devices: deleting a device used by a Sequence is refused and keeps it', async ({
+	page,
+	request
+}, testInfo) => {
+	const sequenceName = `E2E uses WIFI_TEST ${Date.now()}`;
+	const created = await request.post('/api/sequences', {
+		data: {
+			name: sequenceName,
+			steps: [
+				{
+					function_source: 'DLL',
+					function_interface: 'WIFI_TEST',
+					function_name: 'TX_MULTI_VERIFICATION'
+				}
+			]
+		}
+	});
+	expect(created.status(), 'seed a Sequence using WIFI_TEST').toBe(201);
+	const { id } = (await created.json()) as { id: number };
+	try {
+		const functionsBefore = await (await request.get('/api/devices/WIFI_TEST/functions')).json();
+
+		await page.goto('/devices');
+		const row = page.getByRole('article', { name: /WIFI_TEST/ });
+		await row.getByRole('button', { name: 'Delete' }).click();
+		const confirm = page.getByRole('dialog', { name: 'Delete WIFI_TEST?' });
+		await confirm.getByLabel('Type DELETE WIFI_TEST to confirm').fill('DELETE WIFI_TEST');
+		await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		await expect(confirm.getByRole('alert')).toHaveText(
+			`WIFI_TEST is used by Sequences: ${sequenceName}. Remove those steps first.`
+		);
+		await page.screenshot({ path: testInfo.outputPath('device-delete-refused.png') });
+		await confirm.getByRole('button', { name: 'Cancel' }).click();
+		await expect(row).toBeVisible();
+
+		const functionsAfter = await (await request.get('/api/devices/WIFI_TEST/functions')).json();
+		expect(functionsAfter.total).toBe(functionsBefore.total);
+		const sequence = await (await request.get(`/api/sequences/${id}`)).json();
+		expect(sequence.steps).toHaveLength(1);
+	} finally {
+		await request.delete(`/api/sequences/${id}`);
+	}
+});
+
 test('devices: a dictionary device badge deep-links to the device page', async ({ page }) => {
 	await page.goto('/parameter-definitions');
 	await page.getByPlaceholder('Search name or description…').fill('ANT');
