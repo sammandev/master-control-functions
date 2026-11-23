@@ -4716,13 +4716,22 @@ test('Sequence step validation errors stay beside the open step editor', async (
 	await expect(page.getByRole('alert')).toHaveCount(1);
 });
 
-test('Composer adds its step to an existing sequence from the Sequence entry point', async ({
+test('Composer adds a step without restoring old Sequence metadata', async ({
 	page
 }) => {
 	await mockDeviceHub(page);
 	const store = await mockSequenceStore(page, [
 		sequenceDetail(1, 'TRANSMIT_CHECK', [sequenceStep(1)])
 	]);
+	await page.route('**/api/sequences/1', (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		const sequence = store.sequences[0];
+		const snapshot = { ...sequence };
+		// Another tab saves metadata between the composer's read and write.
+		sequence.name = 'RENAMED_CHECK';
+		sequence.description = 'Saved in another tab';
+		return route.fulfill({ json: snapshot });
+	});
 	await page.route('**/api/functions/1/compose', (route) =>
 		route.fulfill({ json: { script: 'TX|ANT=1' } })
 	);
@@ -4739,6 +4748,10 @@ test('Composer adds its step to an existing sequence from the Sequence entry poi
 	await page.getByRole('option', { name: 'TRANSMIT_CHECK (1 steps)' }).click();
 	await dialog.getByRole('button', { name: 'Add step' }).click();
 	await expect(dialog.getByText('Added as a new step.')).toBeVisible();
+	expect(store.sequences[0]).toMatchObject({
+		name: 'RENAMED_CHECK',
+		description: 'Saved in another tab'
+	});
 	const appended = store.requests.filter((r) => r.method === 'PUT').at(-1)!.body as SequenceInput;
 	expect(appended.steps.map((step) => step.function_name)).toEqual([
 		'TX_MULTI_VERIFICATION',

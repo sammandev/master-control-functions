@@ -26,7 +26,7 @@
 		listSequences,
 		getSequence,
 		createSequence,
-		updateSequence,
+		updateSequenceSteps,
 		type SequenceListItem
 	} from '#lib/sequences.ts';
 
@@ -260,13 +260,7 @@
 			} else {
 				const id = Number(seqPick);
 				const current = await getSequence(id);
-				await updateSequence(id, {
-					name: current.name,
-					description: current.description,
-					// Server ignores the read-model extras (id/position/
-					// function_exists) on each spread step.
-					steps: [...current.steps.map((s) => ({ ...s })), step]
-				});
+				await updateSequenceSteps(id, [...current.steps, step]);
 				seqNoteSaved = 'Added as a new step.';
 			}
 			toast.success(seqNoteSaved);
