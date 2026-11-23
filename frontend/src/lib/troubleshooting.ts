@@ -81,7 +81,6 @@ export interface TroubleshootingGuideInput {
 }
 
 export type TroubleshootingDraftStep = TroubleshootingStepInput & { client_id: string };
-export type TroubleshootingChecklistState = Record<number, number[]>;
 
 export function createLatestRequestGuard() {
 	let current = 0;
@@ -104,35 +103,6 @@ export function validateTroubleshootingDraftSteps(
 		}
 	});
 	return errors;
-}
-
-export function setChecklistStep(
-	state: TroubleshootingChecklistState,
-	guideId: number,
-	position: number,
-	checked: boolean
-): TroubleshootingChecklistState {
-	const current = state[guideId] ?? [];
-	const next = checked
-		? current.includes(position)
-			? current
-			: [...current, position]
-		: current.filter((item) => item !== position);
-	if (next.length === 0) {
-		const nextState = { ...state };
-		delete nextState[guideId];
-		return nextState;
-	}
-	return { ...state, [guideId]: next };
-}
-
-export function resetChecklistProgress(
-	state: TroubleshootingChecklistState,
-	guideId: number
-): TroubleshootingChecklistState {
-	const nextState = { ...state };
-	delete nextState[guideId];
-	return nextState;
 }
 
 export function moveDraftStep(

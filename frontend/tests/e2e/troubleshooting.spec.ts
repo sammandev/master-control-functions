@@ -281,9 +281,7 @@ const guides = [
 	}
 ];
 
-test('troubleshooting workflow preserves checklist and supports registry controls', async ({
-	page
-}) => {
+test('troubleshooting shows compact guides and supports registry controls', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
 	page.on('console', (message) => {
@@ -297,6 +295,7 @@ test('troubleshooting workflow preserves checklist and supports registry control
 	await expect(page.getByText('Device / Interface', { exact: true })).toBeVisible();
 	const firstGuide = page.getByRole('button', { name: 'Select guide First guide' });
 	await expect(firstGuide.getByText('Critical', { exact: true })).toHaveCount(0);
+	await expect(firstGuide).not.toContainText('First symptom');
 	await expect(firstGuide.locator('.guide-labels > span')).toHaveText([
 		'ERRCODE:1',
 		'WIFI_TEST',
@@ -337,15 +336,11 @@ test('troubleshooting workflow preserves checklist and supports registry control
 		page.getByRole('button', { name: 'Add Alternate Solution', exact: true })
 	).toHaveText('Add Alternate Solution');
 
-	const firstStep = page.getByRole('checkbox', { name: /Mark step 1: Inspect first/ });
-	await firstStep.check();
+	const resolution = page.getByRole('region', { name: 'Step-by-Step Resolution Guide' });
+	await expect(resolution.getByRole('checkbox')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Select guide Second guide' }).click();
 	await page.getByRole('button', { name: 'Select guide First guide' }).click();
-	await expect(page.getByRole('checkbox', { name: /Mark step 1: Inspect first/ })).toBeChecked();
-	await page.getByRole('button', { name: 'Reset progress' }).click();
-	await expect(
-		page.getByRole('checkbox', { name: /Mark step 1: Inspect first/ })
-	).not.toBeChecked();
+	await expect(resolution.getByRole('heading', { name: 'Inspect first' })).toBeVisible();
 
 	const listRefreshes = refreshes.list;
 	const detailRefreshes = refreshes.detail;
@@ -378,6 +373,8 @@ test('troubleshooting workflow preserves checklist and supports registry control
 	await expect(editor.getByText('Testing Stage / Category', { exact: true })).toBeVisible();
 	await expect(editor.getByText('Severity', { exact: true })).toBeVisible();
 	await expect(editor.getByText('Device / Interface Scope', { exact: true })).toBeVisible();
+	await editor.getByRole('textbox', { name: /Observed Symptom/ }).scrollIntoViewIfNeeded();
+	await editor.screenshot({ path: test.info().outputPath('troubleshooting-new-guide.png') });
 	await page
 		.getByRole('button', { name: /Category:/ })
 		.last()
@@ -418,13 +415,26 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 	await createDialog
 		.getByRole('textbox', { name: /Solution \/ Manifestation Title/ })
 		.fill('CRUD fixture');
-	await createDialog.getByRole('textbox', { name: /Observed Symptom/ }).fill('Fixture symptom');
+	const symptom = createDialog.getByRole('textbox', { name: /Observed Symptom/ });
+	await symptom.pressSequentially('1. Fixture symptom');
+	await symptom.press('Enter');
+	await symptom.pressSequentially('Fixture log');
+	await expect(symptom).toHaveValue('1. Fixture symptom\n2. Fixture log');
 	await createDialog.getByRole('textbox', { name: /Action Headline/ }).fill('Inspect fixture');
 	await createDialog
 		.getByRole('textbox', { name: /Detailed Instruction/ })
 		.fill('Run fixture check');
+	const verification = createDialog.getByRole('textbox', { name: /Expected Verification Result/ });
+	await verification.pressSequentially('- Passes');
+	await verification.press('Enter');
+	await verification.pressSequentially('Is stable');
 	await createDialog.getByRole('button', { name: 'Create Guide' }).click();
 	await expect(page.getByRole('heading', { name: 'CRUD fixture' })).toBeVisible();
+	await expect(page.locator('.diagnostic-grid ol li')).toHaveText([
+		'Fixture symptom',
+		'Fixture log'
+	]);
+	await expect(page.locator('.step-card ul li')).toHaveText(['Passes', 'Is stable']);
 
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
 	const editDialog = page.getByRole('dialog', { name: 'Edit Troubleshooting Guide' });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { applyListMarkup, parseStructuredText } from '../../src/lib/structured-text';
+import { getListEdit, parseStructuredText } from '../../src/lib/structured-text';
 
 describe('parseStructuredText', () => {
 	test('parses mixed paragraphs, bullets, and ordered lists', () => {
@@ -30,20 +30,26 @@ describe('parseStructuredText', () => {
 	});
 });
 
-describe('applyListMarkup', () => {
-	test('numbers only the selected lines and restores the selection', () => {
-		expect(applyListMarkup('Before\nInspect DUT\nRetry flow\nAfter', 7, 29, 'ordered')).toEqual({
-			value: 'Before\n1. Inspect DUT\n2. Retry flow\nAfter',
-			selectionStart: 7,
-			selectionEnd: 35
+describe('getListEdit', () => {
+	test('increments a numbered marker on the current line', () => {
+		expect(getListEdit('Before\n  9. Inspect DUT\nAfter', 23, 'Enter')).toEqual({
+			start: 23,
+			end: 23,
+			text: '\n  10. '
 		});
 	});
 
-	test('toggles bullet markers without touching neighboring lines', () => {
-		expect(applyListMarkup('Keep\n- Inspect DUT\n- Retry flow\nDone', 5, 31, 'bullet')).toEqual({
-			value: 'Keep\nInspect DUT\nRetry flow\nDone',
-			selectionStart: 5,
-			selectionEnd: 27
+	test.each(['Enter', 'Backspace'] as const)('%s removes only an empty marker', (key) => {
+		expect(getListEdit('Keep\n- \nDone', 7, key)).toEqual({
+			start: 5,
+			end: 7,
+			text: ''
 		});
+	});
+
+	test('leaves plain text and unspaced markers to native editing', () => {
+		expect(getListEdit('Check 1. Retry', 14, 'Enter')).toBeUndefined();
+		expect(getListEdit('-', 1, 'Enter')).toBeUndefined();
+		expect(getListEdit('1. ', 0, 'Backspace')).toBeUndefined();
 	});
 });
