@@ -38,6 +38,35 @@ test.beforeAll(async ({ request }) => {
 	await seed(request);
 });
 
+test('Function filter fetches only names and still filters example rows', async ({ page }) => {
+	const exampleRequests: string[] = [];
+	page.on('request', (request) => {
+		const { pathname, search } = new URL(request.url());
+		if (pathname === '/api/examples' || pathname === '/api/examples/function-names')
+			exampleRequests.push(pathname + search);
+	});
+
+	await page.goto('/examples');
+	const details = page.getByRole('region', { name: 'Example details' });
+	await expect(details.getByRole('button', { name: /^Copy example \d+$/ })).toBeVisible();
+	await page.getByRole('button', { name: 'Function name filter' }).click();
+	const name = 'TX_MULTI_VERIFICATION';
+	await expect(page.getByRole('option', { name, exact: true })).toBeVisible();
+	expect(exampleRequests.sort()).toEqual([
+		'/api/examples/function-names',
+		'/api/examples?page=1&page_size=20'
+	]);
+
+	await page.getByRole('option', { name, exact: true }).click();
+	await expect(page).toHaveURL(/function_name=TX_MULTI_VERIFICATION/);
+	const rows = page.getByRole('button', { name: /^Select example of / });
+	await expect(rows.first()).toBeVisible();
+	await expect(rows.first()).toHaveAccessibleName(/^Select example of TX_MULTI_VERIFICATION /);
+	await expect(
+		page.getByRole('button', { name: /^Select example of (?!TX_MULTI_VERIFICATION )/ })
+	).toHaveCount(0);
+});
+
 test('examples list renders and search filters it', async ({ page, request }) => {
 	// Fixture example count derived from the API before the +1 seed — no
 	// literal to update when a workbook batch lands. The seed adds one
