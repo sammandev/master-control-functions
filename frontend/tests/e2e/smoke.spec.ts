@@ -213,6 +213,40 @@ test('save the latest script when Composer preview responses arrive out of order
 	expect((await persisted.json()).script).toBe(latestScript);
 });
 
+test('keep an edited Example script draft when Composer refreshes the preview', async ({
+	page
+}, testInfo) => {
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await page.goto(fnPath);
+	await page.getByRole('button', { name: 'Compose script' }).click();
+
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+	await dialog.getByLabel(/^ANT ·/).fill('15');
+	await dialog.getByLabel(/^STANDARD ·/).fill('11AX');
+	await dialog.getByLabel(/^FREQ ·/).fill('6165');
+	await dialog.getByLabel(/^BW ·/).fill('20');
+	await dialog.getByLabel(/^DATA_RATE ·/).fill('7');
+	await dialog.getByLabel(/^TX_TARGET_POWER ·/).fill('15');
+	await dialog.getByLabel(/^POWER ·/).fill('5dB');
+
+	await dialog.getByText('Save as example').click();
+	const draft = dialog.getByLabel('Script (editable)');
+	const timeout = dialog.getByLabel('Timeout-ms');
+	await timeout.fill('23123');
+	const preview = dialog.getByText(/\|POWER=5dB\|23123\|NEXT\|FAIL$/);
+	await expect(preview).toBeVisible();
+	const generated = await preview.innerText();
+	await expect(draft).toHaveValue(generated);
+
+	const edited = generated.replace('|23123|', '|60000|');
+	await draft.fill(edited);
+	await expect(draft).toHaveValue(edited);
+	await timeout.fill('34123');
+	await expect(dialog.getByText(/\|POWER=5dB\|34123\|NEXT\|FAIL$/)).toBeVisible();
+	await dialog.screenshot({ path: testInfo.outputPath('example-draft.png') });
+	await expect(draft).toHaveValue(edited);
+});
+
 test('view the orphan report', async ({ page }) => {
 	await page.goto('/orphans');
 
