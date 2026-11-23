@@ -44,6 +44,25 @@ test.beforeAll(async ({ request }) => {
 	await seed(request);
 });
 
+test('opening Function details fetches each link list once', async ({ page }) => {
+	const fnId = await firstFunctionId(page.request);
+	const paths = [`/api/functions/${fnId}/parameter-links`, `/api/functions/${fnId}/criteria-links`];
+	const requests: string[] = [];
+	page.on('request', (request) => {
+		const { pathname } = new URL(request.url());
+		if (request.method() === 'GET' && paths.includes(pathname)) requests.push(pathname);
+	});
+
+	await page.goto(`/functions/${fnId}`);
+	const tabs = page.getByRole('tablist', { name: 'Function sections' });
+	await expect(tabs.getByRole('tab', { name: 'Parameters' }).locator('.tab-count')).toHaveText(
+		/^\d+$/
+	);
+	await expect(tabs.getByRole('tab', { name: 'Criteria' }).locator('.tab-count')).toHaveText(/^\d+$/);
+	await expect(page.getByRole('tabpanel').getByText(/^\d+ linked definitions$/)).toBeVisible();
+	expect(requests.sort()).toEqual(paths.sort());
+});
+
 test('Function switcher fetches compact options on first open and preserves catalog order', async ({
 	page,
 	request

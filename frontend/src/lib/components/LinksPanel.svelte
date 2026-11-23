@@ -63,7 +63,7 @@
 		defKind: DefinitionKind;
 		noun: string;
 		defaultDevice?: string;
-		onCountChange?: (id: number, count: number) => void;
+		onCountChange: (count: number) => void;
 	} = $props();
 
 	// ---- list state -------------------------------------------------------
@@ -143,7 +143,7 @@
 		loadError = '';
 		try {
 			links = await listLinks(id, kind);
-			onCountChange?.(id, links.length);
+			onCountChange(links.length);
 		} catch (e) {
 			links = [];
 			loadError = e instanceof Error ? e.message : String(e);
