@@ -97,8 +97,8 @@
 >
 	<Popover.Trigger
 		{id}
-		role={invalid ? 'combobox' : undefined}
-		aria-expanded={invalid ? open : undefined}
+		aria-haspopup="dialog"
+		aria-expanded={open}
 		aria-label={`${kindLabel}: ${selectedLabel}`}
 		aria-invalid={invalid || undefined}
 		aria-describedby={describedBy}

@@ -18,13 +18,13 @@ WITH all_names (device_name) AS (
     UNION SELECT device_name FROM criteria_definitions
     UNION SELECT device_name FROM examples
     UNION SELECT name FROM devices
-	UNION SELECT interface FROM functions
+    UNION SELECT interface FROM functions
 )
 SELECT
     v.device_name AS device_name,
     (SELECT COUNT(*) FROM functions f
-	  WHERE f.interface = v.device_name
-		  OR EXISTS (SELECT 1 FROM parameter_links pl
+      WHERE f.interface = v.device_name
+        OR EXISTS (SELECT 1 FROM parameter_links pl
                    WHERE pl.function_source = f.source
                      AND pl.function_name = f.name
                      AND pl.device_name = v.device_name)

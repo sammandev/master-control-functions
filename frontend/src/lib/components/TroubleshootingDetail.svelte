@@ -25,6 +25,7 @@
 		TroubleshootingCategory,
 		TroubleshootingSeverity as RegistrySeverity
 	} from '#lib/troubleshooting-registry.ts';
+	import StructuredText from '#lib/components/StructuredText.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
 	import Checkbox from '#lib/components/ui/checkbox.svelte';
@@ -83,9 +84,9 @@
 	<header class="detail-head border-border bg-card rounded-lg border p-4">
 		<div class="detail-head-top">
 			<div class="badge-row">
-				<Badge variant="outline" class={severityOutlineClass(guide.severity)}
-					>{severityLabel(guide.severity, severities)}</Badge
-				>
+				<Badge variant="outline" class={severityOutlineClass(guide.severity)}>
+					{severityLabel(guide.severity, severities)}
+				</Badge>
 				<Badge variant="outline">{categoryLabel(guide.category, categories)}</Badge>
 				<Badge variant="default">{guide.device_name || 'Global'}</Badge>
 				{#if guide.error_code}
@@ -167,8 +168,9 @@
 						onclick={() => onSelectGuide(sibling.id)}
 					>
 						<div class="flex w-full items-center justify-between gap-2">
-							<span class="text-foreground line-clamp-1 text-xs font-semibold">{sibling.title}</span
-							>
+							<span class="text-foreground line-clamp-1 text-xs font-semibold">
+								{sibling.title}
+							</span>
 							<Badge variant="outline" class={severityOutlineClass(sibling.severity)}>
 								{severityLabel(sibling.severity, severities)}
 							</Badge>
@@ -181,9 +183,10 @@
 							{#if sibling.function_name}
 								<span class="text-muted-foreground font-mono">{sibling.function_name}</span>
 							{/if}
-							<span class="text-muted-foreground"
-								>· {sibling.step_count} {sibling.step_count === 1 ? 'step' : 'steps'}</span
-							>
+							<span class="text-muted-foreground">
+								· {sibling.step_count}
+								{sibling.step_count === 1 ? 'step' : 'steps'}
+							</span>
 						</div>
 					</button>
 				{/each}
@@ -199,7 +202,7 @@
 					Observed Symptom / Log Signature
 				</h3>
 			</div>
-			<p class="text-foreground mt-2 text-sm leading-relaxed">{guide.symptom}</p>
+			<StructuredText text={guide.symptom} class="mt-2" />
 		</section>
 
 		<section class="border-border bg-card rounded-lg border p-4">
@@ -209,9 +212,7 @@
 					Root Cause
 				</h3>
 			</div>
-			<p class="text-foreground mt-2 text-sm leading-relaxed">
-				{guide.root_cause || 'No root cause recorded yet.'}
-			</p>
+			<StructuredText text={guide.root_cause || 'No root cause recorded yet.'} class="mt-2" />
 		</section>
 	</div>
 
@@ -271,9 +272,7 @@
 								</h4>
 							</div>
 
-							<p class="text-foreground mt-1.5 text-sm leading-relaxed whitespace-pre-line">
-								{step.instruction}
-							</p>
+							<StructuredText text={step.instruction} class="mt-1.5" />
 
 							{#if step.script_snippet}
 								<div class="border-border bg-card mt-2.5 overflow-hidden rounded border">

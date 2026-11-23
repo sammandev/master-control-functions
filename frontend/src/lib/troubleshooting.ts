@@ -83,6 +83,29 @@ export interface TroubleshootingGuideInput {
 export type TroubleshootingDraftStep = TroubleshootingStepInput & { client_id: string };
 export type TroubleshootingChecklistState = Record<number, number[]>;
 
+export function createLatestRequestGuard() {
+	let current = 0;
+	return {
+		begin: () => ++current,
+		isCurrent: (request: number) => request === current
+	};
+}
+
+export function validateTroubleshootingDraftSteps(
+	steps: TroubleshootingDraftStep[]
+): Record<string, string> {
+	const errors: Record<string, string> = {};
+	steps.forEach((step, index) => {
+		if (!step.title.trim()) {
+			errors[`steps.${index}.title`] = `Step ${index + 1}: step title is required`;
+		}
+		if (!step.instruction.trim()) {
+			errors[`steps.${index}.instruction`] = `Step ${index + 1}: instruction is required`;
+		}
+	});
+	return errors;
+}
+
 export function setChecklistStep(
 	state: TroubleshootingChecklistState,
 	guideId: number,
@@ -242,6 +265,7 @@ export async function createTroubleshootingGuide(
 ): Promise<TroubleshootingGuideDetail> {
 	return request<TroubleshootingGuideDetail>('/api/troubleshooting', {
 		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(body)
 	});
 }
@@ -252,6 +276,7 @@ export async function updateTroubleshootingGuide(
 ): Promise<TroubleshootingGuideDetail> {
 	return request<TroubleshootingGuideDetail>(`/api/troubleshooting/${id}`, {
 		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(body)
 	});
 }

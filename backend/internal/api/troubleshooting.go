@@ -71,11 +71,11 @@ func (b *troubleshootingBody) validate() map[string]string {
 		s.Instruction = strings.TrimSpace(s.Instruction)
 		s.ScriptSnippet = strings.TrimSpace(s.ScriptSnippet)
 		s.Verification = strings.TrimSpace(s.Verification)
-		if s.Title == "" && fields["steps.title"] == "" {
-			fields["steps.title"] = "step " + strconv.Itoa(i+1) + ": title is required"
+		if s.Title == "" {
+			fields["steps."+strconv.Itoa(i)+".title"] = "step " + strconv.Itoa(i+1) + ": title is required"
 		}
-		if s.Instruction == "" && fields["steps.instruction"] == "" {
-			fields["steps.instruction"] = "step " + strconv.Itoa(i+1) + ": instruction is required"
+		if s.Instruction == "" {
+			fields["steps."+strconv.Itoa(i)+".instruction"] = "step " + strconv.Itoa(i+1) + ": instruction is required"
 		}
 	}
 	return fields

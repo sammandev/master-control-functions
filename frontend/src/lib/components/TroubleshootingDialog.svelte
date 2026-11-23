@@ -6,6 +6,7 @@
 		createTroubleshootingGuide,
 		moveDraftStep,
 		updateTroubleshootingGuide,
+		validateTroubleshootingDraftSteps,
 		type TroubleshootingCategory,
 		type TroubleshootingGuideDetail,
 		type TroubleshootingGuideInput,
@@ -24,6 +25,7 @@
 	import Button from '#lib/components/ui/button.svelte';
 	import Dialog from '#lib/components/ui/dialog.svelte';
 	import Input from '#lib/components/ui/input.svelte';
+	import StructuredTextEditor from '#lib/components/StructuredTextEditor.svelte';
 	import TroubleshootingRegistryPicker from '#lib/components/TroubleshootingRegistryPicker.svelte';
 	import Textarea from '#lib/components/ui/textarea.svelte';
 
@@ -87,6 +89,11 @@
 	let busy = $state(false);
 	let generalError = $state('');
 	let fieldErrors = $state<Record<string, string>>({});
+	const firstStepError = $derived(
+		fieldErrors.steps ??
+			Object.entries(fieldErrors).find(([key]) => /^steps\.\d+\./.test(key))?.[1] ??
+			''
+	);
 
 	const dialogTitle = $derived(
 		mode === 'edit'
@@ -120,14 +127,7 @@
 		if (!title.trim()) errs.title = 'Title is required';
 		if (!symptom.trim()) errs.symptom = 'Observed symptom is required';
 		if (steps.length === 0) errs.steps = 'At least one resolution step is required';
-		steps.forEach((s, idx) => {
-			if (!s.title.trim() && !errs['steps.title']) {
-				errs['steps.title'] = `Step ${idx + 1}: step title is required`;
-			}
-			if (!s.instruction.trim() && !errs['steps.instruction']) {
-				errs['steps.instruction'] = `Step ${idx + 1}: instruction is required`;
-			}
-		});
+		Object.assign(errs, validateTroubleshootingDraftSteps(steps));
 		return errs;
 	}
 
@@ -208,12 +208,13 @@
 					<span class="font-semibold">Linked to existing problem:</span>
 					<span class="text-muted-foreground ml-1">
 						Sharing Error Code
-						{#if errorCode}<Badge variant="default" class="mx-0.5 font-mono">{errorCode}</Badge
-							>{/if}
+						{#if errorCode}<Badge variant="default" class="mx-0.5 font-mono">
+								{errorCode}
+							</Badge>{/if}
 						or Function
-						{#if functionName}<Badge variant="outline" class="mx-0.5 font-mono"
-								>{functionName}</Badge
-							>{/if}
+						{#if functionName}<Badge variant="outline" class="mx-0.5 font-mono">
+								{functionName}
+							</Badge>{/if}
 						groups this guide alongside <strong>"{initialGuide.title}"</strong> as an alternative solution.
 					</span>
 				</div>
@@ -279,9 +280,9 @@
 						}}
 					/>
 					{#if fieldErrors.device_name}
-						<span id="guide-device-error" class="text-destructive text-xs"
-							>{fieldErrors.device_name}</span
-						>
+						<span id="guide-device-error" class="text-destructive text-xs">
+							{fieldErrors.device_name}
+						</span>
 					{/if}
 				</div>
 
@@ -313,9 +314,9 @@
 						/>
 					</div>
 					{#if fieldErrors.category}
-						<span id="guide-category-error" class="text-destructive text-xs"
-							>{fieldErrors.category}</span
-						>
+						<span id="guide-category-error" class="text-destructive text-xs">
+							{fieldErrors.category}
+						</span>
 					{/if}
 				</div>
 
@@ -333,9 +334,9 @@
 						/>
 					</div>
 					{#if fieldErrors.severity}
-						<span id="guide-severity-error" class="text-destructive text-xs"
-							>{fieldErrors.severity}</span
-						>
+						<span id="guide-severity-error" class="text-destructive text-xs">
+							{fieldErrors.severity}
+						</span>
 					{/if}
 				</div>
 			</div>
@@ -350,9 +351,9 @@
 					<label for="guide-symptom" class="text-foreground text-xs font-semibold">
 						Observed Symptom / Log Signature <span class="text-destructive">*</span>
 					</label>
-					<Textarea
+					<StructuredTextEditor
 						id="guide-symptom"
-						rows={2}
+						rows={3}
 						bind:value={symptom}
 						placeholder="What does the test engineer see in the runner log, console, or measurement report?"
 						aria-invalid={fieldErrors.symptom ? 'true' : undefined}
@@ -360,9 +361,9 @@
 						required
 					/>
 					{#if fieldErrors.symptom}
-						<span id="guide-symptom-error" class="text-destructive text-xs"
-							>{fieldErrors.symptom}</span
-						>
+						<span id="guide-symptom-error" class="text-destructive text-xs">
+							{fieldErrors.symptom}
+						</span>
 					{/if}
 				</div>
 
@@ -370,9 +371,9 @@
 					<label for="guide-root-cause" class="text-foreground text-xs font-semibold">
 						Root Cause Explanation
 					</label>
-					<Textarea
+					<StructuredTextEditor
 						id="guide-root-cause"
-						rows={2}
+						rows={3}
 						bind:value={rootCause}
 						placeholder="Why does this happen in the MCV2 script, INI configuration, DUT firmware, or RF station?"
 					/>
@@ -396,10 +397,8 @@
 				</Button>
 			</div>
 
-			{#if fieldErrors.steps || fieldErrors['steps.title'] || fieldErrors['steps.instruction']}
-				<p class="text-destructive mt-2 text-xs" role="alert">
-					{fieldErrors.steps || fieldErrors['steps.title'] || fieldErrors['steps.instruction']}
-				</p>
+			{#if firstStepError}
+				<p class="text-destructive mt-2 text-xs" role="alert">{firstStepError}</p>
 			{/if}
 
 			<div class="mt-3 grid gap-3">
@@ -453,15 +452,15 @@
 									id="step-title-{idx}"
 									bind:value={step.title}
 									placeholder="e.g. Check TX_TARGET_POWER and POWER tolerance in TEST_SPEC.ini"
-									aria-invalid={fieldErrors['steps.title'] ? 'true' : undefined}
-									aria-describedby={fieldErrors['steps.title']
+									aria-invalid={fieldErrors[`steps.${idx}.title`] ? 'true' : undefined}
+									aria-describedby={fieldErrors[`steps.${idx}.title`]
 										? `step-title-error-${idx}`
 										: undefined}
 									required
 								/>
-								{#if fieldErrors['steps.title']}
+								{#if fieldErrors[`steps.${idx}.title`]}
 									<span id="step-title-error-{idx}" class="text-destructive text-xs">
-										{fieldErrors['steps.title']}
+										{fieldErrors[`steps.${idx}.title`]}
 									</span>
 								{/if}
 							</div>
@@ -470,20 +469,20 @@
 								<label for="step-instruction-{idx}" class="text-foreground text-xs font-semibold">
 									Detailed Instruction <span class="text-destructive">*</span>
 								</label>
-								<Textarea
+								<StructuredTextEditor
 									id="step-instruction-{idx}"
-									rows={2}
+									rows={3}
 									bind:value={step.instruction}
 									placeholder="Explain exactly what file, parameter, or fixture component to inspect or modify."
-									aria-invalid={fieldErrors['steps.instruction'] ? 'true' : undefined}
-									aria-describedby={fieldErrors['steps.instruction']
+									aria-invalid={fieldErrors[`steps.${idx}.instruction`] ? 'true' : undefined}
+									aria-describedby={fieldErrors[`steps.${idx}.instruction`]
 										? `step-instruction-error-${idx}`
 										: undefined}
 									required
 								/>
-								{#if fieldErrors['steps.instruction']}
+								{#if fieldErrors[`steps.${idx}.instruction`]}
 									<span id="step-instruction-error-{idx}" class="text-destructive text-xs">
-										{fieldErrors['steps.instruction']}
+										{fieldErrors[`steps.${idx}.instruction`]}
 									</span>
 								{/if}
 							</div>

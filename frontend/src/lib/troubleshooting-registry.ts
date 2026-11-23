@@ -36,6 +36,7 @@ export interface TroubleshootingRegistryListResult<T> {
 
 const categoriesUrl = '/api/troubleshooting/categories';
 const severitiesUrl = '/api/troubleshooting/severities';
+const jsonHeaders = { 'Content-Type': 'application/json' };
 
 export function listTroubleshootingCategories(): Promise<
 	TroubleshootingRegistryListResult<TroubleshootingCategory>
@@ -48,6 +49,7 @@ export function createTroubleshootingCategory(
 ): Promise<TroubleshootingCategory> {
 	return request<TroubleshootingCategory>(categoriesUrl, {
 		method: 'POST',
+		headers: jsonHeaders,
 		body: JSON.stringify(body)
 	});
 }
@@ -58,6 +60,7 @@ export function updateTroubleshootingCategory(
 ): Promise<TroubleshootingCategory> {
 	return request<TroubleshootingCategory>(`${categoriesUrl}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
+		headers: jsonHeaders,
 		body: JSON.stringify(body)
 	});
 }
@@ -68,6 +71,7 @@ export function reorderTroubleshootingCategory(
 ): Promise<{ items: TroubleshootingCategory[] }> {
 	return request<{ items: TroubleshootingCategory[] }>(`${categoriesUrl}/reorder`, {
 		method: 'POST',
+		headers: jsonHeaders,
 		body: JSON.stringify({ key, with_key: withKey })
 	});
 }
@@ -93,6 +97,7 @@ export function createTroubleshootingSeverity(
 ): Promise<TroubleshootingSeverity> {
 	return request<TroubleshootingSeverity>(severitiesUrl, {
 		method: 'POST',
+		headers: jsonHeaders,
 		body: JSON.stringify(body)
 	});
 }
@@ -103,6 +108,7 @@ export function updateTroubleshootingSeverity(
 ): Promise<TroubleshootingSeverity> {
 	return request<TroubleshootingSeverity>(`${severitiesUrl}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
+		headers: jsonHeaders,
 		body: JSON.stringify(body)
 	});
 }
@@ -113,6 +119,7 @@ export function reorderTroubleshootingSeverity(
 ): Promise<{ items: TroubleshootingSeverity[] }> {
 	return request<{ items: TroubleshootingSeverity[] }>(`${severitiesUrl}/reorder`, {
 		method: 'POST',
+		headers: jsonHeaders,
 		body: JSON.stringify({ key, with_key: withKey })
 	});
 }

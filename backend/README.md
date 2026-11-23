@@ -7,10 +7,10 @@ The [paired Docker deployment](../deploy/README.md) packages the backend and Bun
 ## Requirements
 
 - Go 1.27.3 or newer, matching [go.mod](go.mod).
-- An existing development PostgreSQL database for local work, or the approved database on Ubuntu for deployment validation.
-- Nginx and systemd only for the Ubuntu deployment.
+- An existing PostgreSQL database on the approved Ubuntu host. This guide does not install a database engine.
+- Nginx and systemd for the Ubuntu deployment.
 
-Local database work is allowed only against an explicitly selected development catalog on this workstation. Keep production database access on the approved Ubuntu host. The server applies embedded schema migrations at startup, so use `DATABASE_URL` deliberately and back up the selected catalog before destructive work. Review the [PostgreSQL cutover procedure](../docs/postgresql-migration.md) before deployment. Startup does not transfer the old SQLite data.
+Database connections, backend startup, migrations, and database-backed tests must run on the approved off-machine host. On the restricted Windows workstation, use build, vet, and explicitly database-free validation only. The server applies embedded schema migrations at startup; back up the database and review the [PostgreSQL cutover procedure](../docs/postgresql-migration.md) before deployment. Startup does not transfer the old SQLite data.
 
 ## Database Configuration
 
@@ -36,28 +36,6 @@ set +a
 ```
 
 Do not commit real environment files or share connection URLs containing passwords. Rotate any previously shared database password before deployment. Production uses a separate root-owned environment file described below.
-
-### Windows Development With `backend/.env.dev`
-
-`backend/.env.dev` stores local `DB_*` components. Its `postgresql+psycopg://` URL is a SQLAlchemy URL, not a Go/pgx URL, so do not export that field directly into `DATABASE_URL`.
-
-From the repository root in PowerShell, load the components and derive the pgx URL without printing it:
-
-```powershell
-Get-Content backend/.env.dev | ForEach-Object {
-    $line = $_.Trim()
-    if ($line -and -not $line.StartsWith('#') -and $line -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
-        $value = $matches[2].Trim().Trim('"').Trim("'")
-        [Environment]::SetEnvironmentVariable($matches[1], $value, 'Process')
-    }
-}
-$user = [Uri]::EscapeDataString($env:DB_USER)
-$password = [Uri]::EscapeDataString($env:DB_PASSWORD)
-$database = [Uri]::EscapeDataString($env:DB_NAME)
-$env:DATABASE_URL = "postgresql://${user}:${password}@$($env:DB_HOST):$($env:DB_PORT)/${database}?sslmode=disable"
-```
-
-This only affects the current terminal. `sslmode=disable` is acceptable only for the local loopback development database. Never use this URL for a network or production connection.
 
 ## Local Build And Development
 
@@ -139,24 +117,11 @@ rejection of an oversized row after a valid header. These are database-free;
 they do not replace the operator-run database export/import roundtrip.
 Keep explicit `sslmode=disable` unchanged for the existing approved deployment.
 
-For a local development runtime, load the environment as shown above, then run from the repository root:
-
-```powershell
-go -C backend run -mod=readonly ./cmd/server -addr 127.0.0.1:8088
-```
-
-The API runs at `http://127.0.0.1:8088`. The embedded migrations apply before the listener starts. Start Vite separately with the [frontend guide](../frontend/README.md); Vite proxies `/api` to this port.
-
-To run the backend with a prebuilt SPA from the repository root:
-
-```powershell
-pnpm --dir frontend build
-go -C backend run -mod=readonly ./cmd/server -addr 127.0.0.1:8088 -web ../frontend/build
-```
-
-The `-web` path is relative to `backend/` because `go -C backend` changes the command working directory. If the directory is absent, the server reports API-only mode. Open `http://127.0.0.1:8088/health`; success is `{"status":"ok","db":"ok"}`.
+On the approved Ubuntu host, load the operator-managed environment and run the server as described in the deployment section. The embedded migrations apply before the listener starts. The `-web` path is relative to `backend/`; if the directory is absent, the server reports API-only mode.
 
 On `SIGINT` or `SIGTERM`, the server stops accepting connections and waits for in-flight requests to finish. `-shutdown-timeout` sets the maximum wait (default `45s`). Keep it below the supervisor's stop grace period: Compose `stop_grace_period` is `60s` and the systemd default `TimeoutStopSec` is `90s`.
+
+Do not start the backend on the restricted Windows workstation. Live API workflows and migrations require the approved Ubuntu database host.
 
 ## Device / Interface Contract
 
@@ -168,7 +133,7 @@ Device, Device Name and Interface are the same catalog. Function payloads retain
 
 Deletion is permanent and transactional: it removes the registration, Functions whose `interface` is the Device, scoped Parameter/Criteria definitions, scoped links and Examples, Function grammar/key audits, and Sequence steps whose Function interface or Device scope matches. Links and Examples in other scopes belonging exclusively to deleted Functions are also removed. Because those rows have no Function interface, other-scope rows are preserved when another Function has the same `(source, name)`. Global definitions, other Devices' Functions, and Sequence containers survive; surviving steps retain IDs/order and are renumbered. Saved text and import history are not rewritten. Global cannot be deleted (422); invalid confirmation returns 422, malformed/missing JSON returns 400, and a missing Device returns 404.
 
-Before release, run the Device API regressions in [devices_test.go](tests/api/devices_test.go) and [device_delete_test.go](tests/api/device_delete_test.go) against a disposable PostgreSQL database. Use the local development database for iteration, and repeat the production-candidate validation on the approved Ubuntu host.
+Before release, run the Device API regressions in [devices_test.go](tests/api/devices_test.go) and [device_delete_test.go](tests/api/device_delete_test.go) against a disposable PostgreSQL database on the approved Ubuntu host.
 
 ### Device Type And Workbook Headers
 
@@ -307,16 +272,9 @@ The external API URL is `http://<ubuntu-host>:39063/api/...`. The browser normal
 
 ## Tests
 
-Tests live under [tests/](tests/). Database-backed tests use `TEST_DATABASE_URL`; without it, integration cases skip and do not prove PostgreSQL compatibility.
+Tests live under [tests/](tests/). Database-backed tests use `TEST_DATABASE_URL`; without it, integration cases skip and do not prove PostgreSQL compatibility. The approved operator runs them on Ubuntu against a separate disposable database and never uses the production URL as `TEST_DATABASE_URL`. SQLite transfer fixtures require the `sqlite_migration` build tag and use the same approved off-machine boundary.
 
-For local development, reuse the loaded development URL when the test suite is allowed to create/drop isolated schemas in it:
-
-```powershell
-$env:TEST_DATABASE_URL = $env:DATABASE_URL
-go test -mod=readonly ./internal/api ./internal/db ./tests/api -count=1 -v
-```
-
-Prefer a separate disposable database for the full suite if the normal development catalog contains data you want to preserve. Never use the production URL as `TEST_DATABASE_URL`. SQLite transfer fixtures require the `sqlite_migration` build tag; run the cutover gates on the approved Ubuntu host.
+On the restricted Windows workstation, run only the explicitly database-free compile, vet, importer, type-check, lint, unit-test, and mocked-UI checks documented in this repository.
 
 ## Troubleshooting
 

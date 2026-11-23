@@ -7,7 +7,37 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
-/src/routes/demo/*
+
+# AI agents, instructions, skills, and editor state
+.agents/
+.claude/
+.codex/
+.continue/
+.copilot/
+.cursor/
+.gemini/
+.opencode/
+.superpowers/
+.vscode/
+.github/agents/
+.github/prompts/
+.github/skills/
+.github/copilot-instructions.md
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+skills-lock.json
+opencode.json
+
+# Local project state
+.dev-reference/
+.scratch/
+.workspace/
+.worktrees/
+.codegraph/
+.omo/
+.rtk/
+.idea/
 
 # OS
 .DS_Store

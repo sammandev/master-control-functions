@@ -47,7 +47,9 @@
 	);
 	const names = $derived([
 		'',
-		...new Set((summaries ?? loaded).map((item) => item.device_name).filter(Boolean))
+		...new Set(
+			(summaries?.length ? summaries : loaded).map((item) => item.device_name).filter(Boolean)
+		)
 	]);
 	const options = $derived(
 		[
@@ -60,7 +62,7 @@
 		].filter((item) => item.label.toLowerCase().includes(term.trim().toLowerCase()))
 	);
 	async function loadOptions() {
-		if (summaries || loading) return;
+		if (summaries?.length || loading) return;
 		loading = true;
 		error = '';
 		try {
@@ -96,8 +98,8 @@
 		<Popover.Trigger
 			{id}
 			{disabled}
-			role={invalid ? 'combobox' : undefined}
-			aria-expanded={invalid ? open : undefined}
+			aria-haspopup="dialog"
+			aria-expanded={open}
 			aria-label={`${label}: ${currentLabel}`}
 			aria-invalid={invalid || undefined}
 			aria-describedby={describedBy}

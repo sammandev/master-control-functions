@@ -15,8 +15,8 @@ SELECT (SELECT COUNT(*) FROM parameter_links pl WHERE pl.device_name = $1)
      + (SELECT COUNT(*) FROM criteria_links cl WHERE cl.device_name = $1)
      + (SELECT COUNT(*) FROM parameter_definitions pd WHERE pd.device_name = $1)
      + (SELECT COUNT(*) FROM criteria_definitions cd WHERE cd.device_name = $1)
-	+ (SELECT COUNT(*) FROM examples ex WHERE ex.device_name = $1)
-	+ (SELECT COUNT(*) FROM functions f WHERE f.interface = $1)
+    + (SELECT COUNT(*) FROM examples ex WHERE ex.device_name = $1)
+    + (SELECT COUNT(*) FROM functions f WHERE f.interface = $1)
 `
 
 func (q *Queries) CountDeviceNameUsages(ctx context.Context, device string) (int32, error) {
@@ -45,7 +45,12 @@ SELECT name, created_at, updated_at, source FROM devices WHERE name = $1
 func (q *Queries) GetRegisteredDevice(ctx context.Context, name string) (Device, error) {
 	row := q.db.QueryRowContext(ctx, getRegisteredDevice, name)
 	var i Device
-	err := row.Scan(&i.Name, &i.CreatedAt, &i.UpdatedAt, &i.Source)
+	err := row.Scan(
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Source,
+	)
 	return i, err
 }
 
@@ -63,27 +68,37 @@ type InsertDeviceParams struct {
 }
 
 func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) (Device, error) {
-	row := q.db.QueryRowContext(ctx, insertDevice, arg.Name, arg.CreatedAt, arg.UpdatedAt, arg.Source)
+	row := q.db.QueryRowContext(ctx, insertDevice,
+		arg.Name,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.Source,
+	)
 	var i Device
-	err := row.Scan(&i.Name, &i.CreatedAt, &i.UpdatedAt, &i.Source)
+	err := row.Scan(
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Source,
+	)
 	return i, err
 }
 
 const listDeviceSources = `-- name: ListDeviceSources :many
 WITH content_sources AS (
-    SELECT interface AS name, source FROM functions
-    UNION SELECT device_name, function_source FROM parameter_links
-    UNION SELECT device_name, function_source FROM criteria_links
-    UNION SELECT device_name, function_source FROM examples
+        SELECT interface AS name, source FROM functions
+        UNION SELECT device_name, function_source FROM parameter_links
+        UNION SELECT device_name, function_source FROM criteria_links
+        UNION SELECT device_name, function_source FROM examples
 )
 SELECT name, source FROM devices WHERE source IS NOT NULL
 UNION
 SELECT content.name, content.source FROM content_sources content
 WHERE content.name <> '' AND content.source IN ('BUILT-IN', 'DLL')
-  AND NOT EXISTS (
-      SELECT 1 FROM devices registered
-      WHERE registered.name = content.name AND registered.source IS NOT NULL
-  )
+    AND NOT EXISTS (
+            SELECT 1 FROM devices registered
+            WHERE registered.name = content.name AND registered.source IS NOT NULL
+    )
 ORDER BY name, source
 `
 
@@ -98,13 +113,16 @@ func (q *Queries) ListDeviceSources(ctx context.Context) ([]ListDeviceSourcesRow
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListDeviceSourcesRow{}
+	var items []ListDeviceSourcesRow
 	for rows.Next() {
-		var item ListDeviceSourcesRow
-		if err := rows.Scan(&item.Name, &item.Source); err != nil {
+		var i ListDeviceSourcesRow
+		if err := rows.Scan(&i.Name, &i.Source); err != nil {
 			return nil, err
 		}
-		items = append(items, item)
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -121,7 +139,7 @@ FROM (
     UNION SELECT device_name FROM parameter_definitions
     UNION SELECT device_name FROM criteria_definitions
     UNION SELECT device_name FROM examples
-	UNION SELECT interface FROM functions
+    UNION SELECT interface FROM functions
 ) v
 WHERE v.device_name <> ''
 ON CONFLICT (name) DO NOTHING

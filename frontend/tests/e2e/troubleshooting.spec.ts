@@ -108,10 +108,16 @@ async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh
 			return route.fulfill({ json: { items: categories, total: categories.length } });
 		}
 		if (path === '/api/troubleshooting/categories/measurement' && request.method() === 'PUT') {
+			if (!request.headers()['content-type']?.startsWith('application/json')) {
+				return route.fulfill({ status: 400, json: { error: 'invalid JSON body' } });
+			}
 			categories[0].label = 'Renamed Measurement';
 			return route.fulfill({ json: categories[0] });
 		}
 		if (path === '/api/troubleshooting/categories' && request.method() === 'POST') {
+			if (!request.headers()['content-type']?.startsWith('application/json')) {
+				return route.fulfill({ status: 400, json: { error: 'invalid JSON body' } });
+			}
 			const item = {
 				key: 'advanced-measurement',
 				label: 'Advanced Measurement',
@@ -127,6 +133,9 @@ async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh
 			return route.fulfill({ json: { items: severities, total: severities.length } });
 		}
 		if (path === '/api/troubleshooting/severities' && request.method() === 'POST') {
+			if (!request.headers()['content-type']?.startsWith('application/json')) {
+				return route.fulfill({ status: 400, json: { error: 'invalid JSON body' } });
+			}
 			const item = {
 				key: 'needs-review',
 				label: 'Needs Review',
@@ -141,13 +150,32 @@ async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh
 		}
 		if (path === '/api/devices') return route.fulfill({ json: { items: [], total: 0 } });
 		if (path === '/api/troubleshooting') {
+			if (request.method() === 'POST') {
+				if (!request.headers()['content-type']?.startsWith('application/json')) {
+					return route.fulfill({ status: 400, json: { error: 'invalid JSON body' } });
+				}
+				const body = request.postDataJSON();
+				const created = {
+					...body,
+					id: Math.max(0, ...guides.map((guide) => guide.id)) + 1,
+					steps: body.steps.map((step: object, index: number) => ({
+						...step,
+						id: index + 100,
+						position: index + 1
+					})),
+					created_at: '2026-11-21T00:00:00Z',
+					updated_at: '2026-11-21T00:00:00Z'
+				};
+				guides.push(created);
+				return route.fulfill({ status: 201, json: created });
+			}
 			refreshes.list++;
 			return route.fulfill({
 				json: {
 					items: guides.map(({ steps: _steps, ...guide }) => ({
 						...guide,
 						step_count: _steps.length,
-						related_count: 1
+						related_count: Math.max(0, guides.length - 1)
 					})),
 					total: guides.length,
 					page: 1,
@@ -172,8 +200,33 @@ async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh
 		}
 		const match = path.match(/^\/api\/troubleshooting\/(\d+)$/);
 		if (match) {
+			const id = Number(match[1]);
+			const index = guides.findIndex((guide) => guide.id === id);
+			if (request.method() === 'PUT') {
+				if (!request.headers()['content-type']?.startsWith('application/json')) {
+					return route.fulfill({ status: 400, json: { error: 'invalid JSON body' } });
+				}
+				if (index < 0) return route.fulfill({ status: 404, json: { error: 'not found' } });
+				const body = request.postDataJSON();
+				guides[index] = {
+					...guides[index],
+					...body,
+					steps: body.steps.map((step: object, stepIndex: number) => ({
+						...step,
+						id: stepIndex + 200,
+						position: stepIndex + 1
+					})),
+					updated_at: '2026-11-21T01:00:00Z'
+				};
+				return route.fulfill({ json: guides[index] });
+			}
+			if (request.method() === 'DELETE') {
+				if (index < 0) return route.fulfill({ status: 404, json: { error: 'not found' } });
+				guides.splice(index, 1);
+				return route.fulfill({ status: 204 });
+			}
 			refreshes.detail++;
-			return route.fulfill({ json: guides.find((guide) => guide.id === Number(match[1])) });
+			return route.fulfill({ json: guides.find((guide) => guide.id === id) });
 		}
 		return route.fulfill({ status: 404, json: { error: 'not mocked' } });
 	});
@@ -188,14 +241,14 @@ const guides = [
 		device_name: 'WIFI_TEST',
 		function_name: 'TX_VERIFY',
 		error_code: 'ERRCODE:1',
-		symptom: 'First symptom',
-		root_cause: 'First cause',
+		symptom: '1. First symptom\n2. Confirm prompt state',
+		root_cause: '- First cause\n- Verify configuration',
 		steps: [
 			{
 				id: 1,
 				position: 1,
 				title: 'Inspect first',
-				instruction: 'Inspect it',
+				instruction: '- Inspect it\n- Record the prompt',
 				script_snippet: '',
 				verification: 'Verified'
 			}
@@ -251,6 +304,15 @@ test('troubleshooting workflow preserves checklist and supports registry control
 	]);
 	const detailSeverity = page.locator('.detail-head .severity-badge');
 	await expect(detailSeverity).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(page.locator('.diagnostic-grid ol li')).toHaveText([
+		'First symptom',
+		'Confirm prompt state'
+	]);
+	await expect(page.locator('.diagnostic-grid ul li')).toHaveText([
+		'First cause',
+		'Verify configuration'
+	]);
+	await expect(page.locator('.step-card ul li')).toHaveText(['Inspect it', 'Record the prompt']);
 	const alternativeSection = page.getByRole('region', { name: 'Alternative Solutions' });
 	await expect(alternativeSection.getByText(/One error code or symptom/)).toContainText(
 		'One error code or symptom can have multiple causes. Choose another solution below if needed.'
@@ -291,6 +353,9 @@ test('troubleshooting workflow preserves checklist and supports registry control
 	const manager = page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' });
 	await expect(manager).toBeVisible();
 	await assertDialogChromeIsSeparated(manager, true);
+	await manager.screenshot({
+		path: test.info().outputPath('troubleshooting-manager.png')
+	});
 	await manager
 		.getByRole('textbox', { name: 'Measurement & Criteria label' })
 		.fill('Renamed Measurement');
@@ -342,6 +407,39 @@ test('troubleshooting workflow preserves checklist and supports registry control
 		)
 	).toBe(true);
 	expect(errors).toEqual([]);
+});
+
+test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => {
+	await mockTroubleshooting(page);
+	await page.goto('/troubleshooting');
+
+	await page.getByRole('button', { name: 'New Troubleshooting Guide' }).click();
+	const createDialog = page.getByRole('dialog', { name: 'New Troubleshooting Guide' });
+	await createDialog
+		.getByRole('textbox', { name: /Solution \/ Manifestation Title/ })
+		.fill('CRUD fixture');
+	await createDialog.getByRole('textbox', { name: /Observed Symptom/ }).fill('Fixture symptom');
+	await createDialog.getByRole('textbox', { name: /Action Headline/ }).fill('Inspect fixture');
+	await createDialog
+		.getByRole('textbox', { name: /Detailed Instruction/ })
+		.fill('Run fixture check');
+	await createDialog.getByRole('button', { name: 'Create Guide' }).click();
+	await expect(page.getByRole('heading', { name: 'CRUD fixture' })).toBeVisible();
+
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	const editDialog = page.getByRole('dialog', { name: 'Edit Troubleshooting Guide' });
+	await editDialog
+		.getByRole('textbox', { name: /Solution \/ Manifestation Title/ })
+		.fill('CRUD fixture updated');
+	await editDialog.getByRole('button', { name: 'Save Changes' }).click();
+	await expect(page.getByRole('heading', { name: 'CRUD fixture updated' })).toBeVisible();
+
+	await page.getByRole('button', { name: 'Delete', exact: true }).click();
+	const deleteDialog = page.getByRole('alertdialog', { name: 'Delete Troubleshooting Guide?' });
+	await deleteDialog.getByRole('button', { name: 'Delete Guide', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Select guide CRUD fixture updated' })).toHaveCount(
+		0
+	);
 });
 
 test('metadata refresh failure preserves the current guide list and detail', async ({ page }) => {

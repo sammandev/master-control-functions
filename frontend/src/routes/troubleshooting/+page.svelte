@@ -5,6 +5,7 @@
 	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
 	import {
 		categoryLabel,
+		createLatestRequestGuard,
 		deleteTroubleshootingGuide,
 		getTroubleshootingGuide,
 		listRelatedTroubleshootingGuides,
@@ -60,6 +61,8 @@
 	let relatedGuides = $state<TroubleshootingGuideListItem[]>([]);
 	let relatedError = $state('');
 	let checklistState = $state<TroubleshootingChecklistState>({});
+	const listRequestGuard = createLatestRequestGuard();
+	const detailRequestGuard = createLatestRequestGuard();
 
 	let manageOpen = $state(false);
 	let dialogOpen = $state(false);
@@ -137,7 +140,10 @@
 	}
 
 	async function refreshList(preferId?: number, preservePreferred = false) {
+		const request = listRequestGuard.begin();
+		detailRequestGuard.begin();
 		loadingList = true;
+		loadingDetail = false;
 		listError = '';
 		try {
 			const res = await listTroubleshootingGuides({
@@ -148,6 +154,7 @@
 				page,
 				page_size: pageSize
 			});
+			if (!listRequestGuard.isCurrent(request)) return;
 			items = res.items;
 			total = res.total;
 
@@ -162,31 +169,43 @@
 			} else {
 				selectedId = null;
 				selectedDetail = null;
+				relatedGuides = [];
 			}
 		} catch (err) {
-			listError = err instanceof Error ? err.message : String(err);
+			if (listRequestGuard.isCurrent(request)) {
+				listError = err instanceof Error ? err.message : String(err);
+			}
 		} finally {
-			loadingList = false;
+			if (listRequestGuard.isCurrent(request)) loadingList = false;
 		}
 	}
 
 	async function selectGuide(id: number) {
+		const request = detailRequestGuard.begin();
 		selectedId = id;
 		loadingDetail = true;
 		detailError = '';
 		try {
-			selectedDetail = await getTroubleshootingGuide(id);
+			const detail = await getTroubleshootingGuide(id);
+			if (!detailRequestGuard.isCurrent(request)) return;
+			selectedDetail = detail;
 			relatedError = '';
 			try {
-				relatedGuides = (await listRelatedTroubleshootingGuides(id)).items;
+				const related = await listRelatedTroubleshootingGuides(id);
+				if (!detailRequestGuard.isCurrent(request)) return;
+				relatedGuides = related.items;
 			} catch (err) {
-				relatedGuides = [];
-				relatedError = err instanceof Error ? err.message : String(err);
+				if (detailRequestGuard.isCurrent(request)) {
+					relatedGuides = [];
+					relatedError = err instanceof Error ? err.message : String(err);
+				}
 			}
 		} catch (err) {
-			detailError = err instanceof Error ? err.message : String(err);
+			if (detailRequestGuard.isCurrent(request)) {
+				detailError = err instanceof Error ? err.message : String(err);
+			}
 		} finally {
-			loadingDetail = false;
+			if (detailRequestGuard.isCurrent(request)) loadingDetail = false;
 		}
 	}
 
@@ -253,8 +272,8 @@
 			<span>{total} {total === 1 ? 'guide' : 'guides'}</span>
 		</div>
 		<p class="text-muted-foreground mt-1 text-sm">
-			Step-by-step resolution guides for troubleshooting. Multiple solutions can share
-			the same issue, error code, or function to cover distinct failure causes.
+			Step-by-step resolution guides for troubleshooting. Multiple solutions can share the same
+			issue, error code, or function to cover distinct failure causes.
 		</p>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">

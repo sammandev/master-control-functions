@@ -6,6 +6,8 @@ import {
 	deleteTroubleshootingSeverity,
 	listTroubleshootingCategories,
 	listTroubleshootingSeverities,
+	reorderTroubleshootingCategory,
+	reorderTroubleshootingSeverity,
 	updateTroubleshootingCategory,
 	updateTroubleshootingSeverity
 } from '../../src/lib/troubleshooting-registry';
@@ -39,6 +41,7 @@ describe('troubleshooting category registry client', () => {
 		await createTroubleshootingCategory(input);
 		expect(fetchMock).toHaveBeenCalledWith('/api/troubleshooting/categories', {
 			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(input)
 		});
 	});
@@ -52,9 +55,21 @@ describe('troubleshooting category registry client', () => {
 			'/api/troubleshooting/categories/Line%20Setup%2FPrimary',
 			{
 				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(input)
 			}
 		);
+	});
+
+	test('reorders a category with a JSON request', async () => {
+		const fetchMock = mockJsonResponse({ items: [] });
+
+		await reorderTroubleshootingCategory('connection', 'execution');
+		expect(fetchMock).toHaveBeenCalledWith('/api/troubleshooting/categories/reorder', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ key: 'connection', with_key: 'execution' })
+		});
 	});
 
 	test('deletes a category with encoded key and replacement query', async () => {
@@ -88,6 +103,7 @@ describe('troubleshooting severity registry client', () => {
 		await createTroubleshootingSeverity(input);
 		expect(fetchMock).toHaveBeenCalledWith('/api/troubleshooting/severities', {
 			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(input)
 		});
 	});
@@ -104,7 +120,19 @@ describe('troubleshooting severity registry client', () => {
 		await updateTroubleshootingSeverity('Review/Level', input);
 		expect(fetchMock).toHaveBeenCalledWith('/api/troubleshooting/severities/Review%2FLevel', {
 			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(input)
+		});
+	});
+
+	test('reorders a severity with a JSON request', async () => {
+		const fetchMock = mockJsonResponse({ items: [] });
+
+		await reorderTroubleshootingSeverity('critical', 'high');
+		expect(fetchMock).toHaveBeenCalledWith('/api/troubleshooting/severities/reorder', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ key: 'critical', with_key: 'high' })
 		});
 	});
 

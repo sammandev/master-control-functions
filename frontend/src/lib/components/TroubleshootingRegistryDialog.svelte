@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ArrowDown, ArrowUp, Trash2 } from '@lucide/svelte';
+	import { ArrowDown, ArrowUp, LockKeyhole, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import AlertDialog from './ui/alert-dialog.svelte';
+	import Badge from './ui/badge.svelte';
 	import Button from './ui/button.svelte';
 	import Dialog from './ui/dialog.svelte';
 	import Input from './ui/input.svelte';
@@ -276,7 +277,7 @@
 	{open}
 	{onOpenChange}
 	title="Manage Troubleshooting Lists"
-	description="Edit labels, descriptions, display order, and severity tones."
+	description="Edit labels, descriptions, display order, severity tones, and custom values."
 	class="max-w-[880px]"
 >
 	<Tabs.Root bind:value={tab} activationMode="automatic">
@@ -295,82 +296,108 @@
 						{@const kind = currentKind as Kind}
 						{@const rows = rowsFor(kind)}
 						<section
-							class="border-border bg-background rounded-md border p-3"
+							class="border-border bg-background overflow-hidden rounded-md border"
 							aria-label={`${row.displayName} settings`}
 						>
-							<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto]">
-								<label class="grid gap-1 text-xs font-medium">
-									<span>Label</span>
-									<Input
-										bind:value={row.label}
-										aria-label={`${row.displayName} label`}
-										disabled={row.busy}
-									/>
-								</label>
-								<label class="grid gap-1 text-xs font-medium md:col-start-2 md:row-start-1">
-									<span>Description</span>
-									<Textarea
-										bind:value={row.description}
-										aria-label={`${row.displayName} description`}
-										disabled={row.busy}
-										class="min-h-8 resize-y py-1.5"
-									/>
-								</label>
-								<div class="flex items-start gap-1 md:col-start-3 md:row-start-1">
-									<Button
-										variant="outline"
-										size="icon"
-										aria-label={`Move ${row.displayName} up`}
-										disabled={row.busy || reordering !== null || index === 0}
-										onclick={() => move(row, kind, -1)}><ArrowUp size={15} /></Button
-									>
-									<Button
-										variant="outline"
-										size="icon"
-										aria-label={`Move ${row.displayName} down`}
-										disabled={row.busy || reordering !== null || index === rows.length - 1}
-										onclick={() => move(row, kind, 1)}><ArrowDown size={15} /></Button
-									>
-								</div>
-							</div>
-
-							<div class="mt-3 flex flex-wrap items-end justify-between gap-3">
-								<div class="flex flex-wrap items-end gap-3">
-									<span class="text-muted-foreground py-2 text-xs"
-										>{row.guide_count} {row.guide_count === 1 ? 'guide' : 'guides'}</span
-									>
-									{#if kind === 'severity'}
-										<label class="grid min-w-36 gap-1 text-xs font-medium">
-											<span>Tone</span>
-											<Select
-												bind:value={(row as SeverityRow).tone}
-												options={tones}
-												ariaLabel={`Tone: ${(row as SeverityRow).tone}`}
-												disabled={row.busy}
-											/>
-										</label>
-									{/if}
+							<div
+								class="border-border bg-muted/20 flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2"
+							>
+								<div class="flex min-w-0 items-center gap-2">
+									<span class="truncate text-sm font-semibold">{row.displayName}</span>
+									<Badge variant={row.built_in ? 'outline' : 'default'}>
+										{#if row.built_in}<LockKeyhole size={11} class="mr-1" />{/if}
+										{row.built_in ? 'Built-in' : 'Custom'}
+									</Badge>
 								</div>
 								<div class="flex items-center gap-2">
-									{#if !row.built_in}
+									<code class="text-muted-foreground max-w-48 truncate text-[11px]">{row.key}</code>
+									<Badge variant="outline">
+										{row.guide_count}
+										{row.guide_count === 1 ? 'guide' : 'guides'}
+									</Badge>
+								</div>
+							</div>
+							<div class="p-3">
+								<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto]">
+									<label class="grid gap-1 text-xs font-medium">
+										<span>Label</span>
+										<Input
+											bind:value={row.label}
+											aria-label={`${row.displayName} label`}
+											disabled={row.busy}
+										/>
+									</label>
+									<label class="grid gap-1 text-xs font-medium md:col-start-2 md:row-start-1">
+										<span>Description</span>
+										<Textarea
+											bind:value={row.description}
+											aria-label={`${row.displayName} description`}
+											disabled={row.busy}
+											class="min-h-8 resize-y py-1.5"
+										/>
+									</label>
+									<div class="flex items-start gap-1 md:col-start-3 md:row-start-1">
+										<Button
+											variant="outline"
+											size="icon"
+											aria-label={`Move ${row.displayName} up`}
+											disabled={row.busy || reordering !== null || index === 0}
+											onclick={() => move(row, kind, -1)}
+										>
+											<ArrowUp size={15} />
+										</Button>
+										<Button
+											variant="outline"
+											size="icon"
+											aria-label={`Move ${row.displayName} down`}
+											disabled={row.busy || reordering !== null || index === rows.length - 1}
+											onclick={() => move(row, kind, 1)}
+										>
+											<ArrowDown size={15} />
+										</Button>
+									</div>
+								</div>
+
+								<div class="mt-3 flex flex-wrap items-end justify-between gap-3">
+									<div class="flex flex-wrap items-end gap-3">
+										{#if kind === 'severity'}
+											<label class="grid min-w-36 gap-1 text-xs font-medium">
+												<span>Tone</span>
+												<Select
+													bind:value={(row as SeverityRow).tone}
+													options={tones}
+													ariaLabel={`Tone: ${(row as SeverityRow).tone}`}
+													disabled={row.busy}
+												/>
+											</label>
+										{/if}
+									</div>
+									<div class="flex items-center gap-2">
 										<Button
 											variant="outline"
 											class="text-destructive"
 											aria-label={`Delete ${row.displayName}`}
-											disabled={row.busy}
-											onclick={() => beginDelete(kind, row)}><Trash2 size={14} />Delete</Button
+											title={row.built_in
+												? 'Built-in values are migration-owned and cannot be deleted'
+												: `Delete ${row.displayName}`}
+											disabled={row.busy || row.built_in}
+											onclick={() => beginDelete(kind, row)}
 										>
-									{/if}
-									<Button
-										disabled={row.busy || !row.label.trim()}
-										aria-label={`Save ${row.displayName}`}
-										onclick={() => save(row, kind)}>{row.busy ? 'Saving…' : 'Save'}</Button
-									>
+											<Trash2 size={14} />Delete
+										</Button>
+										<Button
+											disabled={row.busy || !row.label.trim()}
+											aria-label={`Save ${row.displayName}`}
+											onclick={() => save(row, kind)}
+										>
+											{row.busy ? 'Saving…' : 'Save'}
+										</Button>
+									</div>
 								</div>
+								{#if row.error}<p role="alert" class="text-destructive mt-2 text-sm">
+										{row.error}
+									</p>{/if}
 							</div>
-							{#if row.error}<p role="alert" class="text-destructive mt-2 text-sm">
-									{row.error}
-								</p>{/if}
 						</section>
 					{/each}
 				</div>

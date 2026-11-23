@@ -75,16 +75,22 @@ function emptyResponse() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('TroubleshootingRegistryDialog', () => {
-	it('offers category and severity tabs while hiding delete and tone for categories', async () => {
+	it('shows registry status and keeps delete visible with built-in protection', async () => {
 		renderDialog();
 		await expect
 			.element(page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' }))
 			.toBeVisible();
 		await expect.element(page.getByRole('tab', { name: 'Categories' })).toBeVisible();
 		await expect.element(page.getByRole('tab', { name: 'Severities' })).toBeVisible();
+		const categoriesPanel = page.getByRole('tabpanel', { name: 'Categories' });
+		await expect.element(categoriesPanel.getByText('Built-in')).toBeVisible();
+		await expect.element(categoriesPanel.getByText('Custom')).toBeVisible();
 		await expect
-			.element(page.getByRole('button', { name: 'Delete DUT Connection' }))
-			.not.toBeInTheDocument();
+			.element(categoriesPanel.getByRole('button', { name: 'Delete DUT Connection' }))
+			.toBeDisabled();
+		await expect
+			.element(categoriesPanel.getByRole('button', { name: 'Delete Flow Execution' }))
+			.toBeEnabled();
 		await expect.element(page.getByRole('button', { name: /^Tone:/ })).not.toBeInTheDocument();
 		await expect.element(page.getByText('4 guides')).toBeVisible();
 	});
