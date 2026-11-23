@@ -65,6 +65,10 @@ export async function listExamples(params: ExampleListParams = {}): Promise<Exam
 	return request<ExampleListResult>(`/api/examples${suffix}`);
 }
 
+export async function listExampleFunctionNames(): Promise<{ items: string[] }> {
+	return request<{ items: string[] }>('/api/examples/function-names');
+}
+
 export async function createExample(body: ExampleInput): Promise<ExampleRow> {
 	return request<ExampleRow>('/api/examples', {
 		method: 'POST',

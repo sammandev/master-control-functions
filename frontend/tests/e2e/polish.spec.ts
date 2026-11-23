@@ -479,6 +479,9 @@ test('Examples main search and function dropdown cover complete example identiti
 		created_at: '2026-10-07',
 		updated_at: '2026-10-07'
 	}));
+	await page.route('**/api/examples/function-names', (route) =>
+		route.fulfill({ json: { items: ['TX_MATCH', 'LATE_ORPHAN'] } })
+	);
 	const requests: URLSearchParams[] = [];
 	await page.route('**/api/examples?*', (route) => {
 		const query = new URL(route.request().url()).searchParams;
@@ -1002,6 +1005,7 @@ async function mockDeviceHub(page: Page, functionName = 'TX_MULTI_VERIFICATION')
 					}
 				]
 			};
+		else if (url.pathname === '/api/examples/function-names') json = { items: [functionName] };
 		else if (url.pathname === '/api/examples') {
 			const device = url.searchParams.get('device');
 			json = {
@@ -3996,6 +4000,9 @@ test('Examples workspace filters Global results and reaches later API pages', as
 		created_at: '2026-10-07',
 		updated_at: '2026-10-07'
 	}));
+	await page.route('**/api/examples/function-names', (route) =>
+		route.fulfill({ json: { items: ['TX_MATCH'] } })
+	);
 	const requests: URLSearchParams[] = [];
 	await page.route(/\/api\/examples(?:\?.*)?$/, (route) => {
 		const query = new URL(route.request().url()).searchParams;

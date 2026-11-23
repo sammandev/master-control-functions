@@ -248,6 +248,51 @@ test('devices: populated devices offer deletion but Cancel preserves content', a
 	expect(functions.total).toBeGreaterThan(0);
 });
 
+test('devices: deleting a device used by a Sequence is refused and keeps it', async ({
+	page,
+	request
+}, testInfo) => {
+	const sequenceName = `E2E uses WIFI_TEST ${Date.now()}`;
+	const created = await request.post('/api/sequences', {
+		data: {
+			name: sequenceName,
+			steps: [
+				{
+					function_source: 'DLL',
+					function_interface: 'WIFI_TEST',
+					function_name: 'TX_MULTI_VERIFICATION'
+				}
+			]
+		}
+	});
+	expect(created.status(), 'seed a Sequence using WIFI_TEST').toBe(201);
+	const { id } = (await created.json()) as { id: number };
+	try {
+		const functionsBefore = await (await request.get('/api/devices/WIFI_TEST/functions')).json();
+
+		await page.goto('/devices');
+		const row = page.getByRole('article', { name: /WIFI_TEST/ });
+		await row.getByRole('button', { name: 'Delete' }).click();
+		const confirm = page.getByRole('dialog', { name: 'Delete WIFI_TEST?' });
+		await confirm.getByLabel('Type DELETE WIFI_TEST to confirm').fill('DELETE WIFI_TEST');
+		await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		await expect(confirm.getByRole('alert')).toHaveText(
+			`WIFI_TEST is used by Sequences: ${sequenceName}. Remove those steps first.`
+		);
+		await page.screenshot({ path: testInfo.outputPath('device-delete-refused.png') });
+		await confirm.getByRole('button', { name: 'Cancel' }).click();
+		await expect(row).toBeVisible();
+
+		const functionsAfter = await (await request.get('/api/devices/WIFI_TEST/functions')).json();
+		expect(functionsAfter.total).toBe(functionsBefore.total);
+		const sequence = await (await request.get(`/api/sequences/${id}`)).json();
+		expect(sequence.steps).toHaveLength(1);
+	} finally {
+		await request.delete(`/api/sequences/${id}`);
+	}
+});
+
 test('devices: a dictionary device badge deep-links to the device page', async ({ page }) => {
 	await page.goto('/parameter-definitions');
 	await page.getByPlaceholder('Search name or description…').fill('ANT');
@@ -343,3 +388,126 @@ test('devices: the parameters tab pager reloads on page change', async ({ page, 
 	await expect(page.getByText('Page 2 of 2')).toBeVisible();
 	await expect(scopedRows).toHaveCount(5);
 });
+
+test('devices: renaming a resolved Global definition keeps scoped details usable', async ({
+	page,
+	request
+}) => {
+	const suffix = Date.now();
+	const device = `E2E_GLOBAL_RENAME_${suffix}`;
+	const global = `Global parameter ${suffix}`;
+	const scoped = 'Scoped parameter';
+	const fn = await request.post('/api/functions', {
+		data: { source: 'DLL', interface: device, name: 'Global rename test' }
+	});
+	expect(fn.status()).toBe(201);
+	for (const [name, deviceName] of [[global, ''], [scoped, device]]) {
+		const response = await request.post('/api/parameter-definitions', {
+			data: { name, device_name: deviceName, type: 'string', cardinality: 'SINGLE' }
+		});
+		expect(response.status()).toBe(201);
+	}
+	const { id } = await fn.json();
+	const link = await request.post(`/api/functions/${id}/parameter-links`, {
+		data: { name: global, device_name: device, position: 1 }
+	});
+	expect(link.status()).toBe(201);
+
+	await page.goto(`/devices/${device}?tab=parameters`);
+	const globalRow = page.getByRole('button', { name: `Inspect ${global} (Global)` });
+	await globalRow.click();
+	await page.getByRole('button', { name: 'Edit Global definition' }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('Name', { exact: true }).fill(`${global} renamed`);
+	await dialog.getByRole('button', { name: 'Save' }).click();
+	await expect(dialog).toBeHidden();
+
+	await expect(globalRow).toBeHidden();
+	await expect(page.getByRole('heading', { name: scoped, exact: true })).toBeVisible();
+});
+
+for (const [tab, kind, noun] of [
+	['parameters', 'parameter-definitions', 'Parameter'],
+	['criteria', 'criteria-definitions', 'Criteria']
+] as const) {
+	test(`devices: ${tab} search finds off-page definitions without stale detail`, async ({
+		page,
+		request
+	}) => {
+		const device = `E2E_${noun.toUpperCase()}_SEARCH_${Date.now()}`;
+		const firstName = `${noun} 01`;
+		const matchName = `${noun} 21`;
+		const evidence = process.env.DEVICE_SEARCH_SCREENSHOT_DIR;
+		const created = await request.post('/api/devices', { data: { device_name: device } });
+		expect(created.status()).toBe(201);
+		for (let i = 1; i <= 21; i++) {
+			const response = await request.post(`/api/${kind}`, {
+				data: {
+					name: `${noun} ${String(i).padStart(2, '0')}`,
+					type: 'string',
+					cardinality: 'SINGLE',
+					default_value: i === 21 ? 'Off-page value' : '',
+					device_name: device
+				}
+			});
+			expect(response.status(), `seed definition ${i}`).toBe(201);
+		}
+
+		if (evidence) await page.setViewportSize({ width: 1280, height: 900 });
+		await page.goto(`/devices/${device}?tab=${tab}`);
+		const first = page.getByRole('button', { name: `Inspect ${firstName} (${device})` });
+		const match = page.getByRole('button', { name: `Inspect ${matchName} (${device})` });
+		const firstDetail = page.getByRole('heading', { name: firstName, exact: true });
+		const search = page.getByRole('textbox', { name: `Search ${noun.toLowerCase()} definitions` });
+
+		await page.getByRole('button', { name: 'Next page' }).click();
+		await expect(match).toBeVisible();
+		await page.getByRole('button', { name: 'Previous page' }).click();
+		await first.click();
+		await expect(firstDetail).toBeVisible();
+		await expect(match).toBeHidden();
+		await search.fill('off-page value');
+
+		await expect.soft(match).toBeVisible();
+		await expect.soft(firstDetail).toBeHidden();
+		if (evidence) {
+			if (await match.isVisible()) {
+				await expect(page.getByRole('heading', { name: matchName, exact: true })).toBeVisible();
+			}
+			await page.evaluate(() => window.scrollTo(0, 0));
+			await page.screenshot({ path: join(evidence, `${tab}.png`) });
+		}
+
+		const previousSelection = page.url();
+		await match.click();
+		await expect(page).not.toHaveURL(previousSelection);
+		await search.clear();
+		await expect(page.getByText('Page 2 of 2')).toBeVisible();
+		await expect(match).toBeVisible();
+		await expect(page.getByRole('heading', { name: matchName, exact: true })).toBeVisible();
+
+		const panel = page.getByRole('tabpanel', { name: new RegExp(`^${tab}`, 'i') });
+		await search.fill('off-page value');
+		await expect(panel.getByText('Page 1 of 1')).toBeVisible();
+		await page.getByRole('button', { name: 'Edit definition' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Default value').fill('Updated value');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(dialog).toBeHidden();
+		await expect(search).toHaveValue('');
+		await expect(match).toBeVisible();
+		const details = page.getByRole('region', { name: 'Definition details' });
+		await expect(details.getByText('Updated value')).toBeVisible();
+
+		await search.fill('updated value');
+		await expect(panel.getByText('Page 1 of 1')).toBeVisible();
+		await page.getByRole('button', { name: `Add ${noun.toLowerCase()} definition` }).click();
+		const addedName = `${noun} 22`;
+		await dialog.getByLabel('Name', { exact: true }).fill(addedName);
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(dialog).toBeHidden();
+		await expect(search).toHaveValue('');
+		await expect(page.getByRole('button', { name: `Inspect ${addedName} (${device})` })).toBeVisible();
+		await expect(details.getByRole('heading', { name: addedName, exact: true })).toBeVisible();
+	});
+}

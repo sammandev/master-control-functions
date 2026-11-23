@@ -4,12 +4,24 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 )
+
+// DeviceInUseError refuses a device delete while Sequence steps still use
+// the device, either as a Function interface or as a step's device scope.
+type DeviceInUseError struct {
+	Device    string
+	Sequences []string
+}
+
+func (e *DeviceInUseError) Error() string {
+	return e.Device + " is used by Sequences: " + strings.Join(e.Sequences, ", ") + ". Remove those steps first."
+}
 
 // DeleteDevice removes a device's structured content in one transaction.
 // Shared (source, name) links have no interface: keep other scopes when
 // another Function still owns that pair, rather than deleting shared data.
-func DeleteDevice(ctx context.Context, db *sql.DB, name, now string) error {
+func DeleteDevice(ctx context.Context, db *sql.DB, name string) error {
 	if name == "" {
 		return ErrDeviceNotFound
 	}
@@ -30,6 +42,14 @@ func DeleteDevice(ctx context.Context, db *sql.DB, name, now string) error {
 		if uses == 0 {
 			return ErrDeviceNotFound
 		}
+	}
+
+	sequences, err := sequencesUsingDevice(ctx, tx, name)
+	if err != nil {
+		return err
+	}
+	if len(sequences) > 0 {
+		return &DeviceInUseError{Device: name, Sequences: sequences}
 	}
 
 	for _, table := range []string{"parameter_links", "criteria_links", "examples"} {
@@ -54,25 +74,7 @@ func DeleteDevice(ctx context.Context, db *sql.DB, name, now string) error {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE sequences SET updated_at = $2 WHERE id IN
-		(SELECT sequence_id FROM sequence_steps WHERE function_interface = $1 OR device_name = $1)`, name, now); err != nil {
-		return err
-	}
-	// Re-number only affected sequences, preserving their surviving step IDs/order.
-	if _, err := tx.ExecContext(ctx, `WITH affected AS (
-		SELECT DISTINCT sequence_id FROM sequence_steps
-		WHERE function_interface = $1 OR device_name = $1
-	), surviving AS (
-		SELECT id, ROW_NUMBER() OVER (PARTITION BY sequence_id ORDER BY position, id) AS position
-		FROM sequence_steps WHERE sequence_id IN (SELECT sequence_id FROM affected)
-		AND function_interface <> $1 AND device_name <> $1
-	)
-	UPDATE sequence_steps SET position = surviving.position
-	FROM surviving WHERE sequence_steps.id = surviving.id`, name); err != nil {
-		return err
-	}
 	for _, statement := range []string{
-		`DELETE FROM sequence_steps WHERE function_interface = $1 OR device_name = $1`,
 		`DELETE FROM functions WHERE interface = $1`,
 		`DELETE FROM devices WHERE name = $1`,
 	} {
@@ -81,4 +83,24 @@ func DeleteDevice(ctx context.Context, db *sql.DB, name, now string) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func sequencesUsingDevice(ctx context.Context, tx *sql.Tx, name string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT s.name FROM sequences s
+		JOIN sequence_steps step ON step.sequence_id = s.id
+		WHERE step.function_interface = $1 OR step.device_name = $1
+		ORDER BY s.name`, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var sequence string
+		if err := rows.Scan(&sequence); err != nil {
+			return nil, err
+		}
+		names = append(names, sequence)
+	}
+	return names, rows.Err()
 }

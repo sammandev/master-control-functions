@@ -154,6 +154,39 @@ func (q *Queries) InsertExample(ctx context.Context, arg InsertExampleParams) (E
 	return i, err
 }
 
+const listExampleFunctionNames = `-- name: ListExampleFunctionNames :many
+SELECT function_name
+FROM (
+    SELECT DISTINCT ON (function_name) function_name, device_name, id
+    FROM examples
+    ORDER BY function_name, device_name, id
+) first_examples
+ORDER BY device_name, id
+`
+
+func (q *Queries) ListExampleFunctionNames(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listExampleFunctionNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var function_name string
+		if err := rows.Scan(&function_name); err != nil {
+			return nil, err
+		}
+		items = append(items, function_name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExamples = `-- name: ListExamples :many
 
 SELECT e.id, e.function_source, e.function_name, e.device_name, e.script, e.meaning, e.created_at, e.updated_at,

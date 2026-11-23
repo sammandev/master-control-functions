@@ -103,10 +103,24 @@ func listExampleItem(r store.ListExamplesRow) exampleResponse {
 // registerExampleRoutes wires the /api/examples endpoints.
 func registerExampleRoutes(app *fiber.App, q *store.Queries) {
 	app.Get("/api/examples", listExamples(q))
+	app.Get("/api/examples/function-names", listExampleFunctionNames(q))
 	app.Post("/api/examples", createExample(q))
 	app.Get("/api/examples/:id", getExample(q))
 	app.Put("/api/examples/:id", updateExample(q))
 	app.Delete("/api/examples/:id", deleteExample(q))
+}
+
+func listExampleFunctionNames(q *store.Queries) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		names, err := q.ListExampleFunctionNames(c.Context())
+		if err != nil {
+			return serverError(c, "list example function names", err)
+		}
+		if names == nil {
+			names = []string{}
+		}
+		return c.JSON(fiber.Map{"items": names})
+	}
 }
 
 // exampleFilters reads the list filters: function_source, function_name,
