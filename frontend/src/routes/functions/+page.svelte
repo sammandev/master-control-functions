@@ -27,6 +27,7 @@
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
 	import { sortRows } from '#lib/table-sort.ts';
+	import { toast } from 'svelte-sonner';
 
 	let search = $derived(routePage.url.searchParams.get('search') ?? '');
 	const params = $derived.by((): ListParams => {
@@ -124,46 +125,85 @@
 	onMount(() => {
 		void loadMetadata();
 	});
+	async function scopedFunctions(query: ListParams, scope: string, stale = () => false) {
+		const device = scope === '_global' ? '' : scope;
+		const first = await listDeviceFunctions(device, 1, 100);
+		const rows = [...first.items];
+		for (let next = 2; rows.length < first.total; next++) {
+			if (stale()) return null;
+			const more = await listDeviceFunctions(device, next, 100);
+			if (!more.items.length) throw new Error('The function list changed. Please retry.');
+			rows.push(...more.items);
+		}
+		const matches = rows.filter(
+			(row) =>
+				(!query.search ||
+					`${row.name} ${row.description ?? ''}`
+						.toLowerCase()
+						.includes(query.search.trim().toLowerCase())) &&
+				(!query.source || row.source === query.source) &&
+				(!query.interface || row.interface === query.interface) &&
+				(!query.category || row.category === query.category) &&
+				(!query.execution_role || row.execution_role === query.execution_role) &&
+				(!query.execution_phase || row.execution_phase === query.execution_phase)
+		);
+		return sortRows(
+			matches,
+			(row) =>
+				query.sort === 'interface'
+					? row.interface
+					: query.sort === 'updated_at'
+						? row.updated_at
+						: row.name,
+			query.order ?? 'asc'
+		);
+	}
+	// The page holding the function under query and scope, or null when they hide it.
+	async function functionPage(query: ListParams, scope: string | null, id: number) {
+		if (scope === null) {
+			const result = await listFunctions({ ...query, function_id: id });
+			return result.items.some((item) => item.id === id) ? result.page : null;
+		}
+		const rows = (await scopedFunctions(query, scope)) ?? [];
+		const index = rows.findIndex((item) => item.id === id);
+		return index < 0 ? null : Math.floor(index / (query.page_size ?? 20)) + 1;
+	}
+	async function selectCreatedFunction(row: FunctionRow) {
+		clearTimeout(searchTimer);
+		const from = routePage.url.href;
+		const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
+		let scope = deviceFilter;
+		let found = await functionPage(params, scope, row.id);
+		if (found === null) {
+			for (const key of ['search', 'source', 'category', 'execution_role', 'execution_phase'])
+				location.delete(key);
+			if (scope !== null) {
+				scope = row.interface || '_global';
+				location.delete('interface');
+				location.set('device', scope);
+			}
+			const { sort, order, page_size } = params;
+			found = await functionPage({ sort, order, page_size }, scope, row.id);
+		}
+		if (routePage.url.href !== from) return;
+		if (found === null) throw new Error('The saved function is no longer available.');
+
+		if (found > 1) location.set('page', String(found));
+		else location.delete('page');
+		location.set('function', String(row.id));
+		await goto(resolve(`functions?${location.toString()}`), { reset: false });
+	}
 	async function load(query: ListParams, scope = deviceFilter) {
 		const attempt = ++revision;
 		let res;
 		if (scope === null) {
 			res = await listFunctions(query);
 		} else {
-			const device = scope === '_global' ? '' : scope;
-			const first = await listDeviceFunctions(device, 1, 100);
-			const rows = [...first.items];
-			for (let next = 2; rows.length < first.total; next++) {
-				if (attempt !== revision) return { items: [], total: 0 };
-				const more = await listDeviceFunctions(device, next, 100);
-				if (!more.items.length) throw new Error('The function list changed. Please retry.');
-				rows.push(...more.items);
-			}
-			const matches = rows.filter(
-				(row) =>
-					(!query.search ||
-						`${row.name} ${row.description ?? ''}`
-							.toLowerCase()
-							.includes(query.search.trim().toLowerCase())) &&
-					(!query.source || row.source === query.source) &&
-					(!query.interface || row.interface === query.interface) &&
-					(!query.category || row.category === query.category) &&
-					(!query.execution_role || row.execution_role === query.execution_role) &&
-					(!query.execution_phase || row.execution_phase === query.execution_phase)
-			);
-			const sorted = sortRows(
-				matches,
-				(row) =>
-					query.sort === 'interface'
-						? row.interface
-						: query.sort === 'updated_at'
-							? row.updated_at
-							: row.name,
-				query.order ?? 'asc'
-			);
+			const sorted = await scopedFunctions(query, scope, () => attempt !== revision);
+			if (!sorted) return { items: [], total: 0 };
 			const start = ((query.page ?? 1) - 1) * (query.page_size ?? 20);
 			res = {
-				total: matches.length,
+				total: sorted.length,
 				items: sorted.slice(start, start + (query.page_size ?? 20)).map((row): FunctionRow => ({
 					...row,
 					description: row.description ?? '',
@@ -420,7 +460,15 @@
 		}}
 		onClose={() => (dialogMode = null)}
 		onSaved={async (row) => {
-			await setQuery('function', row ? String(row.id) : '', false);
+			if (row && dialogMode === 'create') {
+				try {
+					await selectCreatedFunction(row);
+				} catch (error) {
+					toast.error('Function saved, but could not open it', {
+						description: error instanceof Error ? error.message : String(error)
+					});
+				}
+			} else await setQuery('function', row ? String(row.id) : '', false);
 			retry++;
 		}}
 	/>{/if}

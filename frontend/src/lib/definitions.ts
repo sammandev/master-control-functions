@@ -58,6 +58,7 @@ export async function listDefinitions(
 		order?: 'asc' | 'desc';
 		page?: number;
 		page_size?: number;
+		definition_id?: number;
 	}
 ): Promise<DefinitionListResult> {
 	const qs = new URLSearchParams();
@@ -66,6 +67,7 @@ export async function listDefinitions(
 	if (params.order) qs.set('order', params.order);
 	if (params.page) qs.set('page', String(params.page));
 	if (params.page_size) qs.set('page_size', String(params.page_size));
+	if (params.definition_id) qs.set('definition_id', String(params.definition_id));
 	const s = qs.toString();
 	return request<DefinitionListResult>(`/api/${kind}${s ? `?${s}` : ''}`);
 }

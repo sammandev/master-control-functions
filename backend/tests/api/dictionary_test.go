@@ -253,6 +253,42 @@ func TestDictionaryListPaginationAndSearch(t *testing.T) {
 	}
 }
 
+func TestDictionaryListLocatesRowByID(t *testing.T) {
+	for _, endpoint := range []string{"/api/parameter-definitions", "/api/criteria-definitions"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app, _ := newDictionaryTestApp(t)
+			var lastID int64
+			for _, n := range []string{"ALWAYS_AGC", "APT", "AUTO_CHANGE_CAL_FREQ", "AVERAGES", "BW"} {
+				resp, body := postJSON(t, app, endpoint, `{"name": "`+n+`", "type": "int", "cardinality": "SINGLE"}`)
+				if resp.StatusCode != 201 {
+					t.Fatalf("seed %s failed: %s", n, body)
+				}
+				var row struct {
+					ID int64 `json:"id"`
+				}
+				if err := json.Unmarshal([]byte(body), &row); err != nil {
+					t.Fatalf("decode %s: %v", n, err)
+				}
+				lastID = row.ID
+			}
+
+			// Name-asc puts BW fifth: page 3 at page_size 2.
+			resp, body := doRequest(t, app, "GET", fmt.Sprintf("%s?page=1&page_size=2&sort=name&order=asc&definition_id=%d", endpoint, lastID))
+			if resp.StatusCode != 200 {
+				t.Fatalf("list status = %d (body: %s)", resp.StatusCode, body)
+			}
+			if !strings.Contains(body, `"page":3`) || !strings.Contains(body, `"name":"BW"`) {
+				t.Fatalf("definition_id should open the page holding the row: %s", body)
+			}
+
+			_, body = doRequest(t, app, "GET", endpoint+"?page=2&page_size=2&sort=name&order=asc&definition_id=999999")
+			if !strings.Contains(body, `"page":2`) || !strings.Contains(body, `"name":"AUTO_CHANGE_CAL_FREQ"`) {
+				t.Fatalf("an unknown definition_id should keep the requested page: %s", body)
+			}
+		})
+	}
+}
+
 func TestDictionaryUsageCountAndDeleteGuard(t *testing.T) {
 	app, d := newDictionaryTestApp(t)
 

@@ -185,6 +185,7 @@ type dictionaryRoutes[T any] struct {
 	update   func(c fiber.Ctx, id int64, b definitionBody, now string) (T, error)
 	remove   func(c fiber.Ctx, id int64) (int64, error)
 	toResp   func(T, int64, int64) fiber.Map
+	idOf     func(T) int64
 	nameOf   func(T) string
 	scopeOf  func(T) string
 	sortKeys map[string]func(T) string
@@ -284,6 +285,7 @@ func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 				return r.nameOf(items[i]) < r.nameOf(items[j])
 			})
 		}
+		locateRow(c, &lq, "definition_id", items, r.idOf)
 		start := (lq.page - 1) * lq.pageSize
 		if start > int64(len(items)) {
 			start = int64(len(items))
@@ -458,6 +460,7 @@ func registerParameterDictionary(app *fiber.App, q *store.Queries) {
 			return q.DeleteParameterDefinition(c.Context(), id)
 		},
 		toResp:  parameterDefinitionResponse,
+		idOf:    func(d store.ParameterDefinition) int64 { return d.ID },
 		nameOf:  func(d store.ParameterDefinition) string { return d.Name },
 		scopeOf: func(d store.ParameterDefinition) string { return d.DeviceName },
 		sortKeys: map[string]func(store.ParameterDefinition) string{
@@ -536,6 +539,7 @@ func registerCriteriaDictionary(app *fiber.App, q *store.Queries) {
 			return q.DeleteCriteriaDefinition(c.Context(), id)
 		},
 		toResp:  criteriaDefinitionResponse,
+		idOf:    func(d store.CriteriaDefinition) int64 { return d.ID },
 		nameOf:  func(d store.CriteriaDefinition) string { return d.Name },
 		scopeOf: func(d store.CriteriaDefinition) string { return d.DeviceName },
 		sortKeys: map[string]func(store.CriteriaDefinition) string{
