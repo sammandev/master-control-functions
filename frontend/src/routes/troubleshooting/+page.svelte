@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { ChevronRight, Layers, Plus, RefreshCw, Search, X } from '@lucide/svelte';
+	import {
+		ChevronDown,
+		ChevronRight,
+		Download,
+		Layers,
+		Plus,
+		RefreshCw,
+		Search,
+		Upload,
+		X
+	} from '@lucide/svelte';
 	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
 	import {
 		categoryLabel,
@@ -25,9 +35,16 @@
 		type TroubleshootingDialogMode
 	} from '#lib/components/TroubleshootingDialog.svelte';
 	import TroubleshootingRegistryDialog from '#lib/components/TroubleshootingRegistryDialog.svelte';
+	import TroubleshootingBulkImportDialog from '#lib/components/TroubleshootingBulkImportDialog.svelte';
+	import TroubleshootingExportDialog from '#lib/components/TroubleshootingExportDialog.svelte';
+	import {
+		troubleshootingTemplateUrl,
+		type TroubleshootingExportSelection
+	} from '#lib/troubleshooting-transfer.ts';
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import Input from '#lib/components/ui/input.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
 	import Select from '#lib/components/ui/select.svelte';
@@ -44,6 +61,18 @@
 	let total = $state(0);
 	let loadingList = $state(true);
 	let listError = $state('');
+	let exportIds = $state<number[]>([]);
+	let bulkImportOpen = $state(false);
+	let exportScope = $state<TroubleshootingExportSelection['scope']>();
+	let visibleSelected = $derived(
+		items.length > 0 && items.every((row) => exportIds.includes(row.id))
+	);
+
+	function toggleExportSelection(ids: number[], checked: boolean) {
+		exportIds = checked
+			? [...exportIds, ...ids.filter((id) => !exportIds.includes(id))]
+			: exportIds.filter((id) => !ids.includes(id));
+	}
 
 	let selectedId = $state<number | null>(null);
 	let selectedDetail = $state<TroubleshootingGuideDetail | null>(null);
@@ -239,6 +268,7 @@
 		deleteBusy = true;
 		try {
 			await deleteTroubleshootingGuide(deleteTarget.id);
+			toggleExportSelection([deleteTarget.id], false);
 			toast.success(`Deleted guide "${deleteTarget.title}"`);
 			deleteTarget = null;
 			selectedId = null;
@@ -274,6 +304,39 @@
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
 		<Button variant="secondary" onclick={() => (manageOpen = true)}>Manage Lists</Button>
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} variant="outline">
+						<Upload size={16} /> Import <ChevronDown size={14} />
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end" class="min-w-44">
+				<DropdownMenu.Item onclick={() => (bulkImportOpen = true)}>Bulk import</DropdownMenu.Item>
+				{#each ['json', 'xlsx'] as format (format)}
+					<DropdownMenu.Item textValue={`Download ${format.toUpperCase()} template`}>
+						{#snippet child({ props })}
+							<!-- eslint-disable svelte/no-navigation-without-resolve -->
+							<a
+								{...props}
+								href={troubleshootingTemplateUrl(format === 'json' ? 'json' : 'xlsx')}
+								download={`troubleshooting-guide-template.${format}`}
+							>
+								Download {format.toUpperCase()} template
+							</a>
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
+						{/snippet}
+					</DropdownMenu.Item>
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+		<Button
+			variant="outline"
+			onclick={() => (exportScope = exportIds.length ? 'selected' : 'matching')}
+		>
+			<Download size={16} /> Export
+		</Button>
 		<Button onclick={openCreate}>
 			<Plus size={16} />
 			<span>New Troubleshooting Guide</span>
@@ -383,6 +446,39 @@
 					/>
 				</div>
 			</div>
+			{#if items.length && !loadingList && !listError}
+				<div class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-2 text-xs">
+					<label class="flex items-center gap-2">
+						<input
+							type="checkbox"
+							checked={visibleSelected}
+							indeterminate={!visibleSelected && items.some((row) => exportIds.includes(row.id))}
+							onchange={(event) =>
+								toggleExportSelection(
+									items.map((row) => row.id),
+									event.currentTarget.checked
+								)}
+						/>
+						Select page
+					</label>
+					<button
+						type="button"
+						class="text-primary hover:underline"
+						onclick={() => (exportScope = 'matching')}
+					>
+						Select all matching filters
+					</button>
+					{#if exportIds.length}
+						<button
+							type="button"
+							class="text-primary hover:underline"
+							onclick={() => (exportIds = [])}
+						>
+							Clear {exportIds.length} selected
+						</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		{#if loadingList}
@@ -410,44 +506,54 @@
 			</div>
 		{:else}
 			{#each items as row (row.id)}
-				<button
-					type="button"
-					class={[
-						'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
-						{ chosen: selectedId === row.id }
-					]}
-					aria-pressed={selectedId === row.id}
-					onclick={() => selectGuide(row.id)}
-				>
-					<div class="flex flex-wrap items-center gap-1.5">
-						<div class="guide-labels flex flex-wrap items-center gap-1.5">
-							{#if row.error_code}
-								<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
-							{/if}
-							<Badge variant="outline">{row.device_name || 'Global'}</Badge>
-							{#if row.function_name}
-								<Badge variant="outline"><code class="font-mono">{row.function_name}</code></Badge>
+				<div class="catalog-row">
+					<input
+						type="checkbox"
+						aria-label={`Select ${row.title} for export`}
+						checked={exportIds.includes(row.id)}
+						onchange={(event) => toggleExportSelection([row.id], event.currentTarget.checked)}
+					/>
+					<button
+						type="button"
+						class={[
+							'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+							{ chosen: selectedId === row.id }
+						]}
+						aria-pressed={selectedId === row.id}
+						onclick={() => selectGuide(row.id)}
+					>
+						<div class="flex flex-wrap items-center gap-1.5">
+							<div class="guide-labels flex flex-wrap items-center gap-1.5">
+								{#if row.error_code}
+									<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
+								{/if}
+								<Badge variant="outline">{row.device_name || 'Global'}</Badge>
+								{#if row.function_name}
+									<Badge variant="outline">
+										<code class="font-mono">{row.function_name}</code>
+									</Badge>
+								{/if}
+							</div>
+							{#if row.related_count > 0}
+								<span
+									class="text-primary inline-flex items-center gap-1 text-[11px] font-semibold"
+									title="{row.related_count + 1} solutions available for this problem / error code"
+								>
+									<Layers size={11} />
+									+{row.related_count} alt
+								</span>
 							{/if}
 						</div>
-						{#if row.related_count > 0}
-							<span
-								class="text-primary inline-flex items-center gap-1 text-[11px] font-semibold"
-								title="{row.related_count + 1} solutions available for this problem / error code"
-							>
-								<Layers size={11} />
-								+{row.related_count} alt
-							</span>
-						{/if}
-					</div>
-					<span class="sr-only">Select guide </span>
-					<strong>{row.title}</strong>
-					<span class="meta-line">
-						{categoryLabel(row.category, categories)}
-						· {row.step_count}
-						{row.step_count === 1 ? 'step' : 'steps'}
-					</span>
-					<ChevronRight size={16} class="chevron-icon" />
-				</button>
+						<span class="sr-only">Select guide </span>
+						<strong>{row.title}</strong>
+						<span class="meta-line">
+							{categoryLabel(row.category, categories)}
+							· {row.step_count}
+							{row.step_count === 1 ? 'step' : 'steps'}
+						</span>
+						<ChevronRight size={16} class="chevron-icon" />
+					</button>
+				</div>
 			{/each}
 
 			<Pagination
@@ -515,6 +621,25 @@
 		{/if}
 	</div>
 </div>
+
+{#if bulkImportOpen}
+	<TroubleshootingBulkImportDialog
+		onClose={() => (bulkImportOpen = false)}
+		onImported={({ created, updated }) => {
+			toast.success(`Import complete: ${created} created, ${updated} updated`);
+			void refreshList();
+		}}
+	/>
+{/if}
+
+{#if exportScope}
+	<TroubleshootingExportDialog
+		ids={exportIds}
+		initialScope={exportScope}
+		filters={{ search: search.trim(), category, device, error_code: errorCodeFilter }}
+		onClose={() => (exportScope = undefined)}
+	/>
+{/if}
 
 {#if dialogOpen}
 	<TroubleshootingDialog
@@ -682,7 +807,16 @@
 		font-size: 12px;
 		color: var(--muted-foreground);
 	}
-	.guide-list > button {
+	.catalog-row {
+		position: relative;
+		flex-shrink: 0;
+	}
+	.catalog-row > input {
+		position: absolute;
+		z-index: 1;
+		inset: 16px auto auto 15px;
+	}
+	.catalog-row > button {
 		flex-shrink: 0;
 		display: grid;
 		position: relative;
@@ -690,7 +824,7 @@
 		width: 100%;
 		min-width: 0;
 		text-align: left;
-		padding: 14px 28px 14px 16px;
+		padding: 14px 28px 14px 38px;
 		border-left: 3px solid transparent;
 		border-top: 1px solid var(--border);
 		cursor: pointer;
@@ -706,18 +840,18 @@
 		font-size: 11px;
 		color: var(--muted-foreground);
 	}
-	.guide-list > button :global(.chevron-icon) {
+	.catalog-row > button :global(.chevron-icon) {
 		position: absolute;
 		top: 50%;
 		right: 6px;
 		transform: translateY(-50%);
 		color: var(--muted-foreground);
 	}
-	.guide-list button:hover,
-	.guide-list button.chosen {
+	.catalog-row button:hover,
+	.catalog-row button.chosen {
 		background: var(--device-soft);
 	}
-	.guide-list button.chosen {
+	.catalog-row button.chosen {
 		border-left-color: var(--device-accent);
 	}
 	.detail-pane {
