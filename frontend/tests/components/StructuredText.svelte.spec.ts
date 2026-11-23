@@ -23,11 +23,11 @@ describe('StructuredTextEditor', () => {
 		const textarea = page.getByRole('textbox', { name: 'Troubleshooting notes' });
 		await textarea.click();
 		await userEvent.keyboard('- Inspect DUT{Enter}Retry flow{Enter}{Enter}');
-		await expect.element(textarea).toHaveValue('- Inspect DUT\n- Retry flow\n');
+		await expect.element(textarea).toHaveValue('- Inspect DUT\n- Retry flow\n\n');
 		await userEvent.keyboard('1. Reconnect{Enter}Retest{Enter}{Backspace}');
 		await expect
 			.element(textarea)
-			.toHaveValue('- Inspect DUT\n- Retry flow\n1. Reconnect\n2. Retest\n');
+			.toHaveValue('- Inspect DUT\n- Retry flow\n\n1. Reconnect\n2. Retest\n');
 		await expect
 			.element(page.getByRole('button', { name: /bulleted list|numbered list/i }))
 			.not.toBeInTheDocument();
