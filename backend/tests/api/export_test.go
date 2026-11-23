@@ -274,6 +274,51 @@ func TestExportReimportIdempotent(t *testing.T) {
 	}
 }
 
+func TestExportResetRestoresGlobalFunctions(t *testing.T) {
+	app := newImportTestApp(t)
+	for _, input := range []string{
+		`{"source":"DLL","interface":"","name":"GLOBAL_FN","description":"Global function"}`,
+		`{"source":"DLL","interface":"WIFI_TEST","name":"SCOPED_FN"}`,
+	} {
+		if resp, body := postJSON(t, app, "/api/functions", input); resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create function: %d (body: %s)", resp.StatusCode, body)
+		}
+	}
+
+	xlsx, resp := exportWorkbookBytes(t, app)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("export: %d (body: %s)", resp.StatusCode, xlsx)
+	}
+	ct, body := multipartBody(t, "file", "export.xlsx", xlsx)
+	resp, result := postFile(t, app, "/api/import/reset", ct, body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reset import: %d (body: %s)", resp.StatusCode, result)
+	}
+	var run importer.RunResult
+	if err := json.Unmarshal([]byte(result), &run); err != nil {
+		t.Fatalf("decode reset import: %v", err)
+	}
+	if run.Counts["functions"] != 2 || len(run.Skipped) != 0 {
+		t.Fatalf("reset import did not restore both functions: %s", result)
+	}
+
+	restored, resp := exportWorkbookBytes(t, app)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("export after reset: %d (body: %s)", resp.StatusCode, restored)
+	}
+	wb, err := importer.ParseWorkbook(bytes.NewReader(restored))
+	if err != nil {
+		t.Fatalf("parse export after reset: %v", err)
+	}
+	want := []importer.FunctionRow{
+		{Source: "DLL", Interface: "", Name: "GLOBAL_FN", Description: "Global function"},
+		{Source: "DLL", Interface: "WIFI_TEST", Name: "SCOPED_FN"},
+	}
+	if !reflect.DeepEqual(wb.Functions, want) {
+		t.Fatalf("restored functions = %+v, want %+v", wb.Functions, want)
+	}
+}
+
 // TestExportIncludesOrphans: orphan link rows and orphan examples exist in
 // the source file, so the export must carry them faithfully — with the
 // normalized device scope, exactly as the database stores them.
