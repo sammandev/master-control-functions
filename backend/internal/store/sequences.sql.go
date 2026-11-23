@@ -308,7 +308,24 @@ func (q *Queries) ListSequences(ctx context.Context, search sql.NullString) ([]L
 	return items, nil
 }
 
-const updateSequenceMeta = `-- name: UpdateSequenceMeta :exec
+const touchSequence = `-- name: TouchSequence :execrows
+UPDATE sequences SET updated_at = $1 WHERE id = $2
+`
+
+type TouchSequenceParams struct {
+	UpdatedAt string
+	ID        int64
+}
+
+func (q *Queries) TouchSequence(ctx context.Context, arg TouchSequenceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchSequence, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updateSequenceMeta = `-- name: UpdateSequenceMeta :execrows
 UPDATE sequences SET name = $1, description = $2, updated_at = $3 WHERE id = $4
 `
 
@@ -319,12 +336,15 @@ type UpdateSequenceMetaParams struct {
 	ID          int64
 }
 
-func (q *Queries) UpdateSequenceMeta(ctx context.Context, arg UpdateSequenceMetaParams) error {
-	_, err := q.db.ExecContext(ctx, updateSequenceMeta,
+func (q *Queries) UpdateSequenceMeta(ctx context.Context, arg UpdateSequenceMetaParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateSequenceMeta,
 		arg.Name,
 		arg.Description,
 		arg.UpdatedAt,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

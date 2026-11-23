@@ -39,8 +39,8 @@ type sequenceStepBody struct {
 	Note              string            `json:"note"`
 }
 
-// sequenceBody is the write payload. PUT replaces the entire sequence;
-// PATCH updates only its name and description.
+// sequenceBody is the write payload. The metadata and step routes each
+// use only their own fields.
 type sequenceBody struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
@@ -58,6 +58,11 @@ func (b *sequenceBody) validateMeta() map[string]string {
 
 func (b *sequenceBody) validate() map[string]string {
 	fields := b.validateMeta()
+	b.validateSteps(fields)
+	return fields
+}
+
+func (b *sequenceBody) validateSteps(fields map[string]string) {
 	if len(b.Steps) == 0 {
 		fields["steps"] = "at least one step is required"
 	}
@@ -80,7 +85,6 @@ func (b *sequenceBody) validate() map[string]string {
 			fields["steps.function_name"] = "step " + strconv.Itoa(i+1) + ": name is required"
 		}
 	}
-	return fields
 }
 
 // ---- responses -----------------------------------------------------------
@@ -228,8 +232,9 @@ func registerSequenceRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Get("/api/sequences", listSequences(q))
 	app.Post("/api/sequences", createSequence(q, d))
 	app.Get("/api/sequences/:id", getSequence(q))
-	app.Put("/api/sequences/:id", updateSequence(q, d, true))
-	app.Patch("/api/sequences/:id", updateSequence(q, d, false))
+	app.Put("/api/sequences/:id", updateSequence(q, d, sequenceUpdateAll))
+	app.Patch("/api/sequences/:id", updateSequence(q, d, sequenceUpdateMeta))
+	app.Put("/api/sequences/:id/steps", updateSequence(q, d, sequenceUpdateSteps))
 	app.Delete("/api/sequences/:id", deleteSequence(q))
 	app.Post("/api/sequences/:id/emit", emitSequence(q))
 }
@@ -401,7 +406,17 @@ func getSequence(q *store.Queries) fiber.Handler {
 	}
 }
 
-func updateSequence(q *store.Queries, d *sql.DB, replaceSteps bool) fiber.Handler {
+type sequenceUpdateMode int
+
+const (
+	sequenceUpdateAll sequenceUpdateMode = iota
+	sequenceUpdateMeta
+	sequenceUpdateSteps
+)
+
+func updateSequence(q *store.Queries, d *sql.DB, mode sequenceUpdateMode) fiber.Handler {
+	writeMeta := mode != sequenceUpdateSteps
+	replaceSteps := mode != sequenceUpdateMeta
 	return func(c fiber.Ctx) error {
 		id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 		if err != nil {
@@ -411,20 +426,15 @@ func updateSequence(q *store.Queries, d *sql.DB, replaceSteps bool) fiber.Handle
 		if err := c.Bind().Body(&b); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
 		}
-		var fields map[string]string
-		if replaceSteps {
-			fields = b.validate()
-		} else {
+		fields := map[string]string{}
+		if writeMeta {
 			fields = b.validateMeta()
+		}
+		if replaceSteps {
+			b.validateSteps(fields)
 		}
 		if len(fields) > 0 {
 			return validationError(c, fields)
-		}
-		if _, err := q.GetSequence(c.Context(), id); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "sequence not found"})
-			}
-			return serverError(c, "read sequence", err)
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 
@@ -435,13 +445,26 @@ func updateSequence(q *store.Queries, d *sql.DB, replaceSteps bool) fiber.Handle
 			}
 			defer tx.Rollback()
 			tq := q.WithTx(tx)
-			if err := tq.UpdateSequenceMeta(c.Context(), store.UpdateSequenceMetaParams{
-				Name:        b.Name,
-				Description: b.Description,
-				UpdatedAt:   now,
-				ID:          id,
-			}); err != nil {
+			var affected int64
+			if writeMeta {
+				affected, err = tq.UpdateSequenceMeta(c.Context(), store.UpdateSequenceMetaParams{
+					Name:        b.Name,
+					Description: b.Description,
+					UpdatedAt:   now,
+					ID:          id,
+				})
+			} else {
+				// Lock the parent before replacing steps, without rewriting its metadata.
+				affected, err = tq.TouchSequence(c.Context(), store.TouchSequenceParams{
+					UpdatedAt: now,
+					ID:        id,
+				})
+			}
+			if err != nil {
 				return err
+			}
+			if affected == 0 {
+				return sql.ErrNoRows
 			}
 			if replaceSteps {
 				if err := writeSteps(c, tq, id, b.Steps); err != nil {
@@ -451,7 +474,10 @@ func updateSequence(q *store.Queries, d *sql.DB, replaceSteps bool) fiber.Handle
 			return tx.Commit()
 		}()
 		if err != nil {
-			if store.IsUniqueViolation(err) {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "sequence not found"})
+			}
+			if writeMeta && store.IsUniqueViolation(err) {
 				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 					"error": "a sequence named '" + b.Name + "' already exists",
 				})

@@ -109,6 +109,17 @@ export async function updateSequence(id: number, body: SequenceInput): Promise<S
 	});
 }
 
+export async function updateSequenceSteps(
+	id: number,
+	steps: SequenceStepInput[]
+): Promise<SequenceDetail> {
+	return request<SequenceDetail>(`/api/sequences/${id}/steps`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ steps })
+	});
+}
+
 export async function updateSequenceMeta(
 	id: number,
 	body: Pick<SequenceInput, 'name' | 'description'>

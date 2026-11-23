@@ -4388,8 +4388,7 @@ function emitSequenceText(sequence: SequenceDetail) {
 	};
 }
 
-// Stateful fake of the sequences API: PUT replaces the sequence;
-// PATCH updates only the metadata.
+// Stateful fake of the sequences API, including separate step and metadata writes.
 async function mockSequenceStore(
 	page: Page,
 	initial: SequenceDetail[],
@@ -4405,13 +4404,13 @@ async function mockSequenceStore(
 	let failDetail = options.failDetailOnce ?? false;
 	let rejectSave = options.rejectSaveOnce;
 	let nextStepId = 1000;
-	await page.route(/\/api\/sequences(?:\/\d+(?:\/emit)?)?(?:\?.*)?$/, async (route) => {
+	await page.route(/\/api\/sequences(?:\/\d+(?:\/(?:emit|steps))?)?(?:\?.*)?$/, async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());
 		const raw = request.postData();
 		const body: unknown = raw ? JSON.parse(raw) : null;
 		requests.push({ method: request.method(), path: url.pathname, search: url.search, body });
-		const match = /^\/api\/sequences(?:\/(\d+)(\/emit)?)?$/.exec(url.pathname);
+		const match = /^\/api\/sequences(?:\/(\d+)(?:\/(emit|steps))?)?$/.exec(url.pathname);
 		if (!match) return route.fallback();
 		if (!match[1]) {
 			if (failList) {
@@ -4440,7 +4439,7 @@ async function mockSequenceStore(
 		}
 		const sequence = sequences.find((row) => row.id === Number(match[1]));
 		if (!sequence) return route.fulfill({ status: 404, json: { error: 'Sequence not found' } });
-		if (match[2]) return route.fulfill({ json: emitSequenceText(sequence) });
+		if (match[2] === 'emit') return route.fulfill({ json: emitSequenceText(sequence) });
 		if (request.method() === 'GET') {
 			if (failDetail) {
 				failDetail = false;
@@ -4455,8 +4454,10 @@ async function mockSequenceStore(
 				return route.fulfill({ status: 422, json: { error, fields } });
 			}
 			const input = body as SequenceInput;
-			sequence.name = input.name;
-			sequence.description = input.description;
+			if (match[2] !== 'steps') {
+				sequence.name = input.name;
+				sequence.description = input.description;
+			}
 			if (request.method() === 'PUT') {
 				sequence.steps = input.steps.map((step, index) => {
 					const stored = step as Partial<SequenceStep>;
