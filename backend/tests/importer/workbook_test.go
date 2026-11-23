@@ -3,6 +3,7 @@ package importer_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xuri/excelize/v2"
@@ -150,6 +151,52 @@ func TestParseWorkbookRealFixture(t *testing.T) {
 		if !wantFREQ[s] {
 			t.Fatalf("FREQ scope %q not expected (want WIFI_TEST or OSP)", s)
 		}
+	}
+}
+
+func TestParseWorkbookRequiredHeaders(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		sheet   string
+		headers []string
+		missing string
+	}{
+		{name: "function", sheet: "function_main", headers: []string{"source", "name"}, missing: "interface (or device_name)"},
+		{name: "parameter definition", sheet: "parameter_main", headers: []string{"description"}, missing: "name"},
+		{name: "criteria definition", sheet: "criteria_main", headers: []string{"description"}, missing: "name"},
+		{name: "parameter link", sheet: "function_parameter", headers: []string{"name", "function_name"}, missing: "function_source"},
+		{name: "criteria link", sheet: "function_criteria", headers: []string{"name", "function_source"}, missing: "function_name"},
+		{name: "example", sheet: "example", headers: []string{"function_name", "meaning"}, missing: "script"},
+		{name: "empty sheet", sheet: "parameter_main", missing: "name"},
+		{name: "header-only sheets"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sheets := map[string][][]string{
+				"function_main":      {{" SOURCE ", " DEVICE_NAME ", " NAME "}},
+				"parameter_main":     {{"name"}},
+				"criteria_main":      {{"name"}},
+				"function_parameter": {{"name", "function_source", "function_name"}},
+				"function_criteria":  {{"name", "function_source", "function_name"}},
+				"example":            {{"function_name", "script"}},
+			}
+			if tc.sheet != "" {
+				sheets[tc.sheet] = nil
+				if tc.headers != nil {
+					sheets[tc.sheet] = [][]string{tc.headers}
+				}
+			}
+			_, err := importer.ParseWorkbook(writeAndOpen(t, sheets))
+			if tc.missing == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			want := "sheet " + tc.sheet + ": missing required columns: " + tc.missing
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("got %v, want %q", err, want)
+			}
+		})
 	}
 }
 
