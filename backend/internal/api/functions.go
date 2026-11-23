@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -307,6 +308,19 @@ func (lq *listQuery) countParams() store.CountFunctionsParams {
 	}
 }
 
+// locateRow moves lq to the page holding the row whose id is in the param
+// query, so a client can open a just-saved row wherever it sorts. An absent
+// or unknown id keeps the requested page.
+func locateRow[T any](c fiber.Ctx, lq *listQuery, param string, rows []T, idOf func(T) int64) {
+	id, err := strconv.ParseInt(c.Query(param), 10, 64)
+	if err != nil || id <= 0 {
+		return
+	}
+	if index := slices.IndexFunc(rows, func(row T) bool { return idOf(row) == id }); index >= 0 {
+		lq.page = int64(index)/lq.pageSize + 1
+	}
+}
+
 func listFunctions(q *store.Queries) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		lq := parseListQuery(c)
@@ -332,6 +346,7 @@ func listFunctions(q *store.Queries) fiber.Handler {
 				return c < 0
 			})
 		}
+		locateRow(c, &lq, "function_id", items, func(f store.Function) int64 { return f.ID })
 		start := (lq.page - 1) * lq.pageSize
 		if start > int64(len(items)) {
 			start = int64(len(items))

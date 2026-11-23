@@ -16,6 +16,7 @@
 	import { Plus, RefreshCw, ChevronRight } from '@lucide/svelte';
 	import Input from '#lib/components/ui/input.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
+	import { toast } from 'svelte-sonner';
 
 	// Shared CRUD page for the Parameter definition and Criteria definition
 	// dictionaries. kind picks the endpoint; everything else is identical.
@@ -92,22 +93,66 @@
 	});
 
 	onDestroy(() => clearTimeout(searchTimer));
+	async function scopedDefinitions(
+		endpoint: DefinitionKind,
+		query: Omit<typeof params, 'page'>,
+		device: string,
+		stale = () => false
+	) {
+		const first = await listDefinitions(endpoint, { ...query, page: 1, page_size: 100 });
+		const rows = [...first.items];
+		for (let next = 2; rows.length < first.total; next++) {
+			if (stale()) return null;
+			const more = await listDefinitions(endpoint, { ...query, page: next, page_size: 100 });
+			if (!more.items.length) throw new Error('The definition list changed. Please retry.');
+			rows.push(...more.items);
+		}
+		return rows.filter((row) => row.device_name === (device === '_global' ? '' : device));
+	}
+	// The page holding the definition under query and device, or null when they hide it.
+	async function definitionPage(
+		query: Omit<typeof params, 'page'>,
+		device: string | null,
+		id: number
+	) {
+		if (device === null) {
+			const result = await listDefinitions(kind, { ...query, definition_id: id });
+			return result.items.some((item) => item.id === id) ? result.page : null;
+		}
+		const rows = (await scopedDefinitions(kind, query, device)) ?? [];
+		const index = rows.findIndex((item) => item.id === id);
+		return index < 0 ? null : Math.floor(index / query.page_size) + 1;
+	}
+	async function selectCreatedDefinition(row: DefinitionRow) {
+		clearTimeout(searchTimer);
+		const from = routePage.url.href;
+		const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
+		let device = deviceFilter;
+		let found = await definitionPage(params, device, row.id);
+		if (found === null) {
+			location.delete('search');
+			if (device !== null) {
+				device = row.device_name || '_global';
+				location.set('device', device);
+			}
+			found = await definitionPage({ ...params, search: undefined }, device, row.id);
+		}
+		if (routePage.url.href !== from) return;
+		if (found === null) throw new Error('The saved definition is no longer available.');
+
+		if (found > 1) location.set('page', String(found));
+		else location.delete('page');
+		location.set('definition', String(row.id));
+		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
+		await goto(resolve(`${kind}?${location.toString()}`), { reset: false });
+	}
 	async function load(endpoint: DefinitionKind, query: typeof params, device: string | null) {
 		const attempt = ++revision;
 		let result;
 		if (device === null) result = await listDefinitions(endpoint, query);
 		else {
-			const first = await listDefinitions(endpoint, { ...query, page: 1, page_size: 100 });
-			const rows = [...first.items];
-			for (let next = 2; rows.length < first.total; next++) {
-				if (attempt !== revision) return { items: [], total: 0 };
-				const more = await listDefinitions(endpoint, { ...query, page: next, page_size: 100 });
-				if (!more.items.length) throw new Error('The definition list changed. Please retry.');
-				rows.push(...more.items);
-			}
-			const matches = rows.filter(
-				(row) => row.device_name === (device === '_global' ? '' : device)
-			);
+			const matches = await scopedDefinitions(endpoint, query, device, () => attempt !== revision);
+			if (!matches) return { items: [], total: 0 };
 			const start = (query.page - 1) * query.page_size;
 			result = { items: matches.slice(start, start + query.page_size), total: matches.length };
 		}
@@ -290,7 +335,16 @@
 	editRow={editTarget}
 	prefillDevice={deviceFilter === '_global' ? '' : (deviceFilter ?? '')}
 	onsaved={async (row) => {
-		await setQuery('definition', String(row.id), false);
+		if (editTarget) await setQuery('definition', String(row.id), false);
+		else {
+			try {
+				await selectCreatedDefinition(row);
+			} catch (error) {
+				toast.error('Definition saved, but could not open it', {
+					description: error instanceof Error ? error.message : String(error)
+				});
+			}
+		}
 		retry++;
 	}}
 />
