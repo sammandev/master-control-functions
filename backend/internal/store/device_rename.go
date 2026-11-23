@@ -52,6 +52,7 @@ func RenameDevice(ctx context.Context, db *sql.DB, oldName, newName, now string)
 		`UPDATE parameter_definitions SET device_name = $2, updated_at = $3 WHERE device_name = $1`,
 		`UPDATE criteria_definitions SET device_name = $2, updated_at = $3 WHERE device_name = $1`,
 		`UPDATE examples SET device_name = $2, updated_at = $3 WHERE device_name = $1`,
+		`UPDATE troubleshooting_guides SET device_name = $2, updated_at = $3 WHERE device_name = $1`,
 		`UPDATE function_grammars SET function_interface = $2, updated_at = $3 WHERE function_interface = $1`,
 		`UPDATE script_key_audits SET function_interface = $2, updated_at = $3 WHERE function_interface = $1`,
 	}
