@@ -11,6 +11,7 @@
 	} from '#lib/compose.ts';
 	import { ApiError, formatApiError } from '#lib/client.ts';
 	import { createExample } from '#lib/examples.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import Dialog from '#lib/components/ui/dialog.svelte';
 	import Select from '#lib/components/ui/select.svelte';
 	import Tooltip from '#lib/components/ui/tooltip.svelte';
@@ -68,6 +69,7 @@
 	let onFail = $state('FAIL');
 
 	// ---- preview -----------------------------------------------------------
+	const previewRequestGuard = createLatestRequestGuard();
 	let preview = $state('');
 	let fieldErrors = $state<Record<string, string>>({});
 	let composeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -87,6 +89,8 @@
 	});
 
 	async function loadMeta(id: number) {
+		clearTimeout(composeTimer);
+		previewRequestGuard.begin();
 		loading = true;
 		loadError = '';
 		meta = null;
@@ -134,15 +138,17 @@
 	// Live preview: debounced compose call; the server is the single
 	// source of truth for the grammar, so the preview shows either the
 	// emitted script or the field-level rejections.
-	function previewScript() {
+	function previewScript(request = previewRequestGuard.begin()) {
 		if (!meta) return;
 		composeScript(fnId, currentRequest())
 			.then((res) => {
+				if (!previewRequestGuard.isCurrent(request)) return;
 				preview = res.script;
 				saveScript = res.script;
 				fieldErrors = {};
 			})
 			.catch((e) => {
+				if (!previewRequestGuard.isCurrent(request)) return;
 				preview = '';
 				if (e instanceof ApiError) {
 					fieldErrors = e.fields;
@@ -154,7 +160,8 @@
 
 	function schedulePreview() {
 		clearTimeout(composeTimer);
-		composeTimer = setTimeout(previewScript, 300);
+		const request = previewRequestGuard.begin();
+		composeTimer = setTimeout(() => previewScript(request), 300);
 	}
 
 	async function copyScript() {
