@@ -202,7 +202,15 @@
 	// dialog was last shown.
 	async function reloadSequences() {
 		try {
-			seqs = (await listSequences({ page_size: 200 })).items;
+			const pageSize = 100;
+			const first = await listSequences({ page: 1, page_size: pageSize });
+			const items = first.items;
+			const pageCount = Math.ceil(first.total / first.page_size);
+			for (let page = 2; page <= pageCount; page++) {
+				const result = await listSequences({ page, page_size: pageSize });
+				items.push(...result.items);
+			}
+			seqs = items;
 		} catch {
 			seqs = [];
 		}
