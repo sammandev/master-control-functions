@@ -190,7 +190,6 @@
 		const normalizedSteps = steps.map((s) => ({
 			...s,
 			instruction: trimEmptyListItems(s.instruction),
-			script_snippet: trimEmptyListItems(s.script_snippet),
 			verification: trimEmptyListItems(s.verification)
 		}));
 		const errs = validateClient(normalizedSymptom, normalizedSteps);

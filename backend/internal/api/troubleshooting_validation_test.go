@@ -87,3 +87,17 @@ func TestTroubleshootingBodyValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestTroubleshootingBodyPreservesScriptSnippet(t *testing.T) {
+	const snippet = "    first line\n\tsecond line"
+	body := troubleshootingBody{
+		Title: "Guide", Category: "connection", Severity: "high", Symptom: "Signal lost",
+		Steps: []troubleshootingStepBody{{Title: "Reset", Instruction: "Restart", ScriptSnippet: snippet}},
+	}
+	if fields := body.validate(); len(fields) != 0 {
+		t.Fatalf("unexpected validation errors: %v", fields)
+	}
+	if got := body.Steps[0].ScriptSnippet; got != snippet {
+		t.Fatalf("script_snippet = %q, want %q", got, snippet)
+	}
+}

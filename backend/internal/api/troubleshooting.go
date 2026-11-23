@@ -76,7 +76,6 @@ func (b *troubleshootingBody) validateWithTextNormalization(trimText bool) map[s
 		s.Title = strings.TrimSpace(s.Title)
 		if trimText {
 			s.Instruction = strings.TrimSpace(s.Instruction)
-			s.ScriptSnippet = strings.TrimSpace(s.ScriptSnippet)
 			s.Verification = strings.TrimSpace(s.Verification)
 		}
 		if s.Title == "" {

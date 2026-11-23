@@ -575,6 +575,8 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 	await createDialog
 		.getByRole('textbox', { name: /Detailed Instruction/ })
 		.fill('Run fixture check');
+	const snippet = '    first line\n\tsecond line';
+	await createDialog.getByRole('textbox', { name: /Script Line \/ INI Snippet/ }).fill(snippet);
 	const verification = createDialog.getByRole('textbox', { name: /Expected Verification Result/ });
 	await verification.pressSequentially('- Passes');
 	await verification.press('Enter');
@@ -586,6 +588,7 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 		'Fixture log'
 	]);
 	await expect(page.locator('.step-card ul li')).toHaveText(['Passes', 'Is stable']);
+	expect(await page.locator('.step-card pre').textContent()).toBe(snippet);
 
 	await page.getByRole('button', { name: 'Edit', exact: true }).click();
 	const editDialog = page.getByRole('dialog', { name: 'Edit Troubleshooting Guide' });
@@ -594,6 +597,7 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 		.fill('CRUD fixture updated');
 	await editDialog.getByRole('button', { name: 'Save Changes' }).click();
 	await expect(page.getByRole('heading', { name: 'CRUD fixture updated' })).toBeVisible();
+	expect(await page.locator('.step-card pre').textContent()).toBe(snippet);
 
 	await page.getByRole('button', { name: 'Delete', exact: true }).click();
 	const deleteDialog = page.getByRole('alertdialog', { name: 'Delete Troubleshooting Guide?' });
