@@ -148,9 +148,12 @@ export async function listDeviceDefinitions(
 	kind: DeviceDefinitionKind,
 	deviceName: string,
 	page = 1,
-	pageSize = 20
+	pageSize = 20,
+	search = ''
 ): Promise<DeviceDefinitionsResult> {
+	const query = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+	if (search) query.set('search', search);
 	return request<DeviceDefinitionsResult>(
-		`/api/devices/${devicePath(deviceName)}/${kind}?page=${page}&page_size=${pageSize}`
+		`/api/devices/${devicePath(deviceName)}/${kind}?${query}`
 	);
 }

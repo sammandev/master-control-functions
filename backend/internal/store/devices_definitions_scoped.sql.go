@@ -9,38 +9,13 @@ import (
 	"context"
 )
 
-const countScopedCriteriaDefinitions = `-- name: CountScopedCriteriaDefinitions :one
-SELECT COUNT(*) FROM criteria_definitions WHERE device_name = $1
-`
-
-func (q *Queries) CountScopedCriteriaDefinitions(ctx context.Context, deviceName string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countScopedCriteriaDefinitions, deviceName)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countScopedParameterDefinitions = `-- name: CountScopedParameterDefinitions :one
-SELECT COUNT(*) FROM parameter_definitions WHERE device_name = $1
-`
-
-func (q *Queries) CountScopedParameterDefinitions(ctx context.Context, deviceName string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countScopedParameterDefinitions, deviceName)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const listScopedCriteriaDefinitions = `-- name: ListScopedCriteriaDefinitions :many
-
 SELECT id, name, description, type, unit, default_value, allowed_values, cardinality, value_pattern, required, device_name, created_at, updated_at
 FROM criteria_definitions
 WHERE device_name = $1
 ORDER BY name
 `
 
-// Global definitions resolved by a device's links: a link in the device
-// references the name and no device-scoped sibling shadows it.
 func (q *Queries) ListScopedCriteriaDefinitions(ctx context.Context, deviceName string) ([]CriteriaDefinition, error) {
 	rows, err := q.db.QueryContext(ctx, listScopedCriteriaDefinitions, deviceName)
 	if err != nil {
