@@ -48,6 +48,48 @@ func TestTroubleshootingTransferJSONInvalidIDIsNotCreate(t *testing.T) {
 	}
 }
 
+func TestTroubleshootingTransferXLSXRejectsUnexpectedHeaders(t *testing.T) {
+	for _, tc := range []struct {
+		sheet     string
+		cell      string
+		newHeader string
+		want      []string
+	}{
+		{"Guides", "B1", "guide_id", []string{`missing column "id"`, `unknown column "guide_id"`}},
+		{"Steps", "E1", "snippet", []string{`missing column "script_snippet"`, `unknown column "snippet"`}},
+		{"Steps", "F1", "", []string{`missing column "verification"`}},
+		{"Guides", "K1", "extra_field", []string{`unknown column "extra_field"`}},
+	} {
+		t.Run(tc.sheet+"/"+tc.cell, func(t *testing.T) {
+			data, err := writeTroubleshootingTransfer(troubleshootingTransfer{}, "xlsx", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			book, err := excelize.OpenReader(bytes.NewReader(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer book.Close()
+			if err := book.SetCellStr(tc.sheet, tc.cell, tc.newHeader); err != nil {
+				t.Fatal(err)
+			}
+			file, err := book.WriteToBuffer()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = parseTroubleshootingTransfer(file, "xlsx")
+			if err == nil {
+				t.Fatal("workbook with a malformed header row was accepted")
+			}
+			for _, want := range append(tc.want, tc.sheet) {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not contain %q", err, want)
+				}
+			}
+		})
+	}
+}
+
 func TestTroubleshootingTransferXLSXReferenceErrors(t *testing.T) {
 	book := excelize.NewFile()
 	t.Cleanup(func() { _ = book.Close() })
@@ -61,8 +103,8 @@ func TestTroubleshootingTransferXLSXReferenceErrors(t *testing.T) {
 		sheet string
 		rows  [][]string
 	}{
-		{"Guides", [][]string{{"guide_ref", "title", "category", "severity", "symptom"}, {"alpha", "First", "connection", "high", "symptom"}, {"alpha", "Duplicate", "connection", "high", "symptom"}}},
-		{"Steps", [][]string{{"guide_ref", "step_no", "title", "instruction"}, {"alpha", "2", "Second", "second"}, {"alpha", "1", "First", "first"}, {"orphan", "1", "Orphan", "orphan"}}},
+		{"Guides", [][]string{transferGuideHeaders, {"alpha", "", "First", "connection", "high", "symptom"}, {"alpha", "", "Duplicate", "connection", "high", "symptom"}}},
+		{"Steps", [][]string{transferStepHeaders, {"alpha", "2", "Second", "second"}, {"alpha", "1", "First", "first"}, {"orphan", "1", "Orphan", "orphan"}}},
 	} {
 		for i, row := range table.rows {
 			cell, _ := excelize.CoordinatesToCellName(1, i+1)

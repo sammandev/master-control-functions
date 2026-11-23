@@ -66,7 +66,7 @@ func parseTroubleshootingTransfer(r io.Reader, format string) (troubleshootingTr
 	}
 }
 
-func transferSheet(book *excelize.File, name string, required ...string) ([][]string, map[string]int, error) {
+func transferSheet(book *excelize.File, name string, expected []string) ([][]string, map[string]int, error) {
 	i, err := book.GetSheetIndex(name)
 	if err != nil || i < 0 {
 		return nil, nil, fmt.Errorf("missing %s sheet", name)
@@ -76,23 +76,29 @@ func transferSheet(book *excelize.File, name string, required ...string) ([][]st
 		return nil, nil, fmt.Errorf("%s sheet: %w", name, err)
 	}
 	if len(rows) == 0 {
-		return nil, nil, fmt.Errorf("%s sheet is missing headers", name)
+		return nil, nil, fmt.Errorf("%s sheet is missing columns: %s", name, strings.Join(expected, ", "))
 	}
 	cols := make(map[string]int)
+	var problems []string
 	for i, header := range rows[0] {
 		header = strings.TrimSpace(header)
 		if header == "" {
 			continue
 		}
 		if _, exists := cols[header]; exists {
-			return nil, nil, fmt.Errorf("%s sheet repeats column %q", name, header)
+			problems = append(problems, fmt.Sprintf("repeats column %q", header))
+		} else if !slices.Contains(expected, header) {
+			problems = append(problems, fmt.Sprintf("unknown column %q", header))
 		}
 		cols[header] = i
 	}
-	for _, header := range required {
+	for _, header := range expected {
 		if _, exists := cols[header]; !exists {
-			return nil, nil, fmt.Errorf("%s sheet requires the %q column", name, header)
+			problems = append(problems, fmt.Sprintf("missing column %q", header))
 		}
+	}
+	if len(problems) > 0 {
+		return nil, nil, fmt.Errorf("%s sheet: %s", name, strings.Join(problems, "; "))
 	}
 	return rows[1:], cols, nil
 }
@@ -120,9 +126,10 @@ func readTroubleshootingXLSX(r io.Reader) (troubleshootingTransfer, error) {
 		return doc, fmt.Errorf("invalid XLSX: %w", err)
 	}
 	defer book.Close()
-	guideRows, cols, err := transferSheet(book, "Guides", "guide_ref", "title", "category", "severity", "symptom")
-	if err != nil {
-		return doc, err
+	guideRows, cols, guideErr := transferSheet(book, "Guides", transferGuideHeaders)
+	stepRows, stepCols, stepErr := transferSheet(book, "Steps", transferStepHeaders)
+	if guideErr != nil || stepErr != nil {
+		return doc, errors.Join(guideErr, stepErr)
 	}
 	refs := make(map[string]int)
 	for i, row := range guideRows {
@@ -153,10 +160,6 @@ func readTroubleshootingXLSX(r io.Reader) (troubleshootingTransfer, error) {
 			refs[ref] = len(doc.Guides)
 		}
 		doc.Guides = append(doc.Guides, guide)
-	}
-	stepRows, stepCols, err := transferSheet(book, "Steps", "guide_ref", "step_no", "title", "instruction")
-	if err != nil {
-		return doc, err
 	}
 	steps := make(map[int]map[int]troubleshootingStepBody)
 	for i, row := range stepRows {
