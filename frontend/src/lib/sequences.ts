@@ -49,7 +49,6 @@ export interface SequenceListResult {
 	page_size: number;
 }
 
-// The write payload: PUT is a full replace of meta + ordered steps.
 export interface SequenceStepInput {
 	function_source: string;
 	function_interface: string;
@@ -100,12 +99,14 @@ export async function createSequence(body: SequenceInput): Promise<SequenceDetai
 	});
 }
 
-// Full replace: name/description plus the ordered step array in one write.
-export async function updateSequence(id: number, body: SequenceInput): Promise<SequenceDetail> {
-	return request<SequenceDetail>(`/api/sequences/${id}`, {
+export async function updateSequenceSteps(
+	id: number,
+	steps: SequenceStepInput[]
+): Promise<SequenceDetail> {
+	return request<SequenceDetail>(`/api/sequences/${id}/steps`, {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(body)
+		body: JSON.stringify({ steps })
 	});
 }
 

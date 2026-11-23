@@ -6,12 +6,11 @@
 	import { goto } from '$app/navigation';
 	import {
 		getSequence,
-		updateSequence,
+		updateSequenceSteps,
 		updateSequenceMeta,
 		deleteSequence,
 		emitSequence,
 		type SequenceDetail,
-		type SequenceInput,
 		type EmitResult
 	} from '#lib/sequences.ts';
 	import { parseAssignments } from '#lib/sequence-assignments.ts';
@@ -25,7 +24,7 @@
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import { RefreshCw } from '@lucide/svelte';
 
-	// Step edits are full-replace PUTs; metadata is saved separately.
+	// Step writes replace the ordered step list; metadata is saved separately.
 	// Reorder stays button-driven and gives no toast; durable saves and deletes toast.
 	let seqId = $derived(Number(page.params.id));
 
@@ -91,18 +90,6 @@
 		} finally {
 			emitLoading = false;
 		}
-	}
-
-	// The stored step carries id/position/function_exists on top of the
-	// SequenceStepInput shape; the server's step decoder ignores unknown
-	// fields, so the spread is a sufficient copy for the full-replace PUT.
-	function toInput(): SequenceInput {
-		if (!seq) throw new Error('sequence not loaded');
-		return {
-			name: seq.name,
-			description: seq.description,
-			steps: seq.steps.map((s) => ({ ...s }))
-		};
 	}
 
 	// Returns the failure message ('' on success) so each form shows its own error.
@@ -178,8 +165,8 @@
 			stepError = criteria.error;
 			return;
 		}
-		const body = toInput();
-		const target = body.steps[editingIndex];
+		const steps = seq.steps.map((step) => ({ ...step }));
+		const target = steps[editingIndex];
 		if (!target) return;
 		target.function_source = editFnSource.trim();
 		target.function_interface = editFnInterface.trim();
@@ -191,7 +178,7 @@
 		target.on_fail = editOnFail;
 		target.device_name = editDevice;
 		target.note = editNote;
-		const error = await save(updateSequence(seq.id, body));
+		const error = await save(updateSequenceSteps(seq.id, steps));
 		if (error) {
 			stepError = error;
 			return;
@@ -210,10 +197,10 @@
 		if (!seq) return;
 		const j = i + dir;
 		if (j < 0 || j >= seq.steps.length) return;
-		const body = toInput();
-		const [step] = body.steps.splice(i, 1);
-		body.steps.splice(j, 0, step);
-		const error = await save(updateSequence(seq.id, body));
+		const steps = [...seq.steps];
+		const [step] = steps.splice(i, 1);
+		steps.splice(j, 0, step);
+		const error = await save(updateSequenceSteps(seq.id, steps));
 		if (error) {
 			actionError = error;
 			return;
@@ -224,9 +211,8 @@
 
 	async function removeStep(i: number) {
 		if (!seq || seq.steps.length <= 1) return;
-		const body = toInput();
-		body.steps.splice(i, 1);
-		const error = await save(updateSequence(seq.id, body));
+		const steps = seq.steps.filter((_, index) => index !== i);
+		const error = await save(updateSequenceSteps(seq.id, steps));
 		if (error) {
 			actionError = error;
 			return;

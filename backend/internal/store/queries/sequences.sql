@@ -8,8 +8,11 @@ INSERT INTO sequences (name, description, created_at, updated_at)
 VALUES ($1, $2, $3, $4)
 RETURNING id, name, description, created_at, updated_at;
 
--- name: UpdateSequenceMeta :exec
+-- name: UpdateSequenceMeta :execrows
 UPDATE sequences SET name = $1, description = $2, updated_at = $3 WHERE id = $4;
+
+-- name: TouchSequence :execrows
+UPDATE sequences SET updated_at = $1 WHERE id = $2;
 
 -- name: DeleteSequence :execrows
 DELETE FROM sequences WHERE id = $1;
