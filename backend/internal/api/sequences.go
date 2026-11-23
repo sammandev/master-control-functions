@@ -1,9 +1,11 @@
 package api
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -231,6 +233,20 @@ func registerSequenceRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Post("/api/sequences/:id/emit", emitSequence(q))
 }
 
+// sequenceSortColumns whitelists the list's sortable columns; any other
+// sort value keeps the default (name, id) order. Text columns compare
+// case-insensitively, as the page's former client-side sort did.
+var sequenceSortColumns = map[string]func(a, b store.ListSequencesRow) int{
+	"name":        func(a, b store.ListSequencesRow) int { return foldCompare(a.Name, b.Name) },
+	"description": func(a, b store.ListSequencesRow) int { return foldCompare(a.Description, b.Description) },
+	"steps":       func(a, b store.ListSequencesRow) int { return cmp.Compare(a.StepCount, b.StepCount) },
+	"updated_at":  func(a, b store.ListSequencesRow) int { return strings.Compare(a.UpdatedAt, b.UpdatedAt) },
+}
+
+func foldCompare(a, b string) int {
+	return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+}
+
 func listSequences(q *store.Queries) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		var search sql.NullString
@@ -247,8 +263,17 @@ func listSequences(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "list sequences", err)
 		}
-		// Go-side pagination over the SQL-sorted rows (name, id), same
-		// pattern as the examples list.
+		// Sort then paginate in Go, the functions list's pattern: the
+		// stable sort keeps the SQL order (name, id) as the tiebreak.
+		if compare := sequenceSortColumns[c.Query("sort")]; compare != nil {
+			desc := strings.EqualFold(c.Query("order"), "desc")
+			slices.SortStableFunc(rows, func(a, b store.ListSequencesRow) int {
+				if desc {
+					return compare(b, a)
+				}
+				return compare(a, b)
+			})
+		}
 		lq := parseListQuery(c)
 		start := (lq.page - 1) * lq.pageSize
 		if start > int64(len(rows)) {
