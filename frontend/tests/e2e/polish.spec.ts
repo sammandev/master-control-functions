@@ -4463,7 +4463,7 @@ async function mockSequenceStore(
 					const stored = step as Partial<SequenceStep>;
 					return {
 						...step,
-						id: stored.id ?? nextStepId++,
+						id: nextStepId++,
 						position: index + 1,
 						function_exists: stored.function_exists ?? true
 					};
