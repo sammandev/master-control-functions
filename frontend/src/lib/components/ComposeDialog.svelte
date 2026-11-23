@@ -78,6 +78,7 @@
 	let saveDevice = $state('');
 	let saveMeaning = $state('');
 	let saveScript = $state('');
+	let saveScriptEdited = false;
 	let saving = $state(false);
 	let savedNote = $state('');
 	let saveError = $state('');
@@ -144,7 +145,7 @@
 			.then((res) => {
 				if (!previewRequestGuard.isCurrent(request)) return;
 				preview = res.script;
-				saveScript = res.script;
+				if (!saveScriptEdited) saveScript = res.script;
 				fieldErrors = {};
 			})
 			.catch((e) => {
@@ -417,7 +418,12 @@
 				<div class="field">
 					<Label for="compose-save-script">Script (editable)</Label>
 
-					<Textarea id="compose-save-script" rows={2} bind:value={saveScript} />
+					<Textarea
+						id="compose-save-script"
+						rows={2}
+						bind:value={saveScript}
+						oninput={() => (saveScriptEdited = true)}
+					/>
 				</div>
 				<div class="grid grid-cols-2 gap-2">
 					<div class="field mb-0">
