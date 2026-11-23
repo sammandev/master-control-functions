@@ -361,8 +361,13 @@
 					}
 					return;
 				}
-				if (!result.items.length || requested * size >= result.total)
+				if (!result.items.length || requested * size >= result.total) {
+					if (refresh) {
+						await clearDefinitionSelection(next);
+						return;
+					}
 					throw new Error('This definition is no longer available for this device.');
+				}
 			}
 		} catch (error) {
 			if (!current()) return;
@@ -371,14 +376,17 @@
 			else critError = message;
 		}
 	}
+	async function clearDefinitionSelection(next: 'parameters' | 'criteria') {
+		await selectDefinition(next, undefined, true);
+		if (next === 'parameters') await loadParameters();
+		else await loadCriteria();
+	}
 	async function refreshDefinitions(next: 'parameters' | 'criteria', row: DefinitionRow | null) {
 		const scope = device;
 		if (row) {
 			await inspectDefinition(next, row.id, { refresh: true });
 		} else {
-			await selectDefinition(next, undefined, true);
-			if (next === 'parameters') await loadParameters();
-			else await loadCriteria();
+			await clearDefinitionSelection(next);
 		}
 		if (scope !== device) return;
 		try {

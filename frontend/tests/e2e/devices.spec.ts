@@ -344,6 +344,43 @@ test('devices: the parameters tab pager reloads on page change', async ({ page, 
 	await expect(scopedRows).toHaveCount(5);
 });
 
+test('devices: renaming a resolved Global definition keeps scoped details usable', async ({
+	page,
+	request
+}) => {
+	const suffix = Date.now();
+	const device = `E2E_GLOBAL_RENAME_${suffix}`;
+	const global = `Global parameter ${suffix}`;
+	const scoped = 'Scoped parameter';
+	const fn = await request.post('/api/functions', {
+		data: { source: 'DLL', interface: device, name: 'Global rename test' }
+	});
+	expect(fn.status()).toBe(201);
+	for (const [name, deviceName] of [[global, ''], [scoped, device]]) {
+		const response = await request.post('/api/parameter-definitions', {
+			data: { name, device_name: deviceName, type: 'string', cardinality: 'SINGLE' }
+		});
+		expect(response.status()).toBe(201);
+	}
+	const { id } = await fn.json();
+	const link = await request.post(`/api/functions/${id}/parameter-links`, {
+		data: { name: global, device_name: device, position: 1 }
+	});
+	expect(link.status()).toBe(201);
+
+	await page.goto(`/devices/${device}?tab=parameters`);
+	const globalRow = page.getByRole('button', { name: `Inspect ${global} (Global)` });
+	await globalRow.click();
+	await page.getByRole('button', { name: 'Edit Global definition' }).click();
+	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('Name', { exact: true }).fill(`${global} renamed`);
+	await dialog.getByRole('button', { name: 'Save' }).click();
+	await expect(dialog).toBeHidden();
+
+	await expect(globalRow).toBeHidden();
+	await expect(page.getByRole('heading', { name: scoped, exact: true })).toBeVisible();
+});
+
 for (const [tab, kind, noun] of [
 	['parameters', 'parameter-definitions', 'Parameter'],
 	['criteria', 'criteria-definitions', 'Criteria']
