@@ -1,12 +1,15 @@
 package api
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -231,6 +234,48 @@ func registerSequenceRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Post("/api/sequences/:id/emit", emitSequence(q))
 }
 
+// sequenceSortColumns whitelists the list's sortable columns; any other
+// sort value keeps the default (name, id) order. Text columns use
+// naturalCompare, matching the page's former client-side sort.
+var sequenceSortColumns = map[string]func(a, b store.ListSequencesRow) int{
+	"name":        func(a, b store.ListSequencesRow) int { return naturalCompare(a.Name, b.Name) },
+	"description": func(a, b store.ListSequencesRow) int { return naturalCompare(a.Description, b.Description) },
+	"steps":       func(a, b store.ListSequencesRow) int { return cmp.Compare(a.StepCount, b.StepCount) },
+	"updated_at":  func(a, b store.ListSequencesRow) int { return strings.Compare(a.UpdatedAt, b.UpdatedAt) },
+}
+
+// naturalCompare orders text case-insensitively with digit runs compared
+// by value, so "Run 2" sorts before "Run 10".
+func naturalCompare(a, b string) int {
+	a, b = strings.ToLower(a), strings.ToLower(b)
+	for a != "" && b != "" {
+		da, db := digitPrefix(a), digitPrefix(b)
+		if da != "" && db != "" {
+			na, nb := strings.TrimLeft(da, "0"), strings.TrimLeft(db, "0")
+			if c := cmp.Or(cmp.Compare(len(na), len(nb)), strings.Compare(na, nb)); c != 0 {
+				return c
+			}
+			a, b = a[len(da):], b[len(db):]
+			continue
+		}
+		ra, sa := utf8.DecodeRuneInString(a)
+		rb, sb := utf8.DecodeRuneInString(b)
+		if c := cmp.Compare(ra, rb); c != 0 {
+			return c
+		}
+		a, b = a[sa:], b[sb:]
+	}
+	return cmp.Compare(len(a), len(b))
+}
+
+func digitPrefix(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return s[:i]
+}
+
 func listSequences(q *store.Queries) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		var search sql.NullString
@@ -247,8 +292,17 @@ func listSequences(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "list sequences", err)
 		}
-		// Go-side pagination over the SQL-sorted rows (name, id), same
-		// pattern as the examples list.
+		// Sort then paginate in Go, the functions list's pattern: the
+		// stable sort keeps the SQL order (name, id) as the tiebreak.
+		if compare := sequenceSortColumns[c.Query("sort")]; compare != nil {
+			desc := strings.EqualFold(c.Query("order"), "desc")
+			slices.SortStableFunc(rows, func(a, b store.ListSequencesRow) int {
+				if desc {
+					return compare(b, a)
+				}
+				return compare(a, b)
+			})
+		}
 		lq := parseListQuery(c)
 		start := (lq.page - 1) * lq.pageSize
 		if start > int64(len(rows)) {

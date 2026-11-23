@@ -232,3 +232,40 @@ func TestResetLeavesSequencesUntouched(t *testing.T) {
 		t.Fatalf("step lost after reset: %s", body)
 	}
 }
+
+// TestSequenceListSortsBeforePaging: sort/order apply to the whole
+// filtered list before the page is cut, so page 1 of a Steps-descending
+// sort holds the longest sequence even when its name sorts last.
+func TestSequenceListSortsBeforePaging(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedSequenceFunctions(t, app)
+
+	for _, seq := range []struct {
+		name  string
+		steps int
+	}{{"alpha", 1}, {"Bravo", 2}, {"charlie", 3}} {
+		steps := strings.TrimSuffix(strings.Repeat(seqStepB+",", seq.steps), ",")
+		if resp, body := postJSON(t, app, "/api/sequences",
+			`{"name":"`+seq.name+`","steps":[`+steps+`]}`); resp.StatusCode != 201 {
+			t.Fatalf("create %s: %d (body: %s)", seq.name, resp.StatusCode, body)
+		}
+	}
+
+	for _, tc := range []struct {
+		query string
+		want  string
+	}{
+		{"sort=steps&order=desc&page_size=1", "charlie"},
+		{"sort=steps&order=desc&page_size=1&page=2", "Bravo"},
+		{"sort=steps&order=asc&page_size=1", "alpha"},
+		{"sort=name&order=desc&page_size=1", "charlie"},
+		{"sort=name&order=desc&page_size=1&page=2", "Bravo"},
+		{"sort=bogus&order=desc&page_size=1", "alpha"},
+	} {
+		resp, body := doRequest(t, app, "GET", "/api/sequences?"+tc.query)
+		if resp.StatusCode != 200 || !strings.Contains(body, `"total":3`) ||
+			!strings.Contains(body, `"name":"`+tc.want+`"`) {
+			t.Errorf("%s: want %s on the page: %d (body: %s)", tc.query, tc.want, resp.StatusCode, body)
+		}
+	}
+}

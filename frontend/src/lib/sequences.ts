@@ -70,10 +70,18 @@ export interface SequenceInput {
 }
 
 export async function listSequences(
-	params: { search?: string; page?: number; page_size?: number } = {}
+	params: {
+		search?: string;
+		sort?: string;
+		order?: 'asc' | 'desc';
+		page?: number;
+		page_size?: number;
+	} = {}
 ): Promise<SequenceListResult> {
 	const qs = new URLSearchParams();
 	if (params.search) qs.set('search', params.search);
+	if (params.sort) qs.set('sort', params.sort);
+	if (params.order) qs.set('order', params.order);
 	if (params.page) qs.set('page', String(params.page));
 	if (params.page_size) qs.set('page_size', String(params.page_size));
 	const suffix = qs.size > 0 ? `?${qs.toString()}` : '';
