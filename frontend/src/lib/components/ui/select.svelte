@@ -15,7 +15,9 @@
 		name,
 		heading = false,
 		displayValue,
+		loadingLabel,
 		class: className,
+		onopen,
 		onchange
 	}: {
 		value: V;
@@ -28,7 +30,9 @@
 		name?: string;
 		heading?: boolean;
 		displayValue?: string;
+		loadingLabel?: string;
 		class?: string;
+		onopen?: () => void;
 		onchange?: (value: V) => void;
 	} = $props();
 
@@ -52,8 +56,9 @@
 {#if name}<input type="hidden" {name} {value} {disabled} {required} />{/if}
 <Popover.Root
 	bind:open
-	onOpenChange={() => {
+	onOpenChange={(next) => {
 		term = '';
+		if (next) onopen?.();
 	}}
 >
 	<Popover.Trigger
@@ -115,19 +120,25 @@
 				</div>
 				<Combobox.ContentStatic>
 					<Combobox.Viewport class="max-h-60 overflow-y-auto overscroll-contain">
-						{#each filtered as option (option.value)}
-							<Combobox.Item
-								value={option.value}
-								label={option.label}
-								disabled={option.disabled}
-								class={itemBase}
-							>
-								<span class="min-w-0 break-words">{option.label}</span>
-								{#if option.value === value}<Check size={14} class="shrink-0" />{/if}
-							</Combobox.Item>
-						{:else}<p role="status" class="text-muted-foreground px-2 py-3">
-								No options match your search.
-							</p>{/each}
+						{#if loadingLabel}
+							<p role="status" class="text-muted-foreground px-2 py-3">{loadingLabel}</p>
+						{:else}
+							{#each filtered as option (option.value)}
+								<Combobox.Item
+									value={option.value}
+									label={option.label}
+									disabled={option.disabled}
+									class={itemBase}
+								>
+									<span class="min-w-0 break-words">{option.label}</span>
+									{#if option.value === value}<Check size={14} class="shrink-0" />{/if}
+								</Combobox.Item>
+							{:else}
+								<p role="status" class="text-muted-foreground px-2 py-3">
+									No options match your search.
+								</p>
+							{/each}
+						{/if}
 					</Combobox.Viewport>
 				</Combobox.ContentStatic>
 			</Combobox.Root>

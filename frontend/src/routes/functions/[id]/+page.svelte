@@ -2,8 +2,13 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { onMount } from 'svelte';
-	import { getFunction, listFunctions, ApiError, type FunctionRow } from '#lib/api.ts';
+	import {
+		getFunction,
+		listFunctionOptions,
+		ApiError,
+		type FunctionOption,
+		type FunctionRow
+	} from '#lib/api.ts';
 	import Select from '#lib/components/ui/select.svelte';
 	import FunctionDetail from '#lib/components/FunctionDetail.svelte';
 	import FunctionDialog from '#lib/components/FunctionDialog.svelte';
@@ -11,36 +16,22 @@
 	import Breadcrumb from '#lib/components/ui/breadcrumb.svelte';
 	import { RefreshCw } from '@lucide/svelte';
 	const fnId = $derived(Number(page.params.id));
-	let functions = $state<FunctionRow[]>([]);
+	let functions = $state.raw<FunctionOption[] | null>(null);
 	let switchError = $state('');
-	let switchingOptions = $state(false);
+	let optionsRequest = $state.raw<AbortController | null>(null);
 	async function loadOptions() {
-		if (switchingOptions) return;
-		switchingOptions = true;
+		if (functions || optionsRequest) return;
+		const { signal } = (optionsRequest = new AbortController());
 		switchError = '';
 		try {
-			const result = await listFunctions({ page: 1, page_size: 100, sort: 'name', order: 'asc' });
-			const rows = [...result.items];
-			for (let next = 2; rows.length < result.total; next++) {
-				const more = await listFunctions({
-					page: next,
-					page_size: 100,
-					sort: 'name',
-					order: 'asc'
-				});
-				if (!more.items.length) throw new Error('The function list changed. Please retry.');
-				rows.push(...more.items);
-			}
-			functions = rows;
+			const { items } = await listFunctionOptions(signal);
+			if (!signal.aborted) functions = items;
 		} catch (error) {
-			switchError = error instanceof Error ? error.message : String(error);
+			if (!signal.aborted) switchError = error instanceof Error ? error.message : String(error);
 		} finally {
-			switchingOptions = false;
+			if (!signal.aborted) optionsRequest = null;
 		}
 	}
-	onMount(() => {
-		void loadOptions();
-	});
 
 	let retry = $state(0);
 	const content = $derived.by(() => {
@@ -77,8 +68,15 @@
 			onSaved={async (row) => {
 				dialogMode = null;
 
-				if (row) retry++;
-				else await goto(resolve('functions'));
+				if (row) {
+					if (row.name !== fn.name || row.source !== fn.source || row.interface !== fn.interface) {
+						optionsRequest?.abort();
+						optionsRequest = null;
+						functions = null;
+						switchError = '';
+					}
+					retry++;
+				} else await goto(resolve('functions'));
 			}}
 		/>{/if}
 {:catch error}
@@ -95,13 +93,16 @@
 {/await}
 
 {#snippet functionHeading(fn: FunctionRow)}
+	{@const rows = functions ?? []}
 	<h1 class="function-heading">
 		<Select
 			heading
 			ariaLabel="Switch function"
 			value={String(fn.id)}
 			displayValue={fn.name}
-			options={(functions.some((row) => row.id === fn.id) ? functions : [fn, ...functions]).map(
+			loadingLabel={optionsRequest ? 'Loading functions…' : undefined}
+			onopen={loadOptions}
+			options={(rows.some((row) => row.id === fn.id) ? rows : [fn, ...rows]).map(
 				(row) => ({
 					value: String(row.id),
 					label: `${row.name} (${row.source} / ${row.interface || 'Global'})`

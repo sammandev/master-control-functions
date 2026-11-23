@@ -209,6 +209,60 @@ test('standalone Function header uses a full-width searchable switcher', async (
 	expect(errors).toEqual([]);
 });
 
+test('Function switcher shares an in-flight request and retries a failed load', async ({ page }) => {
+	await mockFunctionCatalog(page);
+	let requests = 0;
+	const failure = Promise.withResolvers<void>();
+	await page.route('**/api/functions/options', async (route) => {
+		if (++requests > 1) return route.fallback();
+		await failure.promise;
+		await route.fulfill({ status: 503, json: { error: 'Options unavailable' } });
+	});
+	await page.goto('/functions/1');
+
+	const trigger = page.getByRole('button', { name: 'Switch function' });
+	const popup = page.getByRole('dialog', { name: 'Choose Switch function' });
+	const search = popup.getByRole('combobox', { name: 'Search options' });
+	const loading = popup.getByRole('status');
+	await trigger.click();
+	await expect(loading).toHaveText('Loading functions…');
+	await search.press('Escape');
+	await trigger.click();
+	await expect(loading).toHaveText('Loading functions…');
+	expect(requests).toBe(1);
+
+	failure.resolve();
+	await expect(page.getByRole('alert')).toContainText('Options unavailable');
+	await search.press('Escape');
+	await trigger.click();
+	await expect(popup.getByRole('option')).toHaveCount(2);
+	await expect(page.getByText('Options unavailable')).toBeHidden();
+	expect(requests).toBe(2);
+});
+
+test('Function switcher refreshes on next open after a Function rename', async ({ page }) => {
+	await mockFunctionCatalog(page);
+	await page.goto('/functions/1');
+	const trigger = page.getByRole('button', { name: 'Switch function' });
+	const popup = page.getByRole('dialog', { name: 'Choose Switch function' });
+	await trigger.click();
+	await expect(popup.getByRole('option')).toHaveText([
+		'RX_PER (BUILT-IN / GPIB)',
+		'TX_MULTI_VERIFICATION (DLL / WIFI_TEST)'
+	]);
+	await popup.getByRole('combobox').press('Escape');
+	await page.getByRole('button', { name: 'Edit function', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Edit Function #1' });
+	await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('A_FUNCTION');
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(trigger).toHaveText('A_FUNCTION');
+	await trigger.click();
+	await expect(popup.getByRole('option')).toHaveText([
+		'A_FUNCTION (DLL / WIFI_TEST)',
+		'RX_PER (BUILT-IN / GPIB)'
+	]);
+});
+
 test('Device field links open and highlight definitions beyond the first page', async ({
 	page
 }) => {
@@ -1069,6 +1123,15 @@ async function mockFunctionCatalog(page: Page) {
 	];
 	const requests: URLSearchParams[] = [];
 	const mutations: { method: string; path: string; body: Record<string, unknown> | null }[] = [];
+	await page.route('**/api/functions/options', (route) =>
+		route.fulfill({
+			json: {
+				items: functions
+					.map(({ id, name, source, interface: scope }) => ({ id, name, source, interface: scope }))
+					.sort((a, b) => a.name.localeCompare(b.name))
+			}
+		})
+	);
 	await page.route('**/api/functions/facets', (route) =>
 		route.fulfill({
 			json: {
