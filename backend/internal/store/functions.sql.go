@@ -13,8 +13,7 @@ import (
 const countFunctions = `-- name: CountFunctions :one
 SELECT COUNT(*) FROM functions
 WHERE ($1::text IS NULL
-       OR lower(name) LIKE lower($1::text)
-       OR lower(description) LIKE lower($1::text))
+       OR strpos(lower(name || ' ' || description), lower($1::text)) > 0)
   AND ($2::text IS NULL OR source = $2::text)
   AND ($3::text IS NULL OR interface = $3::text)
   AND ($4::text IS NULL OR category = $4::text)
@@ -136,8 +135,7 @@ func (q *Queries) InsertFunction(ctx context.Context, arg InsertFunctionParams) 
 const listFunctions = `-- name: ListFunctions :many
 SELECT id, source, interface, name, description, convention, category, execution_role, execution_phase, created_at, updated_at FROM functions
 WHERE ($1::text IS NULL
-       OR lower(name) LIKE lower($1::text)
-       OR lower(description) LIKE lower($1::text))
+       OR strpos(lower(name || ' ' || description), lower($1::text)) > 0)
   AND ($2::text IS NULL OR source = $2::text)
   AND ($3::text IS NULL OR interface = $3::text)
   AND ($4::text IS NULL OR category = $4::text)

@@ -255,11 +255,15 @@ func (r dictionaryRoutes[T]) create() fiber.Handler {
 func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		lq := parseListQuery(c)
-		total, err := r.count(c, lq.search)
+		var search *string
+		if pattern := likePattern(lq.search); pattern != "" {
+			search = &pattern
+		}
+		total, err := r.count(c, search)
 		if err != nil {
 			return serverError(c, "count definitions", err)
 		}
-		items, err := r.list(c, lq.search)
+		items, err := r.list(c, search)
 		if err != nil {
 			return serverError(c, "list definitions", err)
 		}
