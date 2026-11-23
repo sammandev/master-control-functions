@@ -3,6 +3,7 @@
 		AlertTriangle,
 		CheckCircle2,
 		Copy,
+		Download,
 		FileCode2,
 		GitBranchPlus,
 		Layers,
@@ -37,6 +38,7 @@
 		onFilterErrorCode,
 		onAddAlternate,
 		onEdit,
+		onExport,
 		onDelete
 	}: {
 		guide: TroubleshootingGuideDetail;
@@ -47,6 +49,7 @@
 		onFilterErrorCode?: (errorCode: string) => void;
 		onAddAlternate: (guide: TroubleshootingGuideDetail) => void;
 		onEdit: (guide: TroubleshootingGuideDetail) => void;
+		onExport: (guide: TroubleshootingGuideDetail) => void;
 		onDelete: (guide: TroubleshootingGuideDetail) => void;
 	} = $props();
 
@@ -114,6 +117,10 @@
 				<Button variant="secondary" size="sm" onclick={() => onEdit(guide)}>
 					<Pencil size={14} />
 					<span>Edit</span>
+				</Button>
+				<Button variant="secondary" size="sm" onclick={() => onExport(guide)}>
+					<Download size={14} />
+					<span>Export</span>
 				</Button>
 				<Button variant="destructive" size="sm" onclick={() => onDelete(guide)}>
 					<Trash2 size={14} />
