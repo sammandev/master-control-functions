@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -43,10 +44,27 @@ type troubleshootingTransferLookups interface {
 
 func registerTroubleshootingTransferRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Get("/api/troubleshooting/templates/:format", troubleshootingTemplate(q))
-	app.Post("/api/troubleshooting/import/single", singleTroubleshootingTransfer)
-	app.Post("/api/troubleshooting/import/preview", troubleshootingImport(q, d, false))
-	app.Post("/api/troubleshooting/import/commit", troubleshootingImport(q, d, true))
+	app.Post("/api/troubleshooting/import/single", requireTroubleshootingImportOrigin, singleTroubleshootingTransfer)
+	app.Post("/api/troubleshooting/import/preview", requireTroubleshootingImportOrigin, troubleshootingImport(q, d, false))
+	app.Post("/api/troubleshooting/import/commit", requireTroubleshootingImportOrigin, troubleshootingImport(q, d, true))
 	app.Post("/api/troubleshooting/export", troubleshootingExport(q, d))
+}
+
+func requireTroubleshootingImportOrigin(c fiber.Ctx) error {
+	if c.Get(fiber.HeaderSecFetchSite) != "cross-site" {
+		origins := c.Request().Header.PeekAll(fiber.HeaderOrigin)
+		if len(origins) == 0 {
+			return c.Next()
+		}
+		if len(origins) == 1 {
+			origin, err := url.Parse(string(origins[0]))
+			if err == nil && (origin.Scheme == "http" || origin.Scheme == "https") &&
+				origin.Host != "" && strings.EqualFold(origin.Host, c.Host()) {
+				return c.Next()
+			}
+		}
+	}
+	return troubleshootingTransferError(c, fiber.StatusForbidden, "Cross-origin troubleshooting imports are not allowed.")
 }
 
 func readTroubleshootingUpload(c fiber.Ctx) (troubleshootingTransfer, error) {

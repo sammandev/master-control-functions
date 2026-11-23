@@ -17,6 +17,11 @@ import (
 
 func uploadGuideTransferBytes(t *testing.T, app *fiber.App, operation, filename string, content []byte) (int, string) {
 	t.Helper()
+	return uploadGuideTransferWithHeaders(t, app, operation, filename, content, nil)
+}
+
+func uploadGuideTransferWithHeaders(t *testing.T, app *fiber.App, operation, filename string, content []byte, headers map[string]string) (int, string) {
+	t.Helper()
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
 	part, err := form.CreateFormFile("file", filename)
@@ -29,8 +34,11 @@ func uploadGuideTransferBytes(t *testing.T, app *fiber.App, operation, filename 
 	if err := form.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest("POST", "/api/troubleshooting/import/"+operation, &body)
+	req := httptest.NewRequest("POST", "http://catalog.example:4174/api/troubleshooting/import/"+operation, &body)
 	req.Header.Set("Content-Type", form.FormDataContentType())
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
 	res, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +49,34 @@ func uploadGuideTransferBytes(t *testing.T, app *fiber.App, operation, filename 
 		t.Fatal(err)
 	}
 	return res.StatusCode, string(result)
+}
+
+func TestTroubleshootingGuideImportRequestOrigin(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	payload := []byte(`{"guides":[{"title":"Origin test","category":"connection","severity":"high","symptom":"Signal lost","steps":[{"title":"Reset","instruction":"Restart"}]}]}`)
+	for _, operation := range []string{"single", "preview", "commit"} {
+		t.Run(operation, func(t *testing.T) {
+			for _, tc := range []struct {
+				name    string
+				headers map[string]string
+				want    int
+			}{
+				{"same origin", map[string]string{"Origin": "http://catalog.example:4174", "Sec-Fetch-Site": "same-origin"}, 200},
+				{"no browser headers", nil, 200},
+				{"cross site fetch", map[string]string{"Sec-Fetch-Site": "cross-site"}, 403},
+				{"different origin port", map[string]string{"Origin": "http://catalog.example:4175"}, 403},
+				{"untrusted forwarded host", map[string]string{"Origin": "https://untrusted.example", "X-Forwarded-Host": "untrusted.example"}, 403},
+				{"opaque origin", map[string]string{"Origin": "null"}, 403},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					status, _ := uploadGuideTransferWithHeaders(t, app, operation, "origin.json", payload, tc.headers)
+					if status != tc.want {
+						t.Fatalf("status = %d, want %d", status, tc.want)
+					}
+				})
+			}
+		})
+	}
 }
 
 func TestTroubleshootingGuideTransferImport(t *testing.T) {
