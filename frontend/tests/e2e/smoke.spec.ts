@@ -141,6 +141,78 @@ test('compose a script and save it as an example', async ({ page }) => {
 	).toBeVisible();
 });
 
+test('save the latest script when Composer preview responses arrive out of order', async ({
+	page,
+	request
+}, testInfo) => {
+	const composePath = `/api${fnPath}/compose`;
+	const olderTimeout = '23123';
+	const latestTimeout = '34123';
+	const olderRequested = Promise.withResolvers<void>();
+	const releaseOlder = Promise.withResolvers<void>();
+	await page.route(composePath, async (route) => {
+		if (route.request().postDataJSON().timeout_ms !== olderTimeout) {
+			await route.continue();
+			return;
+		}
+		const response = await route.fetch();
+		olderRequested.resolve();
+		await releaseOlder.promise;
+		await route.fulfill({ response });
+	});
+
+	await page.goto(fnPath);
+	await page.getByRole('button', { name: 'Compose script' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+	await dialog.getByLabel(/^ANT ·/).fill('15');
+	await dialog.getByLabel(/^STANDARD ·/).fill('11AX');
+	await dialog.getByLabel(/^FREQ ·/).fill('6165');
+	await dialog.getByLabel(/^BW ·/).fill('20');
+	await dialog.getByLabel(/^DATA_RATE ·/).fill('7');
+	await dialog.getByLabel(/^TX_TARGET_POWER ·/).fill('15');
+	await dialog.getByLabel(/^POWER ·/).fill('5dB');
+	await expect(dialog.getByText(/\|POWER=5dB\|10000\|NEXT\|FAIL$/)).toBeVisible();
+
+	const meaning = 'Composer out-of-order preview regression';
+	await dialog.getByText('Save as example').click();
+	await dialog.getByLabel('Meaning').fill(meaning);
+
+	const timeout = dialog.getByLabel('Timeout-ms');
+	await timeout.fill(olderTimeout);
+	await olderRequested.promise;
+	await timeout.fill(latestTimeout);
+	const latestPreview = dialog.getByText(/\|POWER=5dB\|34123\|NEXT\|FAIL$/);
+	await expect(latestPreview).toBeVisible();
+	const latestScript = await latestPreview.innerText();
+
+	const olderResponse = page.waitForResponse(
+		(response) =>
+			new URL(response.url()).pathname === composePath &&
+			response.request().postDataJSON().timeout_ms === olderTimeout
+	);
+	releaseOlder.resolve();
+	const older = await olderResponse;
+	expect(older.ok()).toBe(true);
+	expect(await older.finished()).toBeNull();
+
+	const savedResponse = page.waitForResponse(
+		(response) => response.url().endsWith('/api/examples') && response.request().method() === 'POST'
+	);
+	await dialog.getByRole('button', { name: 'Save example' }).click();
+	const saved = await savedResponse;
+	expect(saved.status()).toBe(201);
+	const { id } = await saved.json();
+	const persisted = await request.get(`/api/examples/${id}`);
+	expect(persisted.status()).toBe(200);
+
+	await page.goto('/examples');
+	await page.getByLabel('Search examples').fill(meaning);
+	const details = page.getByRole('region', { name: 'Example details' });
+	await expect(details.getByText(meaning)).toBeVisible();
+	await details.screenshot({ path: testInfo.outputPath('persisted-example.png') });
+	expect((await persisted.json()).script).toBe(latestScript);
+});
+
 test('view the orphan report', async ({ page }) => {
 	await page.goto('/orphans');
 
