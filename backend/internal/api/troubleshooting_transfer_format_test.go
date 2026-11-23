@@ -32,6 +32,22 @@ func TestTroubleshootingTransferRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTroubleshootingTransferJSONInvalidIDIsNotCreate(t *testing.T) {
+	raw := `{"guides":[{"id":null},{"id":0},{"id":"unknown"},{}]}`
+	doc, err := parseTroubleshootingTransfer(strings.NewReader(raw), "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, guide := range doc.Guides[:3] {
+		if len(guide.issues) != 1 || !strings.Contains(guide.issues[0], "id must be a positive integer") {
+			t.Errorf("guide %d missing invalid id error: %+v", i+1, guide)
+		}
+	}
+	if len(doc.Guides[3].issues) != 0 || doc.Guides[3].ID != nil {
+		t.Fatalf("absent id should be valid for create: %+v", doc.Guides[3])
+	}
+}
+
 func TestTroubleshootingTransferXLSXReferenceErrors(t *testing.T) {
 	book := excelize.NewFile()
 	t.Cleanup(func() { _ = book.Close() })
