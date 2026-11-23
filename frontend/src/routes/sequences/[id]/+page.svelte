@@ -105,10 +105,24 @@
 	}
 
 	// Returns the failure message ('' on success) so each form shows its own error.
-	async function save(update: Promise<SequenceDetail>): Promise<string> {
+	async function save(
+		update: Promise<SequenceDetail>,
+		{ reconcileDraft = false } = {}
+	): Promise<string> {
 		try {
-			seq = await update;
+			const updated = await update;
 			actionError = '';
+			if (reconcileDraft && editingIndex !== null) {
+				const stepId = seq?.steps[editingIndex]?.id;
+				const index = updated.steps.findIndex((step) => step.id === stepId);
+				if (index === -1) {
+					cancelStep();
+					actionError = 'Steps changed. Reopen the step to continue editing.';
+				} else {
+					editingIndex = index;
+				}
+			}
+			seq = updated;
 			await refreshEmit();
 			return '';
 		} catch (e) {
@@ -119,7 +133,8 @@
 	async function saveMeta() {
 		if (!seq || !nameDraft.trim()) return;
 		const error = await save(
-			updateSequenceMeta(seq.id, { name: nameDraft.trim(), description: descDraft })
+			updateSequenceMeta(seq.id, { name: nameDraft.trim(), description: descDraft }),
+			{ reconcileDraft: true }
 		);
 		if (error) {
 			actionError = error;

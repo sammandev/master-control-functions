@@ -4651,12 +4651,16 @@ test('Sequence rename keeps the ordered steps unchanged', async ({ page }) => {
 		])
 	]);
 	await page.goto('/sequences/1');
+	const firstStep = page.locator('.steps > li').first();
+	await firstStep.getByRole('button', { name: 'Edit', exact: true }).click();
+	await firstStep.getByLabel('Note', { exact: true }).fill('Unsaved draft');
 	await page.getByRole('button', { name: 'Rename', exact: true }).click();
 	await page.getByLabel('Sequence name', { exact: true }).fill('TRANSMIT_CHECK_V2');
 	await page.getByLabel('Description', { exact: true }).fill('bench sequence');
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByText('Sequence updated', { exact: true })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'TRANSMIT_CHECK_V2', exact: true })).toBeVisible();
+	await expect(firstStep.getByLabel('Note', { exact: true })).toHaveValue('Unsaved draft');
 	const renames = store.requests.filter((r) => r.method === 'PATCH' || r.method === 'PUT');
 	expect(renames).toMatchObject([
 		{ method: 'PATCH', body: { name: 'TRANSMIT_CHECK_V2', description: 'bench sequence' } }

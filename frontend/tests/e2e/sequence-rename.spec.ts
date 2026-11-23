@@ -45,3 +45,56 @@ test('renaming a sequence in a stale tab preserves a saved step edit', async ({
 		await request.delete(`/api${path}`);
 	}
 });
+
+test('renaming after another tab reorders steps cannot move a draft to a different step', async ({
+	page,
+	request
+}) => {
+	const name = `E2E reordered rename ${Date.now()}`;
+	const created = await request.post('/api/sequences', {
+		data: {
+			name,
+			steps: [
+				{ function_source: 'DLL', function_name: 'E2E_FIRST_STEP' },
+				{ function_source: 'DLL', function_name: 'E2E_SECOND_STEP' }
+			]
+		}
+	});
+	expect(created.status()).toBe(201);
+	const { id } = (await created.json()) as SequenceDetail;
+	const path = `/sequences/${id}`;
+	const otherTab = await page.context().newPage();
+
+	try {
+		await Promise.all([page.goto(path), otherTab.goto(path)]);
+		const steps = page.locator('.steps');
+		await steps.getByRole('button', { name: 'Edit', exact: true }).first().click();
+		await page.getByLabel('Note', { exact: true }).fill('Unsaved draft');
+		await page.getByRole('button', { name: 'Rename', exact: true }).click();
+		await page.getByLabel('Sequence name', { exact: true }).fill(`${name} renamed`);
+		await expect(page.getByLabel('Note', { exact: true })).toHaveValue('Unsaved draft');
+
+		const reorder = otherTab.waitForResponse(
+			(response) => response.url().endsWith(`/api${path}`) && response.request().method() === 'PUT'
+		);
+		await otherTab.getByRole('button', { name: 'Move step down', exact: true }).first().click();
+		const reordered = await reorder;
+		expect(reordered.status()).toBe(200);
+		const saved = (await reordered.json()) as SequenceDetail;
+		expect(saved.steps.map((step) => step.function_name)).toEqual([
+			'E2E_SECOND_STEP',
+			'E2E_FIRST_STEP'
+		]);
+
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(page.getByRole('heading', { name: `${name} renamed`, exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Save step', exact: true })).not.toBeVisible();
+		await expect(
+			page.getByText('Steps changed. Reopen the step to continue editing.')
+		).toBeVisible();
+		const renamed = await request.get(`/api${path}`);
+		expect(await renamed.json()).toMatchObject({ name: `${name} renamed`, steps: saved.steps });
+	} finally {
+		await request.delete(`/api${path}`);
+	}
+});
