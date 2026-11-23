@@ -130,6 +130,7 @@
 	let paramLoaded = $state(false);
 	let paramLoading = $state(false);
 	let paramError = $state('');
+	let paramRevision = 0;
 
 	let critScoped = $state<DeviceDefinitionRow[]>([]);
 	let critGlobal = $state<DeviceDefinitionRow[]>([]);
@@ -140,6 +141,7 @@
 	let critLoaded = $state(false);
 	let critLoading = $state(false);
 	let critError = $state('');
+	let critRevision = 0;
 
 	// ---- examples tab -------------------------------------------------------
 	let exampleItems = $state<ExampleRow[]>([]);
@@ -220,46 +222,51 @@
 			fnPage * fnPageSize
 		)
 	);
-	// Section searches filter the loaded page only; the APIs page server-side.
 	let paramSearch = $state('');
 	let critSearch = $state('');
 	let exSearch = $state('');
-	function matchesDefinition(row: DeviceDefinitionRow, term: string) {
-		const needle = term.trim().toLowerCase();
-		return (
-			!needle ||
-			`${row.name} ${row.type} ${row.allowed_values || ''} ${row.default_value || ''} ${row.description || ''}`
-				.toLowerCase()
-				.includes(needle)
-		);
+	const paramTerm = $derived(paramSearch.trim());
+	const critTerm = $derived(critSearch.trim());
+
+	function setDefinitionSearch(next: 'parameters' | 'criteria', value: string) {
+		if (next === 'parameters') {
+			if (value.trim() !== paramTerm) paramPage = 1;
+			paramSearch = value;
+		} else {
+			if (value.trim() !== critTerm) critPage = 1;
+			critSearch = value;
+		}
 	}
-	function viewDefinitions(rows: DeviceDefinitionRow[], term: string, key: string, dir: SortDir) {
-		const matches = rows.filter((row) => matchesDefinition(row, term));
-		return key === '' ? matches : sortRows(matches, DEF_SORT_KEYS[key]!, dir);
+	function viewDefinitions(rows: DeviceDefinitionRow[], key: string, dir: SortDir) {
+		return key === '' ? rows : sortRows(rows, DEF_SORT_KEYS[key]!, dir);
 	}
 	const paramScopedView = $derived(
-		viewDefinitions(paramScoped, paramSearch, paramSortKey, paramSortDir)
+		viewDefinitions(paramScoped, paramSortKey, paramSortDir)
 	);
 	const paramGlobalView = $derived(
-		viewDefinitions(paramGlobal, paramSearch, paramSortKey, paramSortDir)
+		viewDefinitions(paramGlobal, paramSortKey, paramSortDir)
 	);
 	const critScopedView = $derived(
-		viewDefinitions(critScoped, critSearch, critSortKey, critSortDir)
+		viewDefinitions(critScoped, critSortKey, critSortDir)
 	);
 	const critGlobalView = $derived(
-		viewDefinitions(critGlobal, critSearch, critSortKey, critSortDir)
+		viewDefinitions(critGlobal, critSortKey, critSortDir)
 	);
 
-	const selectedParameter = $derived(
-		[...paramScoped, ...paramGlobal].find(
-			(row) => row.id === Number(page.url.searchParams.get('definition'))
-		) ?? (page.url.searchParams.has('definition') ? undefined : (paramScoped[0] ?? paramGlobal[0]))
-	);
-	const selectedCriterion = $derived(
-		[...critScoped, ...critGlobal].find(
-			(row) => row.id === Number(page.url.searchParams.get('definition'))
-		) ?? (page.url.searchParams.has('definition') ? undefined : (critScoped[0] ?? critGlobal[0]))
-	);
+	function selectedDefinition(
+		scoped: DeviceDefinitionRow[],
+		global: DeviceDefinitionRow[],
+		term: string
+	) {
+		const id = page.url.searchParams.get('definition');
+		return (
+			scoped.find((row) => row.id === Number(id)) ??
+			global.find((row) => row.id === Number(id)) ??
+			(id === null || term ? (scoped[0] ?? global[0]) : undefined)
+		);
+	}
+	const selectedParameter = $derived(selectedDefinition(paramScoped, paramGlobal, paramTerm));
+	const selectedCriterion = $derived(selectedDefinition(critScoped, critGlobal, critTerm));
 
 	const exampleMatches = $derived(
 		exampleItems.filter((row) =>
@@ -308,23 +315,24 @@
 	async function inspectDefinition(next: 'parameters' | 'criteria', id: number) {
 		const scope = device;
 		const revision = deviceRevision;
+		const filtered = next === 'parameters' ? paramTerm : critTerm;
 		if (next === 'parameters') paramSearch = '';
 		else critSearch = '';
 		await selectDefinition(next, id);
 		const loaded =
 			next === 'parameters' ? [...paramScoped, ...paramGlobal] : [...critScoped, ...critGlobal];
-		if (loaded.some((row) => row.id === id)) return;
+		if (!filtered && loaded.some((row) => row.id === id)) return;
 		const size = next === 'parameters' ? paramPageSize : critPageSize;
+		const current = () =>
+			revision === deviceRevision &&
+			scope === device &&
+			tab === next &&
+			Number(page.url.searchParams.get('definition')) === id &&
+			!(next === 'parameters' ? paramTerm : critTerm);
 		try {
 			for (let requested = 1; ; requested++) {
 				const result = await listDeviceDefinitions(next, scope, requested, size);
-				if (
-					revision !== deviceRevision ||
-					scope !== device ||
-					tab !== next ||
-					Number(page.url.searchParams.get('definition')) !== id
-				)
-					return;
+				if (!current()) return;
 				if ([...result.items, ...result.global_items].some((row) => row.id === id)) {
 					if (next === 'parameters') {
 						paramPage = requested;
@@ -339,7 +347,7 @@
 					throw new Error('This definition is no longer available for this device.');
 			}
 		} catch (error) {
-			if (revision !== deviceRevision || scope !== device) return;
+			if (!current()) return;
 			const message = error instanceof Error ? error.message : String(error);
 			if (next === 'parameters') paramError = message;
 			else critError = message;
@@ -412,17 +420,17 @@
 		critPage = 1;
 		examplePage = 1;
 	});
-	// Pagination interacts with the lazy cache: changing a tab's page or page
-	// size invalidates that tab's cache so the loader below refetches with
-	// the new page. (Device switches above reset both together.)
+	// Pagination and definition search invalidate the lazy tab caches.
 	$effect(() => {
 		void paramPage;
 		void paramPageSize;
+		void paramTerm;
 		paramLoaded = false;
 	});
 	$effect(() => {
 		void critPage;
 		void critPageSize;
+		void critTerm;
 		critLoaded = false;
 	});
 	$effect(() => {
@@ -499,14 +507,26 @@
 	async function loadParameters() {
 		const scope = device;
 		const revision = deviceRevision;
+		const attempt = ++paramRevision;
 		const requestedPage = paramPage;
 		const requestedSize = paramPageSize;
+		const search = paramTerm;
 		const current = () =>
-			revision === deviceRevision && requestedPage === paramPage && requestedSize === paramPageSize;
+			revision === deviceRevision &&
+			attempt === paramRevision &&
+			requestedPage === paramPage &&
+			requestedSize === paramPageSize &&
+			search === paramTerm;
 		paramLoading = true;
 		paramError = '';
 		try {
-			const res = await listDeviceDefinitions('parameters', scope, requestedPage, requestedSize);
+			const res = await listDeviceDefinitions(
+				'parameters',
+				scope,
+				requestedPage,
+				requestedSize,
+				search
+			);
 			if (!current()) return;
 			const last = Math.max(1, Math.ceil(res.total / requestedSize));
 			if (requestedPage > last) {
@@ -533,14 +553,20 @@
 	async function loadCriteria() {
 		const scope = device;
 		const revision = deviceRevision;
+		const attempt = ++critRevision;
 		const requestedPage = critPage;
 		const requestedSize = critPageSize;
+		const search = critTerm;
 		const current = () =>
-			revision === deviceRevision && requestedPage === critPage && requestedSize === critPageSize;
+			revision === deviceRevision &&
+			attempt === critRevision &&
+			requestedPage === critPage &&
+			requestedSize === critPageSize &&
+			search === critTerm;
 		critLoading = true;
 		critError = '';
 		try {
-			const res = await listDeviceDefinitions('criteria', scope, requestedPage, requestedSize);
+			const res = await listDeviceDefinitions('criteria', scope, requestedPage, requestedSize, search);
 			if (!current()) return;
 			const last = Math.max(1, Math.ceil(res.total / requestedSize));
 			if (requestedPage > last) {
@@ -845,7 +871,7 @@
 						paramTotal,
 						paramGlobalTotal,
 						paramSearch,
-						(value) => (paramSearch = value)
+						(value) => setDefinitionSearch('parameters', value)
 					)}
 					<h3 class="group-heading">
 						Scoped <span class="group-count">{paramScopedView.length}</span>
@@ -924,7 +950,7 @@
 									<TableCell colspan={6} class="banner-empty text-center" aria-live="polite">
 										{paramLoading
 											? 'Loading…'
-											: paramSearch
+											: paramTerm
 												? 'No scoped definitions match your search.'
 												: 'No definitions scoped to this device.'}
 									</TableCell>
@@ -1047,7 +1073,7 @@
 						critTotal,
 						critGlobalTotal,
 						critSearch,
-						(value) => (critSearch = value)
+						(value) => setDefinitionSearch('criteria', value)
 					)}
 					<h3 class="group-heading">
 						Scoped <span class="group-count">{critScopedView.length}</span>
@@ -1126,7 +1152,7 @@
 									<TableCell colspan={6} class="banner-empty text-center" aria-live="polite">
 										{critLoading
 											? 'Loading…'
-											: critSearch
+											: critTerm
 												? 'No scoped definitions match your search.'
 												: 'No definitions scoped to this device.'}
 									</TableCell>

@@ -343,3 +343,57 @@ test('devices: the parameters tab pager reloads on page change', async ({ page, 
 	await expect(page.getByText('Page 2 of 2')).toBeVisible();
 	await expect(scopedRows).toHaveCount(5);
 });
+
+for (const [tab, kind, noun] of [
+	['parameters', 'parameter-definitions', 'Parameter'],
+	['criteria', 'criteria-definitions', 'Criteria']
+] as const) {
+	test(`devices: ${tab} search finds off-page definitions without stale detail`, async ({
+		page,
+		request
+	}) => {
+		const device = `E2E_${noun.toUpperCase()}_SEARCH_${Date.now()}`;
+		const firstName = `${noun} 01`;
+		const matchName = `${noun} 21`;
+		const evidence = process.env.DEVICE_SEARCH_SCREENSHOT_DIR;
+		const created = await request.post('/api/devices', { data: { device_name: device } });
+		expect(created.status()).toBe(201);
+		for (let i = 1; i <= 21; i++) {
+			const response = await request.post(`/api/${kind}`, {
+				data: {
+					name: `${noun} ${String(i).padStart(2, '0')}`,
+					type: 'string',
+					cardinality: 'SINGLE',
+					default_value: i === 21 ? 'Off-page value' : '',
+					device_name: device
+				}
+			});
+			expect(response.status(), `seed definition ${i}`).toBe(201);
+		}
+
+		if (evidence) await page.setViewportSize({ width: 1280, height: 900 });
+		await page.goto(`/devices/${device}?tab=${tab}`);
+		const first = page.getByRole('button', { name: `Inspect ${firstName} (${device})` });
+		const match = page.getByRole('button', { name: `Inspect ${matchName} (${device})` });
+		const firstDetail = page.getByRole('heading', { name: firstName, exact: true });
+		const search = page.getByRole('textbox', { name: `Search ${noun.toLowerCase()} definitions` });
+
+		await page.getByRole('button', { name: 'Next page' }).click();
+		await expect(match).toBeVisible();
+		await page.getByRole('button', { name: 'Previous page' }).click();
+		await first.click();
+		await expect(firstDetail).toBeVisible();
+		await expect(match).toBeHidden();
+		await search.fill('off-page value');
+
+		await expect.soft(match).toBeVisible();
+		await expect.soft(firstDetail).toBeHidden();
+		if (evidence) {
+			if (await match.isVisible()) {
+				await expect(page.getByRole('heading', { name: matchName, exact: true })).toBeVisible();
+			}
+			await page.evaluate(() => window.scrollTo(0, 0));
+			await page.screenshot({ path: join(evidence, `${tab}.png`) });
+		}
+	});
+}
