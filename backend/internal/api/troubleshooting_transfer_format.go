@@ -33,11 +33,30 @@ func parseTroubleshootingTransfer(r io.Reader, format string) (troubleshootingTr
 		d := json.NewDecoder(r)
 		d.DisallowUnknownFields()
 		var doc troubleshootingTransfer
-		if err := d.Decode(&doc); err != nil {
+		var input struct {
+			Guides []struct {
+				ID json.RawMessage `json:"id"`
+				troubleshootingBody
+			} `json:"guides"`
+		}
+		if err := d.Decode(&input); err != nil {
 			return doc, fmt.Errorf("invalid JSON: %w", err)
 		}
-		if d.Decode(new(any)) != io.EOF || doc.Guides == nil {
+		if d.Decode(new(any)) != io.EOF || input.Guides == nil {
 			return doc, errors.New("expected one JSON object containing a guides array")
+		}
+		doc.Guides = make([]troubleshootingTransferGuide, 0, len(input.Guides))
+		for _, item := range input.Guides {
+			guide := troubleshootingTransferGuide{troubleshootingBody: item.troubleshootingBody}
+			if item.ID != nil {
+				var id int64
+				if err := json.Unmarshal(item.ID, &id); err != nil || id <= 0 {
+					guide.issues = append(guide.issues, "id must be a positive integer")
+				} else {
+					guide.ID = &id
+				}
+			}
+			doc.Guides = append(doc.Guides, guide)
 		}
 		return doc, nil
 	case "xlsx":
