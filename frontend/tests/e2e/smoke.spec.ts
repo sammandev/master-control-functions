@@ -288,3 +288,56 @@ test('sequence: emit, reorder and add a composer step', async ({ page, request }
 	).toBeVisible();
 	await expect(page).toHaveURL(/\/sequences$/);
 });
+
+test('Composer can find and append to a sequence beyond the first 100', async ({
+	page,
+	request
+}) => {
+	const prefix = `Composer sequence ${Date.now()}`;
+	const targetName = `${prefix} 103`;
+	const sequenceIds: number[] = [];
+	try {
+		for (let index = 1; index <= 103; index++) {
+			const name = `${prefix} ${String(index).padStart(3, '0')}`;
+			const created = await request.post('/api/sequences', {
+				data: {
+					name,
+					description: '',
+					steps: [
+						{
+							function_source: 'DLL',
+							function_interface: 'WIFI_TEST',
+							function_name: 'TX_MULTI_VERIFICATION'
+						}
+					]
+				}
+			});
+			expect(created.status(), name).toBe(201);
+			const { id } = (await created.json()) as { id: number };
+			sequenceIds.push(id);
+		}
+
+		await page.goto(fnPath);
+		await page.getByRole('button', { name: 'Compose script' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+		await dialog.getByText('Add to sequence').click();
+		await dialog.getByRole('button', { name: 'Target sequence' }).click();
+		const picker = page.getByRole('dialog', { name: 'Choose Target sequence' });
+		await picker.getByRole('combobox', { name: 'Search options' }).fill(targetName);
+		const target = picker.getByRole('option', { name: `${targetName} (1 steps)` });
+		await expect(target).toBeVisible();
+		await target.click();
+		await dialog.getByRole('button', { name: 'Add step' }).click();
+		await expect(dialog.getByText('Added as a new step.')).toBeVisible();
+
+		const saved = await request.get(`/api/sequences/${sequenceIds.at(-1)}`);
+		expect(saved.status()).toBe(200);
+		const detail = (await saved.json()) as { steps: { function_name: string }[] };
+		expect(detail.steps).toHaveLength(2);
+		expect(detail.steps[1].function_name).toBe('TX_MULTI_VERIFICATION');
+	} finally {
+		for (const id of sequenceIds) {
+			await request.delete(`/api/sequences/${id}`);
+		}
+	}
+});
