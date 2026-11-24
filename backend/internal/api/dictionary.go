@@ -272,7 +272,7 @@ func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 			return serverError(c, "list definitions", err)
 		}
 
-		// Unknown sort keys fall back to the default name order.
+		// Unknown sort keys keep the store's ID order.
 		if keyFn := r.sortKeys[lq.sortCol]; keyFn != nil {
 			sort.SliceStable(items, func(i, j int) bool {
 				a, b := keyFn(items[i]), keyFn(items[j])
