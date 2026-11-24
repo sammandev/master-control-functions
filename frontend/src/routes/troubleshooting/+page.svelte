@@ -335,7 +335,7 @@
 			<Upload size={16} /> Import
 		</Button>
 		<Button variant="outline" onclick={() => (exportSelection = {})}>
-			<Download size={16} /> Export Guides
+			<Download size={16} /> Export
 		</Button>
 		<Button onclick={openCreate}>
 			<Plus size={16} />
