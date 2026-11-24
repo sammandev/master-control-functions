@@ -49,7 +49,7 @@ func renameDevice(db *sql.DB) fiber.Handler {
 		if name == "" {
 			return validationError(c, map[string]string{"device_name": "is required"})
 		}
-		if problem := validateDeviceName(name); problem != "" {
+		if problem := validateRegistryDeviceName(name); problem != "" {
 			return validationError(c, map[string]string{"device_name": problem})
 		}
 		device, err := store.RenameDevice(c.Context(), db, oldName, name, time.Now().UTC().Format(time.RFC3339))
@@ -118,7 +118,7 @@ func normalizeDeviceName(raw string) string {
 }
 
 // validateDeviceName checks the already-normalized name against the
-// registry's input rules and returns a field error, or "" when valid.
+// shared input rules and returns a field error, or "" when valid.
 // The reserved names collide with the Global device's reserved "_global"
 // segment / "(Global)" label in user-visible ways, so they are rejected.
 func validateDeviceName(name string) string {
@@ -136,6 +136,13 @@ func validateDeviceName(name string) string {
 	return ""
 }
 
+func validateRegistryDeviceName(name string) string {
+	if name == "." || name == ".." {
+		return `cannot be "." or ".."`
+	}
+	return validateDeviceName(name)
+}
+
 // createDevice reserves a name in the devices registry (ADR-0010) before
 // any content references it. The stored name follows ADR-0002's
 // normalization rule: trimmed and uppercased. A name already present as a
@@ -151,7 +158,7 @@ func createDevice(q *store.Queries) fiber.Handler {
 		if name == "" {
 			return validationError(c, map[string]string{"device_name": "is required"})
 		}
-		if problem := validateDeviceName(name); problem != "" {
+		if problem := validateRegistryDeviceName(name); problem != "" {
 			return validationError(c, map[string]string{"device_name": problem})
 		}
 		source, problem := b.deviceSource()

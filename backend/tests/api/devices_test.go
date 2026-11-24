@@ -513,6 +513,58 @@ func TestDeviceRegistryCreateRejectsInvalidNames(t *testing.T) {
 	}
 }
 
+func TestDeviceRegistryRejectsDotSegments(t *testing.T) {
+	for _, route := range []struct{ method, path string }{
+		{http.MethodPost, "/api/devices"},
+		{http.MethodPut, "/api/devices/SCOUT.CONTROL"},
+	} {
+		t.Run(route.method, func(t *testing.T) {
+			for _, name := range []string{".", ".."} {
+				t.Run(name, func(t *testing.T) {
+					app, _ := newDictionaryTestApp(t)
+					if route.method == http.MethodPut {
+						if resp, body := registerDevice(t, app, "SCOUT.CONTROL"); resp.StatusCode != http.StatusCreated {
+							t.Fatalf("create original device: %d %s", resp.StatusCode, body)
+						}
+					}
+					resp, body := doJSON(t, app, route.method, route.path, `{"device_name":" `+name+` "}`)
+					if resp.StatusCode != http.StatusUnprocessableEntity {
+						t.Fatalf("status = %d, want 422 (body: %s)", resp.StatusCode, body)
+					}
+					var result struct {
+						Fields map[string]string `json:"fields"`
+					}
+					if err := json.Unmarshal([]byte(body), &result); err != nil {
+						t.Fatalf("decode response: %v (body: %s)", err, body)
+					}
+					if message, want := result.Fields["device_name"], `cannot be "." or ".."`; message != want {
+						t.Fatalf("device_name error = %q, want %q", message, want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestDeviceDotScopeDoesNotBlockFunctionUpdate(t *testing.T) {
+	app, db := newDictionaryTestApp(t)
+	var id int64
+	if err := db.QueryRow(`
+		INSERT INTO functions (source, interface, name, description, created_at, updated_at)
+		VALUES ('DLL', '.', 'LEGACY', 'Original description', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+		RETURNING id
+	`).Scan(&id); err != nil {
+		t.Fatalf("seed Function with legacy scope: %v", err)
+	}
+
+	resp, body := doJSON(t, app, http.MethodPut, "/api/functions/"+strconv.FormatInt(id, 10),
+		`{"source":"DLL","interface":".","name":"LEGACY","description":"Updated description"}`)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `"interface":"."`) ||
+		!strings.Contains(body, `"description":"Updated description"`) {
+		t.Fatalf("update Function with legacy scope: %d %s", resp.StatusCode, body)
+	}
+}
+
 // Device names must mean the same thing on every path that creates them:
 // the content paths (dictionary, examples) apply the same ADR-0002
 // normalization as the registry, so a casing twin can never sneak in.
