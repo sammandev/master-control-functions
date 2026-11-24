@@ -32,6 +32,7 @@
 	let {
 		guide,
 		relatedGuides = [],
+		loadingRelated = false,
 		categories = [],
 		severities = [],
 		onSelectGuide,
@@ -43,6 +44,7 @@
 	}: {
 		guide: TroubleshootingGuideDetail;
 		relatedGuides?: TroubleshootingGuideListItem[];
+		loadingRelated?: boolean;
 		categories?: TroubleshootingCategory[];
 		severities?: RegistrySeverity[];
 		onSelectGuide: (id: number) => void;
@@ -99,6 +101,7 @@
 				<Button
 					variant="secondary"
 					size="sm"
+					disabled={loadingRelated}
 					title="Copy structured Markdown diagnostic context for AI assistants"
 					onclick={copyAiContext}
 				>
@@ -132,7 +135,14 @@
 		<h2 class="text-foreground mt-2.5 text-lg leading-snug font-semibold">{guide.title}</h2>
 	</header>
 
-	{#if relatedGuides.length > 0}
+	{#if loadingRelated}
+		<section
+			aria-label="Alternative Solutions"
+			class="border-primary/25 bg-primary/5 rounded-lg border p-3.5"
+		>
+			<p class="text-muted-foreground text-xs" role="status">Loading alternative solutions…</p>
+		</section>
+	{:else if relatedGuides.length > 0}
 		<section
 			aria-label="Alternative Solutions"
 			class="border-primary/25 bg-primary/5 rounded-lg border p-3.5"

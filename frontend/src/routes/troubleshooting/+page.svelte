@@ -69,6 +69,7 @@
 	let categoryError = $state('');
 	let severityError = $state('');
 	let relatedGuides = $state<TroubleshootingGuideListItem[]>([]);
+	let loadingRelated = $state(false);
 	let relatedError = $state('');
 	const listRequestGuard = createLatestRequestGuard();
 	const detailRequestGuard = createLatestRequestGuard();
@@ -155,6 +156,7 @@
 		detailRequestGuard.begin();
 		loadingList = true;
 		loadingDetail = false;
+		loadingRelated = false;
 		listError = '';
 		try {
 			const res = await listTroubleshootingGuides({
@@ -200,29 +202,37 @@
 	async function selectGuide(id: number) {
 		const request = detailRequestGuard.begin();
 		selectedId = id;
+		selectedDetail = null;
 		loadingDetail = true;
+		loadingRelated = false;
 		detailError = '';
 		try {
 			const detail = await getTroubleshootingGuide(id);
 			if (!detailRequestGuard.isCurrent(request)) return;
 			selectedDetail = detail;
-			relatedError = '';
-			try {
-				const related = await listRelatedTroubleshootingGuides(id);
-				if (!detailRequestGuard.isCurrent(request)) return;
-				relatedGuides = related.items;
-			} catch (err) {
-				if (detailRequestGuard.isCurrent(request)) {
-					relatedGuides = [];
-					relatedError = err instanceof Error ? err.message : String(err);
-				}
-			}
+			void loadRelatedGuides(id, request);
 		} catch (err) {
 			if (detailRequestGuard.isCurrent(request)) {
 				detailError = err instanceof Error ? err.message : String(err);
 			}
 		} finally {
 			if (detailRequestGuard.isCurrent(request)) loadingDetail = false;
+		}
+	}
+
+	async function loadRelatedGuides(id: number, request: number) {
+		relatedGuides = [];
+		relatedError = '';
+		loadingRelated = true;
+		try {
+			const related = await listRelatedTroubleshootingGuides(id);
+			if (detailRequestGuard.isCurrent(request)) relatedGuides = related.items;
+		} catch (err) {
+			if (detailRequestGuard.isCurrent(request)) {
+				relatedError = err instanceof Error ? err.message : String(err);
+			}
+		} finally {
+			if (detailRequestGuard.isCurrent(request)) loadingRelated = false;
 		}
 	}
 
@@ -517,7 +527,11 @@
 			{#if relatedError}
 				<div class="banner-error" role="alert">
 					<span>{relatedError}</span>
-					<Button variant="outline" size="sm" onclick={() => selectGuide(selectedDetail!.id)}>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => loadRelatedGuides(selectedDetail!.id, detailRequestGuard.begin())}
+					>
 						Retry related guides
 					</Button>
 				</div>
@@ -525,6 +539,7 @@
 			<TroubleshootingDetail
 				guide={selectedDetail}
 				{relatedGuides}
+				{loadingRelated}
 				{categories}
 				{severities}
 				onSelectGuide={(id) => selectGuide(id)}
