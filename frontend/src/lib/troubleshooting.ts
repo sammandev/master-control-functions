@@ -215,6 +215,10 @@ export async function listTroubleshootingGuides(
 	return request<TroubleshootingListResult>(`/api/troubleshooting${qs ? `?${qs}` : ''}`);
 }
 
+export async function listTroubleshootingDevices(): Promise<{ items: string[] }> {
+	return request<{ items: string[] }>('/api/troubleshooting/devices');
+}
+
 export async function getTroubleshootingGuide(id: number): Promise<TroubleshootingGuideDetail> {
 	return request<TroubleshootingGuideDetail>(`/api/troubleshooting/${id}`);
 }

@@ -18,6 +18,7 @@
 		deleteTroubleshootingGuide,
 		getTroubleshootingGuide,
 		listRelatedTroubleshootingGuides,
+		listTroubleshootingDevices,
 		listTroubleshootingGuides,
 		type TroubleshootingGuideDetail,
 		type TroubleshootingGuideListItem
@@ -96,12 +97,29 @@
 	onDestroy(() => clearTimeout(searchTimer));
 
 	async function loadDeviceOptions() {
-		try {
-			const res = await listDevices();
-			deviceSummaries = res.items;
-		} catch {
-			// DevicePicker also self-loads if summaries are empty
+		const [catalog, guides] = await Promise.allSettled([
+			listDevices(),
+			listTroubleshootingDevices()
+		]);
+		// DevicePicker also self-loads if summaries are empty
+		if (catalog.status === 'rejected') return;
+		const known = new Set(catalog.value.items.map((item) => item.device_name));
+		const guideOnly =
+			guides.status === 'fulfilled' ? guides.value.items.filter((name) => !known.has(name)) : [];
+		if (!guideOnly.length) {
+			deviceSummaries = catalog.value.items;
+			return;
 		}
+		deviceSummaries = [
+			...catalog.value.items,
+			...guideOnly.map((device_name) => ({
+				device_name,
+				functions: 0,
+				parameters: 0,
+				criteria: 0,
+				examples: 0
+			}))
+		].sort((a, b) => a.device_name.localeCompare(b.device_name));
 	}
 
 	async function loadCategories(): Promise<boolean> {
@@ -579,6 +597,7 @@
 		onImported={({ created, updated }) => {
 			toast.success(`Import complete: ${created} created, ${updated} updated`);
 			void refreshList();
+			void loadDeviceOptions();
 		}}
 	/>
 {/if}

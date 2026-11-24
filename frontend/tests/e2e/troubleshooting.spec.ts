@@ -329,6 +329,7 @@ async function mockTroubleshooting(page: Page, options: { failOneCategoryRefresh
 			return route.fulfill({ status: 201, json: item });
 		}
 		if (path === '/api/devices') return route.fulfill({ json: { items: [], total: 0 } });
+		if (path === '/api/troubleshooting/devices') return route.fulfill({ json: { items: [] } });
 		if (path === '/api/troubleshooting') {
 			if (request.method() === 'POST') {
 				if (!request.headers()['content-type']?.startsWith('application/json')) {

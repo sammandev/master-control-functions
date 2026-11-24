@@ -157,6 +157,7 @@ type troubleshootingListItem struct {
 func registerTroubleshootingRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Get("/api/troubleshooting", listTroubleshootingGuides(q))
 	app.Post("/api/troubleshooting", createTroubleshootingGuide(q, d))
+	app.Get("/api/troubleshooting/devices", listTroubleshootingDevices(q))
 	app.Get("/api/troubleshooting/:id/related", listRelatedTroubleshootingGuides(q))
 	app.Get("/api/troubleshooting/:id", getTroubleshootingGuide(q))
 	app.Put("/api/troubleshooting/:id", updateTroubleshootingGuide(q, d))
@@ -243,6 +244,21 @@ func troubleshootingFilters(c fiber.Ctx) (search, category, deviceName, errorCod
 		errorCode = sql.NullString{String: ec, Valid: true}
 	}
 	return
+}
+
+// listTroubleshootingDevices returns every Device name guides are scoped to,
+// including names imported without a Device catalog entry.
+func listTroubleshootingDevices(q *store.Queries) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		names, err := q.ListTroubleshootingDeviceNames(c.Context())
+		if err != nil {
+			return serverError(c, "list troubleshooting devices", err)
+		}
+		if names == nil {
+			names = []string{}
+		}
+		return c.JSON(fiber.Map{"items": names})
+	}
 }
 
 func listTroubleshootingGuides(q *store.Queries) fiber.Handler {
