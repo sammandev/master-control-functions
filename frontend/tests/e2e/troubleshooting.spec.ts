@@ -800,13 +800,18 @@ for (const sharedTag of ['error code', 'function name']) {
 		const guides = '/api/troubleshooting';
 		const sourceTitle = 'Reconnect the signal cable';
 		const alternateTitle = 'Restart the signal receiver';
+		const sourceErrorCode = 'E2E-SIGNAL-LOSS';
+		const sourceFunctionName = 'E2E_Read_Signal';
+		const otherErrorCode = 'E2E-OTHER-ERROR';
+		const otherFunctionName = 'E2E_Other_Function';
+		const matchByErrorCode = sharedTag === 'error code';
 		const created = await request.post(guides, {
 			data: {
 				title: sourceTitle,
 				category: 'connection',
 				severity: 'warning',
-				error_code: 'E2E-SIGNAL-LOSS',
-				function_name: 'E2E_READ_SIGNAL',
+				error_code: sourceErrorCode,
+				function_name: sourceFunctionName,
 				symptom: 'The receiver reports signal loss.',
 				steps: [{ title: 'Reseat the cable', instruction: 'Reconnect both ends of the cable.' }]
 			}
@@ -835,22 +840,21 @@ for (const sharedTag of ['error code', 'function name']) {
 
 			const errorCode = alternate.getByRole('textbox', { name: 'Error Code / Problem Tag' });
 			const functionName = alternate.getByRole('textbox', { name: 'Related Function Name' });
-			await expect(errorCode).toHaveValue('E2E-SIGNAL-LOSS');
-			await expect(functionName).toHaveValue('E2E_READ_SIGNAL');
-			await errorCode.fill('E2E-OTHER-ERROR');
-			await functionName.fill('E2E_OTHER_FUNCTION');
+			await expect(errorCode).toHaveValue(sourceErrorCode);
+			await expect(functionName).toHaveValue(sourceFunctionName);
+			await errorCode.fill(otherErrorCode);
+			await functionName.fill(otherFunctionName);
 			const submit = alternate.getByRole('button', { name: 'Create Alternate Solution' });
 			await expect(submit).toBeDisabled();
 			await expect(
 				alternate.getByText('Keep at least one Error Code or Related Function Name from the original guide.')
 			).toBeVisible();
 
-			const [linkedErrorCode, linkedFunctionName] =
-				sharedTag === 'error code'
-					? [' e2e-signal-loss ', 'E2E_OTHER_FUNCTION']
-					: ['E2E-OTHER-ERROR', ' e2e_read_signal '];
-			await errorCode.fill(linkedErrorCode);
-			await functionName.fill(linkedFunctionName);
+			if (matchByErrorCode) {
+				await errorCode.fill(` ${sourceErrorCode.toLowerCase()} `);
+			} else {
+				await functionName.fill(` ${sourceFunctionName.toLowerCase()} `);
+			}
 			await expect(submit).toBeEnabled();
 			const saveResponse = page.waitForResponse(
 				(response) =>
@@ -862,8 +866,8 @@ for (const sharedTag of ['error code', 'function name']) {
 			const savedGuide = await saved.json();
 			alternateId = savedGuide.id;
 			expect(savedGuide).toMatchObject({
-				error_code: linkedErrorCode.trim().toUpperCase(),
-				function_name: linkedFunctionName.trim().toUpperCase()
+				error_code: matchByErrorCode ? sourceErrorCode : otherErrorCode,
+				function_name: matchByErrorCode ? otherFunctionName : sourceFunctionName
 			});
 			await expect(page.getByRole('heading', { name: alternateTitle })).toBeVisible();
 			const related = page.getByRole('region', { name: 'Alternative Solutions' });
