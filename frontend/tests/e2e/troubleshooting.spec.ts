@@ -702,9 +702,13 @@ test('returns to the last matching page after deleting its only guide', async ({
 		const matchingGuides = catalog.getByRole('button', { name: `Select guide ${searchTerm}` });
 		await search.fill(searchTerm);
 		await expect(catalog.getByText('21 total', { exact: true })).toBeVisible();
-		await expect(catalog.getByRole('button', { name: '20 / page, Page size' })).toBeVisible();
-		await catalog.getByRole('button', { name: 'Next page' }).click();
-		await expect(catalog.getByText('Page 2 of 2', { exact: true })).toBeAttached();
+		await catalog.getByRole('button', { name: '20 / page, Page size' }).click();
+		await page.getByRole('option', { name: '10 / page', exact: true }).click();
+		const nextPage = catalog.getByRole('button', { name: 'Next page' });
+		await nextPage.click();
+		await expect(catalog.getByText('Page 2 of 3', { exact: true })).toBeAttached();
+		await nextPage.click();
+		await expect(catalog.getByText('Page 3 of 3', { exact: true })).toBeAttached();
 		await expect(matchingGuides).toHaveCount(1);
 		const deletedTitle = await matchingGuides.locator('strong').innerText();
 
@@ -724,8 +728,9 @@ test('returns to the last matching page after deleting its only guide', async ({
 		const screenshot = process.env.TROUBLESHOOTING_DELETE_PAGE_SCREENSHOT;
 		if (screenshot) await page.screenshot({ path: screenshot, animations: 'disabled' });
 
-		await expect(matchingGuides).toHaveCount(20);
-		await expect(catalog.getByText('Page 1 of 1', { exact: true })).toBeAttached();
+		await expect(matchingGuides).toHaveCount(10);
+		await expect(catalog.getByText('Page 2 of 2', { exact: true })).toBeAttached();
+		await expect(matchingGuides.locator('strong')).toHaveText(titles.slice(10, 20));
 		await expect(search).toHaveValue(searchTerm);
 		await expect(catalog.getByText(deletedTitle, { exact: true })).toHaveCount(0);
 		await expect(catalog.getByText(unrelatedTitle, { exact: true })).toHaveCount(0);
