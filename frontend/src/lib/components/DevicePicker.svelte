@@ -105,9 +105,9 @@
 			aria-describedby={describedBy}
 			title={currentLabel}
 			class={cn(
-				'border-border bg-card text-foreground flex w-full min-w-0 items-center justify-between rounded-[4px] border text-sm',
+				'border-border bg-card text-foreground flex w-full min-w-0 items-center justify-between rounded-[4px] border text-sm disabled:cursor-default disabled:opacity-50',
 				compact
-					? 'focus-visible:border-primary focus-visible:ring-ring/40 h-8 gap-1.5 px-2.5 transition-colors outline-none focus-visible:ring-1 disabled:cursor-default disabled:opacity-50'
+					? 'focus-visible:border-primary focus-visible:ring-ring/40 h-8 gap-1.5 px-2.5 transition-colors outline-none focus-visible:ring-1'
 					: 'focus-visible:outline-ring min-h-10 gap-2 px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2',
 				heading && 'device-picker-heading-trigger',
 				compact && comfortable && 'h-10'

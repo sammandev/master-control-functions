@@ -40,6 +40,8 @@ for (const { kind, label, device } of [
 				.filter({ has: page.getByRole('cell', { name, exact: true }) });
 			await row.getByRole('button', { name: `Create missing ${label} definition` }).click();
 			const dialog = page.getByRole('dialog');
+			const deviceField = dialog.getByRole('button', { name: /^Device \/ Interface:/ });
+			await expect.soft(deviceField).toHaveCSS('opacity', '0.5');
 			const nameField = dialog.getByRole('textbox', { name: 'Name', exact: true });
 			await expect(nameField).toHaveValue(name);
 			await nameField.click({ force: true });
