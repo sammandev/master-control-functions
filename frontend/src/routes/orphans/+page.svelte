@@ -512,7 +512,7 @@
 			</div>
 			<div class="field">
 				<Label for="orphan-def-name">Name</Label>
-				<Input id="orphan-def-name" type="text" value={definitionForm.name} readonly />
+				<Input id="orphan-def-name" type="text" value={definitionForm.name} disabled />
 				{#if fieldErrors.name}<span class="field-error">{fieldErrors.name}</span>{/if}
 			</div>
 			<div class="field">

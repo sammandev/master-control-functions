@@ -42,8 +42,10 @@ for (const { kind, label, device } of [
 			const dialog = page.getByRole('dialog');
 			const nameField = dialog.getByRole('textbox', { name: 'Name', exact: true });
 			await expect(nameField).toHaveValue(name);
-			await nameField.press('End');
-			await nameField.press('X');
+			await nameField.click({ force: true });
+			await page.keyboard.press('End');
+			await page.keyboard.press('X');
+			expect.soft(await nameField.isDisabled(), 'definition name is locked').toBe(true);
 
 			const [response] = await Promise.all([
 				page.waitForResponse(
