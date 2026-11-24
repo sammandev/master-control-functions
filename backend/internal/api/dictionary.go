@@ -266,6 +266,11 @@ func (r dictionaryRoutes[T]) create() fiber.Handler {
 func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		lq := dictionaryListQuery{listQuery: parseListQuery(c)}
+		switch lq.sortCol {
+		case "name", "type", "updated_at":
+		default:
+			lq.sortCol = ""
+		}
 		if pattern := likePattern(lq.search); pattern != "" {
 			lq.pattern = nullStrPtr(&pattern)
 		}

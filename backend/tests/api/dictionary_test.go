@@ -416,6 +416,20 @@ func TestDictionaryPageSortOrder(t *testing.T) {
 					}
 				})
 			}
+			t.Run("unsupported fallback", func(t *testing.T) {
+				for _, query := range []string{"page_size=2&page=2", "page_size=2&definition_id=4"} {
+					resp, want := doRequest(t, app, "GET", endpoint+query)
+					if resp.StatusCode != 200 {
+						t.Fatalf("ID order: got %d %s", resp.StatusCode, want)
+					}
+					for _, sort := range []string{"interface", "%00"} {
+						resp, body := doRequest(t, app, "GET", endpoint+query+"&sort="+sort+"&order=desc")
+						if resp.StatusCode != 200 || body != want {
+							t.Errorf("%s sort=%s: got %d %s, want 200 %s", query, sort, resp.StatusCode, body, want)
+						}
+					}
+				}
+			})
 			check(t, "page_size=2&sort=name&page=9223372036854775807", 9223372036854775807, 2, 7, nil)
 			check(t, "page_size=1&search=%25Pa_h%5CQ%25&sort=type&order=desc&definition_id=3&page=2", 2, 1, 1, nil)
 			check(t, "page_size=1&search=%25Pa_h%5CQ%25&sort=type&order=desc&definition_id=2&page=2", 1, 1, 1, []int64{2})
