@@ -537,12 +537,31 @@ func TestDeviceRegistryRejectsDotSegments(t *testing.T) {
 					if err := json.Unmarshal([]byte(body), &result); err != nil {
 						t.Fatalf("decode response: %v (body: %s)", err, body)
 					}
-					if message := result.Fields["device_name"]; !strings.Contains(message, strconv.Quote(name)) {
-						t.Fatalf("device_name error %q does not identify rejected name %q", message, name)
+					if message, want := result.Fields["device_name"], `cannot be "." or ".."`; message != want {
+						t.Fatalf("device_name error = %q, want %q", message, want)
 					}
 				})
 			}
 		})
+	}
+}
+
+func TestDeviceDotScopeDoesNotBlockFunctionUpdate(t *testing.T) {
+	app, db := newDictionaryTestApp(t)
+	var id int64
+	if err := db.QueryRow(`
+		INSERT INTO functions (source, interface, name, description, created_at, updated_at)
+		VALUES ('DLL', '.', 'LEGACY', 'Original description', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
+		RETURNING id
+	`).Scan(&id); err != nil {
+		t.Fatalf("seed Function with legacy scope: %v", err)
+	}
+
+	resp, body := doJSON(t, app, http.MethodPut, "/api/functions/"+strconv.FormatInt(id, 10),
+		`{"source":"DLL","interface":".","name":"LEGACY","description":"Updated description"}`)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `"interface":"."`) ||
+		!strings.Contains(body, `"description":"Updated description"`) {
+		t.Fatalf("update Function with legacy scope: %d %s", resp.StatusCode, body)
 	}
 }
 

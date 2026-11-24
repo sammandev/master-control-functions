@@ -49,7 +49,7 @@ func renameDevice(db *sql.DB) fiber.Handler {
 		if name == "" {
 			return validationError(c, map[string]string{"device_name": "is required"})
 		}
-		if problem := validateDeviceName(name); problem != "" {
+		if problem := validateRegistryDeviceName(name); problem != "" {
 			return validationError(c, map[string]string{"device_name": problem})
 		}
 		device, err := store.RenameDevice(c.Context(), db, oldName, name, time.Now().UTC().Format(time.RFC3339))
@@ -118,15 +118,12 @@ func normalizeDeviceName(raw string) string {
 }
 
 // validateDeviceName checks the already-normalized name against the
-// registry's input rules and returns a field error, or "" when valid.
+// shared input rules and returns a field error, or "" when valid.
 // The reserved names collide with the Global device's reserved "_global"
 // segment / "(Global)" label in user-visible ways, so they are rejected.
 func validateDeviceName(name string) string {
 	if name == "_GLOBAL" || name == "GLOBAL" {
 		return "is reserved for the Global device"
-	}
-	if name == "." || name == ".." {
-		return `cannot be "." or ".." because browsers treat them as navigation`
 	}
 	for _, r := range name {
 		if r < 0x20 || r == 0x7f {
@@ -137,6 +134,13 @@ func validateDeviceName(name string) string {
 		return fmt.Sprintf("is too long (max %d characters)", maxDeviceNameRunes)
 	}
 	return ""
+}
+
+func validateRegistryDeviceName(name string) string {
+	if name == "." || name == ".." {
+		return `cannot be "." or ".."`
+	}
+	return validateDeviceName(name)
 }
 
 // createDevice reserves a name in the devices registry (ADR-0010) before
@@ -154,7 +158,7 @@ func createDevice(q *store.Queries) fiber.Handler {
 		if name == "" {
 			return validationError(c, map[string]string{"device_name": "is required"})
 		}
-		if problem := validateDeviceName(name); problem != "" {
+		if problem := validateRegistryDeviceName(name); problem != "" {
 			return validationError(c, map[string]string{"device_name": problem})
 		}
 		source, problem := b.deviceSource()
