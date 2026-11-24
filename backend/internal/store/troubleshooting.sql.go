@@ -255,11 +255,27 @@ SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
 FROM troubleshooting_guides g
 JOIN troubleshooting_severities taxonomy_severity ON taxonomy_severity.key = g.severity
 JOIN troubleshooting_categories taxonomy_category ON taxonomy_category.key = g.category
+WHERE ($1::text IS NULL
+       OR lower(g.title) LIKE lower($1::text)
+       OR lower(g.symptom) LIKE lower($1::text)
+       OR lower(g.root_cause) LIKE lower($1::text)
+       OR lower(g.error_code) LIKE lower($1::text)
+       OR lower(g.function_name) LIKE lower($1::text))
+  AND ($2::text IS NULL OR g.category = $2::text)
+  AND ($3::text IS NULL OR g.device_name = $3::text)
+  AND ($4::text IS NULL OR lower(g.error_code) = lower($4::text))
 ORDER BY taxonomy_severity.sort_order,
          taxonomy_category.sort_order,
          lower(g.title),
          g.id
 `
+
+type ListTroubleshootingExportGuidesParams struct {
+	Search     sql.NullString
+	Category   sql.NullString
+	DeviceName sql.NullString
+	ErrorCode  sql.NullString
+}
 
 type ListTroubleshootingExportGuidesRow struct {
 	ID           int64
@@ -273,8 +289,13 @@ type ListTroubleshootingExportGuidesRow struct {
 	RootCause    string
 }
 
-func (q *Queries) ListTroubleshootingExportGuides(ctx context.Context) ([]ListTroubleshootingExportGuidesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTroubleshootingExportGuides)
+func (q *Queries) ListTroubleshootingExportGuides(ctx context.Context, arg ListTroubleshootingExportGuidesParams) ([]ListTroubleshootingExportGuidesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTroubleshootingExportGuides,
+		arg.Search,
+		arg.Category,
+		arg.DeviceName,
+		arg.ErrorCode,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -307,10 +328,27 @@ func (q *Queries) ListTroubleshootingExportGuides(ctx context.Context) ([]ListTr
 }
 
 const listTroubleshootingExportSteps = `-- name: ListTroubleshootingExportSteps :many
-SELECT guide_id, title, instruction, script_snippet, verification
-FROM troubleshooting_steps
-ORDER BY guide_id, position, id
+SELECT s.guide_id, s.title, s.instruction, s.script_snippet, s.verification
+FROM troubleshooting_steps s
+JOIN troubleshooting_guides g ON g.id = s.guide_id
+WHERE ($1::text IS NULL
+       OR lower(g.title) LIKE lower($1::text)
+       OR lower(g.symptom) LIKE lower($1::text)
+       OR lower(g.root_cause) LIKE lower($1::text)
+       OR lower(g.error_code) LIKE lower($1::text)
+       OR lower(g.function_name) LIKE lower($1::text))
+  AND ($2::text IS NULL OR g.category = $2::text)
+  AND ($3::text IS NULL OR g.device_name = $3::text)
+  AND ($4::text IS NULL OR lower(g.error_code) = lower($4::text))
+ORDER BY s.guide_id, s.position, s.id
 `
+
+type ListTroubleshootingExportStepsParams struct {
+	Search     sql.NullString
+	Category   sql.NullString
+	DeviceName sql.NullString
+	ErrorCode  sql.NullString
+}
 
 type ListTroubleshootingExportStepsRow struct {
 	GuideID       int64
@@ -320,8 +358,13 @@ type ListTroubleshootingExportStepsRow struct {
 	Verification  string
 }
 
-func (q *Queries) ListTroubleshootingExportSteps(ctx context.Context) ([]ListTroubleshootingExportStepsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTroubleshootingExportSteps)
+func (q *Queries) ListTroubleshootingExportSteps(ctx context.Context, arg ListTroubleshootingExportStepsParams) ([]ListTroubleshootingExportStepsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTroubleshootingExportSteps,
+		arg.Search,
+		arg.Category,
+		arg.DeviceName,
+		arg.ErrorCode,
+	)
 	if err != nil {
 		return nil, err
 	}

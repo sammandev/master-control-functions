@@ -3,6 +3,8 @@ package api_test
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -13,6 +15,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/xuri/excelize/v2"
+
+	"webprogfndb/internal/store"
 )
 
 func uploadGuideTransferBytes(t *testing.T, app *fiber.App, operation, filename string, content []byte) (int, string) {
@@ -229,5 +233,60 @@ func TestTroubleshootingGuideAllExportOrder(t *testing.T) {
 	}
 	if !strings.Contains(all, `"steps": []`) {
 		t.Fatalf("expected guides with no steps to export an empty array: %s", all)
+	}
+}
+
+func TestTroubleshootingGuideMatchingExportOrder(t *testing.T) {
+	app, db := newLinksTestApp(t)
+	for _, stmt := range []string{
+		`DELETE FROM troubleshooting_guides`,
+		`UPDATE troubleshooting_severities SET sort_order = 10 WHERE key = 'critical'`,
+		`INSERT INTO troubleshooting_guides (id, title, category, severity, error_code, symptom, created_at, updated_at) VALUES
+			(201, 'Zebra', 'execution', 'high', 'ERR:7', 'Symptom', '', ''),
+			(202, 'Alpha', 'connection', 'high', 'ERR:8', 'Symptom', '', ''),
+			(203, 'Aardvark', 'execution', 'critical', 'err:7', 'Symptom', '', ''),
+			(204, 'apple', 'execution', 'high', 'ERR:7', 'Symptom', '', ''),
+			(205, 'APPLE', 'execution', 'high', 'ERR:7', 'Symptom', '', ''),
+			(206, 'Other category', 'connection', 'high', 'ERR:7', 'Symptom', '', ''),
+			(207, 'Other error code', 'execution', 'high', 'ERR:9', 'Symptom', '', '')`,
+		`INSERT INTO troubleshooting_steps (id, guide_id, position, title, instruction, script_snippet, verification) VALUES
+			(201, 204, 2, 'Third', 'Instruction 3', '', 'Verified'),
+			(203, 204, 1, 'Second', 'Instruction 2', '', ''),
+			(202, 204, 1, 'First', 'Instruction 1', E'  Run\n\tCheck', ''),
+			(204, 202, 1, 'Unmatched guide', 'Instruction 4', '', ''),
+			(205, 206, 1, 'Unmatched category', 'Instruction 5', '', ''),
+			(206, 207, 1, 'Unmatched error code', 'Instruction 6', '', ''),
+			(207, 203, 1, 'Lowercase error code', 'Instruction 7', '', '')`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, matching := postJSON(t, app, "/api/troubleshooting/export?error_code=ERR:7&category=execution", `{"format":"json","scope":"matching"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("matching export: %d: %s", res.StatusCode, matching)
+	}
+	res, selected := postJSON(t, app, "/api/troubleshooting/export", `{"format":"json","scope":"selected","ids":[204,205,201,203]}`)
+	if res.StatusCode != http.StatusOK || matching != selected {
+		t.Fatalf("matching export differs from ordered selection (%d):\nmatching: %s\nselected: %s", res.StatusCode, matching, selected)
+	}
+	steps, err := store.New(db).ListTroubleshootingExportSteps(context.Background(), store.ListTroubleshootingExportStepsParams{
+		Category:  sql.NullString{String: "execution", Valid: true},
+		ErrorCode: sql.NullString{String: "ERR:7", Valid: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 4 {
+		t.Fatalf("matching step read returned %d steps, want the 4 steps of matched guides: %+v", len(steps), steps)
+	}
+	for _, step := range steps {
+		if step.GuideID != 203 && step.GuideID != 204 {
+			t.Fatalf("matching step read returned a step of guide %d outside the filters", step.GuideID)
+		}
+	}
+	res, body := postJSON(t, app, "/api/troubleshooting/export?search=no-match", `{"format":"json","scope":"matching"}`)
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("empty matching export: %d: %s", res.StatusCode, body)
 	}
 }

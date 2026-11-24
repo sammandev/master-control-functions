@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -341,27 +340,19 @@ func loadTroubleshootingExport(c fiber.Ctx, q *store.Queries, d *sql.DB, in trou
 	}
 	defer tx.Rollback()
 	q = q.WithTx(tx)
-	if in.Scope == "all" {
-		doc.Guides, err = loadAllTroubleshootingExportGuides(c.Context(), q)
+	if in.Scope == "matching" || in.Scope == "all" {
+		var filters store.ListTroubleshootingExportGuidesParams
+		if in.Scope == "matching" {
+			filters.Search, filters.Category, filters.DeviceName, filters.ErrorCode = troubleshootingFilters(c)
+		}
+		doc.Guides, err = loadTroubleshootingExportGuides(c.Context(), q, filters)
 		if err != nil {
 			return doc, err
 		}
 		return doc, tx.Commit()
 	}
-	ids := in.IDs
-	if in.Scope == "matching" {
-		params := store.ListTroubleshootingGuidesParams{Limit: math.MaxInt64}
-		params.Search, params.Category, params.DeviceName, params.ErrorCode = troubleshootingFilters(c)
-		rows, err := q.ListTroubleshootingGuides(c.Context(), params)
-		if err != nil {
-			return doc, err
-		}
-		for _, row := range rows {
-			ids = append(ids, row.ID)
-		}
-	}
 	seen := make(map[int64]bool)
-	for _, id := range ids {
+	for _, id := range in.IDs {
 		if seen[id] {
 			continue
 		}
@@ -385,8 +376,8 @@ func loadTroubleshootingExport(c fiber.Ctx, q *store.Queries, d *sql.DB, in trou
 	return doc, tx.Commit()
 }
 
-func loadAllTroubleshootingExportGuides(ctx context.Context, q *store.Queries) ([]troubleshootingTransferGuide, error) {
-	rows, err := q.ListTroubleshootingExportGuides(ctx)
+func loadTroubleshootingExportGuides(ctx context.Context, q *store.Queries, filters store.ListTroubleshootingExportGuidesParams) ([]troubleshootingTransferGuide, error) {
+	rows, err := q.ListTroubleshootingExportGuides(ctx, filters)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +397,7 @@ func loadAllTroubleshootingExportGuides(ctx context.Context, q *store.Queries) (
 		}
 		indexByID[row.ID] = i
 	}
-	steps, err := q.ListTroubleshootingExportSteps(ctx)
+	steps, err := q.ListTroubleshootingExportSteps(ctx, store.ListTroubleshootingExportStepsParams(filters))
 	if err != nil {
 		return nil, err
 	}
