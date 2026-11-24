@@ -3,6 +3,8 @@ package api_test
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -13,6 +15,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/xuri/excelize/v2"
+
+	"webprogfndb/internal/store"
 )
 
 func uploadGuideTransferBytes(t *testing.T, app *fiber.App, operation, filename string, content []byte) (int, string) {
@@ -261,8 +265,20 @@ func TestTroubleshootingGuideMatchingExportOrder(t *testing.T) {
 	if res.StatusCode != http.StatusOK || matching != selected {
 		t.Fatalf("matching export differs from ordered selection (%d):\nmatching: %s\nselected: %s", res.StatusCode, matching, selected)
 	}
-	if strings.Contains(matching, "Unmatched guide") {
-		t.Fatalf("matching export included steps from a guide outside the filters: %s", matching)
+	steps, err := store.New(db).ListTroubleshootingExportSteps(context.Background(), store.ListTroubleshootingExportStepsParams{
+		Category:  sql.NullString{String: "execution", Valid: true},
+		ErrorCode: sql.NullString{String: "ERR:7", Valid: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 3 {
+		t.Fatalf("matching step read returned %d steps, want the 3 steps of matched guides: %+v", len(steps), steps)
+	}
+	for _, step := range steps {
+		if step.GuideID != 204 {
+			t.Fatalf("matching step read returned a step of guide %d outside the filters", step.GuideID)
+		}
 	}
 	res, body := postJSON(t, app, "/api/troubleshooting/export?search=no-match", `{"format":"json","scope":"matching"}`)
 	if res.StatusCode != http.StatusUnprocessableEntity {
