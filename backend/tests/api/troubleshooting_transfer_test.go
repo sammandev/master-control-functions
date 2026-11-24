@@ -246,12 +246,17 @@ func TestTroubleshootingGuideMatchingExportOrder(t *testing.T) {
 			(202, 'Alpha', 'connection', 'high', 'ERR:8', 'Symptom', '', ''),
 			(203, 'Aardvark', 'execution', 'critical', 'err:7', 'Symptom', '', ''),
 			(204, 'apple', 'execution', 'high', 'ERR:7', 'Symptom', '', ''),
-			(205, 'APPLE', 'execution', 'high', 'ERR:7', 'Symptom', '', '')`,
+			(205, 'APPLE', 'execution', 'high', 'ERR:7', 'Symptom', '', ''),
+			(206, 'Other category', 'connection', 'high', 'ERR:7', 'Symptom', '', ''),
+			(207, 'Other error code', 'execution', 'high', 'ERR:9', 'Symptom', '', '')`,
 		`INSERT INTO troubleshooting_steps (id, guide_id, position, title, instruction, script_snippet, verification) VALUES
 			(201, 204, 2, 'Third', 'Instruction 3', '', 'Verified'),
 			(203, 204, 1, 'Second', 'Instruction 2', '', ''),
 			(202, 204, 1, 'First', 'Instruction 1', E'  Run\n\tCheck', ''),
-			(204, 202, 1, 'Unmatched guide', 'Instruction 4', '', '')`,
+			(204, 202, 1, 'Unmatched guide', 'Instruction 4', '', ''),
+			(205, 206, 1, 'Unmatched category', 'Instruction 5', '', ''),
+			(206, 207, 1, 'Unmatched error code', 'Instruction 6', '', ''),
+			(207, 203, 1, 'Lowercase error code', 'Instruction 7', '', '')`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatal(err)
@@ -272,11 +277,11 @@ func TestTroubleshootingGuideMatchingExportOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(steps) != 3 {
-		t.Fatalf("matching step read returned %d steps, want the 3 steps of matched guides: %+v", len(steps), steps)
+	if len(steps) != 4 {
+		t.Fatalf("matching step read returned %d steps, want the 4 steps of matched guides: %+v", len(steps), steps)
 	}
 	for _, step := range steps {
-		if step.GuideID != 204 {
+		if step.GuideID != 203 && step.GuideID != 204 {
 			t.Fatalf("matching step read returned a step of guide %d outside the filters", step.GuideID)
 		}
 	}
