@@ -10,11 +10,9 @@
 		type ExampleRow,
 		type ExampleListParams
 	} from '#lib/examples.ts';
-	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
 	import Input from '#lib/components/ui/input.svelte';
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
-	import Tooltip from '#lib/components/ui/tooltip.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
 	import SortHead from '#lib/components/SortHead.svelte';
 	import { nextSort, sortRows, type SortDir } from '#lib/table-sort.ts';
@@ -29,16 +27,16 @@
 		TableCell
 	} from '#lib/components/ui/table/index.ts';
 
-	// In fixed mode this panel shows one Function's examples. The shared
+	// Shows one Function's examples inside Function detail. The shared
 	// ExampleDialog owns create/edit validation for every Examples surface.
 	let {
-		fixed = null,
+		fixed,
 		defaultDevice = '',
 		functionId
 	}: {
-		fixed?: { source: string; name: string } | null;
+		fixed: { source: string; name: string };
 		defaultDevice?: string;
-		functionId?: number;
+		functionId: number;
 	} = $props();
 
 	let items = $state<ExampleRow[]>([]);
@@ -49,23 +47,19 @@
 	let loadError = $state('');
 	const listRequestGuard = createLatestRequestGuard();
 	const usageFields = $derived(
-		functionId === undefined
-			? null
-			: getComposeFields(functionId).then((fields) => ({
-					parameters: fields.parameters.map((field) => field.name),
-					criteria: fields.criteria.map((field) => field.name)
-				}))
+		getComposeFields(functionId).then((fields) => ({
+			parameters: fields.parameters.map((field) => field.name),
+			criteria: fields.criteria.map((field) => field.name)
+		}))
 	);
 
-	let fnSource = $state('');
-	let fnName = $state('');
 	let deviceFilter = $state('');
 	let search = $state('');
 
 	function currentFilters(): ExampleListParams {
 		return {
-			function_source: fixed?.source ?? fnSource.trim(),
-			function_name: fixed?.name ?? fnName.trim(),
+			function_source: fixed.source,
+			function_name: fixed.name,
 			device: deviceFilter.trim() || undefined,
 			search: search.trim(),
 			page
@@ -106,7 +100,6 @@
 	// helper. '' keeps the API's default order until a header is clicked.
 	const EXAMPLE_SORT_KEYS: Record<string, (row: ExampleRow) => string | number | null | undefined> =
 		{
-			function: (r) => `${r.function_source}/${r.function_name}`,
 			device: (r) => r.device_name || '',
 			script: (r) => r.script,
 			meaning: (r) => r.meaning
@@ -180,52 +173,16 @@
 	}
 </script>
 
-<!-- Mounts flush inside a Card (the function detail tabs Card in fixed
-     mode; the /examples page wraps it in a Card in standalone mode): the
-     toolbar and table carry the card's horizontal padding, the table
-     itself is borderless so the Card frames it. -->
+<!-- Mounts flush inside the function detail tabs Card: the toolbar and
+     table carry the card's horizontal padding, the table itself is
+     borderless so the Card frames it. -->
 <div>
-	{#if fixed}
-		<div class="example-heading">
-			<div>
-				<strong>Examples</strong>
-				<p>{loading ? 'Loading…' : `${total} ${total === 1 ? 'example' : 'examples'}`}</p>
-			</div>
-			<div class="example-actions">
-				<Input
-					class="w-36"
-					placeholder="Device…"
-					aria-label="Device filter"
-					bind:value={deviceFilter}
-					oninput={resetPage}
-				/>
-				<div class="example-search">
-					<Search size={16} /><Input
-						placeholder="Search script or meaning…"
-						aria-label="Search examples"
-						bind:value={search}
-						oninput={resetPage}
-					/>
-				</div>
-				<Button onclick={openCreateDialog}><Plus data-icon="inline-start" /> New example</Button>
-			</div>
+	<div class="example-heading">
+		<div>
+			<strong>Examples</strong>
+			<p>{loading ? 'Loading…' : `${total} ${total === 1 ? 'example' : 'examples'}`}</p>
 		</div>
-	{:else}
-		<div class="toolbar mb-0 px-4 pt-4 pb-3">
-			<Input
-				class="w-28"
-				placeholder="Source…"
-				aria-label="Function source filter"
-				bind:value={fnSource}
-				oninput={resetPage}
-			/>
-			<Input
-				class="w-44"
-				placeholder="Function name…"
-				aria-label="Function name filter"
-				bind:value={fnName}
-				oninput={resetPage}
-			/>
+		<div class="example-actions">
 			<Input
 				class="w-36"
 				placeholder="Device…"
@@ -233,18 +190,17 @@
 				bind:value={deviceFilter}
 				oninput={resetPage}
 			/>
-			<Input
-				class="min-w-56"
-				placeholder="Search script or meaning…"
-				aria-label="Search examples"
-				bind:value={search}
-				oninput={resetPage}
-			/>
-			<span class="spacer"></span>
-			<span class="muted">{loading ? 'Loading…' : `${total} example(s)`}</span>
-			<Button onclick={openCreateDialog}>New example</Button>
+			<div class="example-search">
+				<Search size={16} /><Input
+					placeholder="Search script or meaning…"
+					aria-label="Search examples"
+					bind:value={search}
+					oninput={resetPage}
+				/>
+			</div>
+			<Button onclick={openCreateDialog}><Plus data-icon="inline-start" /> New example</Button>
 		</div>
-	{/if}
+	</div>
 
 	{#if loadError}
 		<div class="px-4">
@@ -262,15 +218,6 @@
 	<Table class="border-0">
 		<TableHeader>
 			<TableRow>
-				{#if !fixed}
-					<SortHead
-						label="Function"
-						col="function"
-						active={sortKey}
-						dir={sortDir}
-						onclick={() => applySort('function')}
-					/>
-				{/if}
 				<SortHead
 					label="Device"
 					col="device"
@@ -298,35 +245,21 @@
 		<TableBody>
 			{#each view as row (row.id)}
 				<TableRow>
-					{#if !fixed}
-						<TableCell>
-							{row.function_source}/{row.function_name}
-							{#if !row.function_exists}
-								<Tooltip content="No function with this source and name exists">
-									{#snippet children(tp)}
-										<Badge variant="warn" {...tp} tabindex={0}>orphan</Badge>
-									{/snippet}
-								</Tooltip>
-							{/if}
-						</TableCell>
-					{/if}
 					<TableCell class="text-muted-foreground text-xs">{row.device_name || 'Not set'}</TableCell
 					>
 					<TableCell class="max-w-[420px] font-mono text-xs break-words whitespace-pre-wrap">
 						{row.script}
-						{#if usageFields}
-							{#await usageFields}
-								<ExampleFieldUsage script={row.script} loading />
-							{:then fields}
-								<ExampleFieldUsage
-									script={row.script}
-									parameters={fields.parameters}
-									criteria={fields.criteria}
-								/>
-							{:catch}
-								<ExampleFieldUsage script={row.script} unavailable />
-							{/await}
-						{/if}
+						{#await usageFields}
+							<ExampleFieldUsage script={row.script} loading />
+						{:then fields}
+							<ExampleFieldUsage
+								script={row.script}
+								parameters={fields.parameters}
+								criteria={fields.criteria}
+							/>
+						{:catch}
+							<ExampleFieldUsage script={row.script} unavailable />
+						{/await}
 					</TableCell>
 					<TableCell class="max-w-80 text-[13px] break-words whitespace-pre-wrap"
 						>{row.meaning}</TableCell
@@ -355,7 +288,7 @@
 				</TableRow>
 			{:else}
 				<TableRow>
-					<TableCell colspan={fixed ? 4 : 5} class="banner-empty text-center" aria-live="polite">
+					<TableCell colspan={4} class="banner-empty text-center" aria-live="polite">
 						{loading ? 'Loading…' : 'No examples yet.'}
 					</TableCell>
 				</TableRow>
