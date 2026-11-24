@@ -243,7 +243,7 @@ func likePattern(search string) string {
 	return "%" + strings.ReplaceAll(cleaned, `\`, `\\`) + "%"
 }
 
-// listQuery holds the parsed query-string parameters for GET /api/functions.
+// listQuery holds the parsed list query-string parameters.
 type listQuery struct {
 	search   string
 	filters  map[string]*string
@@ -260,10 +260,8 @@ func parseListQuery(c fiber.Ctx) listQuery {
 			lq.filters[f] = &v
 		}
 	}
+	// Each list handler checks sortCol against its own sort keys.
 	lq.sortCol = strings.TrimSpace(c.Query("sort"))
-	if _, ok := sortColumns[lq.sortCol]; !ok {
-		lq.sortCol = ""
-	}
 	lq.sortDesc = strings.EqualFold(c.Query("order"), "desc")
 	if p, err := strconv.ParseInt(c.Query("page"), 10, 64); err == nil && p > 0 {
 		lq.page = p

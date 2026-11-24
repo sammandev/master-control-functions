@@ -450,6 +450,49 @@ func TestDictionarySortUnknownColumnDoesNotPanic(t *testing.T) {
 	}
 }
 
+func TestDictionarySortByType(t *testing.T) {
+	// Regression: parseListQuery whitelisted sort against functions.go's
+	// sortColumns, which has no "type", so sort=type silently fell back
+	// to name order and both directions returned the same rows.
+	app, _ := newDictionaryTestApp(t)
+
+	for _, base := range []string{"/api/parameter-definitions", "/api/criteria-definitions"} {
+		for _, def := range []string{
+			`{"name": "ALPHA", "type": "string", "cardinality": "SINGLE"}`,
+			`{"name": "BRAVO", "type": "double", "cardinality": "SINGLE"}`,
+			`{"name": "CHARLIE", "type": "int", "cardinality": "SINGLE"}`,
+		} {
+			if resp, body := postJSON(t, app, base, def); resp.StatusCode != 201 {
+				t.Fatalf("seed %s: %d %s", base, resp.StatusCode, body)
+			}
+		}
+		for order, want := range map[string][]string{
+			"asc":  {"BRAVO", "CHARLIE", "ALPHA"},
+			"desc": {"ALPHA", "CHARLIE", "BRAVO"},
+		} {
+			resp, body := doRequest(t, app, "GET", base+"?sort=type&order="+order)
+			if resp.StatusCode != 200 {
+				t.Fatalf("GET %s order=%s: status = %d (body: %s)", base, order, resp.StatusCode, body)
+			}
+			var list struct {
+				Items []struct {
+					Name string `json:"name"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal([]byte(body), &list); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			got := make([]string, 0, len(list.Items))
+			for _, item := range list.Items {
+				got = append(got, item.Name)
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("GET %s?sort=type&order=%s names = %v, want %v", base, order, got, want)
+			}
+		}
+	}
+}
+
 func TestCriteriaDefinitionValidation(t *testing.T) {
 	// Criteria share the parameter validation code path; pin one 422 case
 	// per dictionary so the parity is tested, not assumed.

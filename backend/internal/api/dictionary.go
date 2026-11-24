@@ -272,9 +272,7 @@ func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 			return serverError(c, "list definitions", err)
 		}
 
-		// Whitelist against THIS dictionary's sort keys — functions.go's
-		// sortColumns admits different keys ("interface", "source") that
-		// would nil-panic here.
+		// Unknown sort keys keep the store's ID order.
 		if keyFn := r.sortKeys[lq.sortCol]; keyFn != nil {
 			sort.SliceStable(items, func(i, j int) bool {
 				a, b := keyFn(items[i]), keyFn(items[j])
