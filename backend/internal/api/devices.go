@@ -211,7 +211,14 @@ func deleteDevice(db *sql.DB) fiber.Handler {
 		}
 		var inUse *store.DeviceInUseError
 		if errors.As(err, &inUse) {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": inUse.Error(), "sequences": inUse.Sequences})
+			refusal := fiber.Map{"error": inUse.Error()}
+			if len(inUse.Sequences) > 0 {
+				refusal["sequences"] = inUse.Sequences
+			}
+			if len(inUse.Guides) > 0 {
+				refusal["guides"] = inUse.Guides
+			}
+			return c.Status(fiber.StatusConflict).JSON(refusal)
 		}
 		if err != nil {
 			return serverError(c, "delete device", err)
@@ -327,14 +334,7 @@ func deviceFunctions(q *store.Queries) fiber.Handler {
 			return serverError(c, "list device functions", err)
 		}
 		lq := parseListQuery(c)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(rows)) {
-			start = int64(len(rows))
-		}
-		end := start + lq.pageSize
-		if end > int64(len(rows)) {
-			end = int64(len(rows))
-		}
+		start, end := lq.sliceBounds(len(rows))
 		items := make([]fiber.Map, 0, end-start)
 		for _, f := range rows[start:end] {
 			items = append(items, functionResponse(f))
