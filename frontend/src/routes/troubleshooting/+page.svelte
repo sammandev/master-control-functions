@@ -597,6 +597,7 @@
 		onImported={({ created, updated }) => {
 			toast.success(`Import complete: ${created} created, ${updated} updated`);
 			void refreshList();
+			void loadDeviceOptions();
 		}}
 	/>
 {/if}
