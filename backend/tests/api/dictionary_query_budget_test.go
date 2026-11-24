@@ -2,11 +2,13 @@ package api_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
 	"testing"
 
+	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 
@@ -17,6 +19,7 @@ import (
 
 type queryCounter struct {
 	calls atomic.Int64
+	rows  atomic.Int64
 }
 
 func (c *queryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
@@ -24,9 +27,14 @@ func (c *queryCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.T
 	return ctx
 }
 
-func (*queryCounter) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+func (c *queryCounter) TraceQueryEnd(_ context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	c.rows.Add(data.CommandTag.RowsAffected())
+}
 
-func TestDictionaryPageQueryBudget(t *testing.T) {
+// newTracedApp serves the API over a connection pool whose queries are
+// counted, and returns the untraced handle for seeding.
+func newTracedApp(t *testing.T) (*fiber.App, *sql.DB, *queryCounter) {
+	t.Helper()
 	d, err := testdb.Open(t)
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +60,11 @@ func TestDictionaryPageQueryBudget(t *testing.T) {
 	config.Tracer = counter
 	traced := stdlib.OpenDB(*config)
 	t.Cleanup(func() { traced.Close() })
-	app := api.New(traced)
+	return api.New(traced), d, counter
+}
+
+func TestDictionaryPageQueryBudget(t *testing.T) {
+	app, d, counter := newTracedApp(t)
 
 	for _, kind := range []string{"parameter", "criteria"} {
 		t.Run(kind, func(t *testing.T) {

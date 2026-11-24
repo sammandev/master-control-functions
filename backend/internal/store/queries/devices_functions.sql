@@ -21,4 +21,5 @@ WHERE f.interface = sqlc.arg(device)
    OR EXISTS (SELECT 1 FROM criteria_links cl
               WHERE cl.function_source = f.source AND cl.function_name = f.name
                 AND cl.device_name = sqlc.arg(device))
-ORDER BY f.name, f.source, f.interface;
+ORDER BY f.name, f.source, f.interface
+LIMIT sqlc.arg('page_size')::bigint OFFSET sqlc.arg('page_offset')::bigint;
