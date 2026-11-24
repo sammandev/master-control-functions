@@ -38,13 +38,20 @@ WHERE f.interface = $1
               WHERE cl.function_source = f.source AND cl.function_name = f.name
                 AND cl.device_name = $1)
 ORDER BY f.name, f.source, f.interface
+LIMIT $3::bigint OFFSET $2::bigint
 `
+
+type ListFunctionsByDeviceScopeParams struct {
+	Device     string
+	PageOffset int64
+	PageSize   int64
+}
 
 // Explicit columns, not f.*: sqlc v1.31.1's star-expansion edit mis-splices
 // at this file's offsets ("edited query syntax is invalid"); the CTE index
 // query lives apart in devices_index.sql for the same reason.
-func (q *Queries) ListFunctionsByDeviceScope(ctx context.Context, device string) ([]Function, error) {
-	rows, err := q.db.QueryContext(ctx, listFunctionsByDeviceScope, device)
+func (q *Queries) ListFunctionsByDeviceScope(ctx context.Context, arg ListFunctionsByDeviceScopeParams) ([]Function, error) {
+	rows, err := q.db.QueryContext(ctx, listFunctionsByDeviceScope, arg.Device, arg.PageOffset, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}

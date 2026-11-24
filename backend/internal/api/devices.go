@@ -329,14 +329,17 @@ func deviceFunctions(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "count device functions", err)
 		}
-		rows, err := q.ListFunctionsByDeviceScope(c.Context(), device)
+		lq := parseListQuery(c)
+		rows, err := q.ListFunctionsByDeviceScope(c.Context(), store.ListFunctionsByDeviceScopeParams{
+			Device:     device,
+			PageSize:   lq.pageSize,
+			PageOffset: lq.offset(),
+		})
 		if err != nil {
 			return serverError(c, "list device functions", err)
 		}
-		lq := parseListQuery(c)
-		start, end := lq.sliceBounds(len(rows))
-		items := make([]fiber.Map, 0, end-start)
-		for _, f := range rows[start:end] {
+		items := make([]fiber.Map, 0, len(rows))
+		for _, f := range rows {
 			items = append(items, functionResponse(f))
 		}
 		return c.JSON(fiber.Map{
