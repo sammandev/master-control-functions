@@ -668,6 +668,101 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 	);
 });
 
+test('shows resolution steps before alternative solutions finish loading', async ({
+	page,
+	request
+}) => {
+	const guides = '/api/troubleshooting';
+	const primaryTitle = 'Reconnect the Ethernet cable';
+	const alternateTitle = 'Restart the network adapter';
+	const step = 'Reseat the Ethernet cable';
+	const errorCode = 'E2E-LINK-DOWN';
+	const ids: number[] = [];
+	const held = Promise.withResolvers<boolean>();
+	const release = Promise.withResolvers<void>();
+
+	try {
+		for (const [title, rootCause, stepTitle, instruction] of [
+			[
+				primaryTitle,
+				'The Ethernet cable is loose.',
+				step,
+				'Unplug the cable and reconnect it until it clicks.'
+			],
+			[
+				alternateTitle,
+				'The network adapter is unresponsive.',
+				'Restart the adapter',
+				'Disable and re-enable the network adapter.'
+			]
+		]) {
+			const created = await request.post(guides, {
+				data: {
+					title,
+					category: 'connection',
+					severity: 'warning',
+					error_code: errorCode,
+					symptom: 'The device reports a link-down error.',
+					root_cause: rootCause,
+					steps: [
+						{ title: stepTitle, instruction, verification: 'The link indicator turns green.' }
+					]
+				}
+			});
+			expect(created.status()).toBe(201);
+			ids.push((await created.json()).id);
+		}
+
+		await page.goto('/troubleshooting');
+		const catalog = page.getByRole('complementary', { name: 'Troubleshooting guides' });
+		const searchResponse = page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return url.pathname === guides && url.searchParams.get('search') === errorCode;
+		});
+		await catalog.getByRole('searchbox', { name: 'Search troubleshooting guides' }).fill(errorCode);
+		expect((await searchResponse).status()).toBe(200);
+		await expect(catalog.getByText('2 total', { exact: true })).toBeVisible();
+
+		await page.route(
+			`**${guides}/${ids[0]}/related`,
+			async (route) => {
+				const response = await route.fetch();
+				held.resolve(response.ok());
+				await release.promise;
+				await route.fulfill({ response });
+			},
+			{ times: 1 }
+		);
+
+		const detailResponse = page.waitForResponse(
+			(response) => new URL(response.url()).pathname === `${guides}/${ids[0]}`
+		);
+		await catalog.getByRole('button', { name: `Select guide ${primaryTitle}` }).click();
+		expect((await detailResponse).status()).toBe(200);
+		expect(await held.promise).toBe(true);
+
+		const alternate = page
+			.getByRole('region', { name: 'Alternative Solutions' })
+			.getByRole('button', { name: alternateTitle });
+		const copyAiContext = page.getByRole('button', { name: 'Copy AI Context', exact: true });
+		await expect.soft(page.getByRole('heading', { name: step })).toBeVisible();
+		await expect
+			.soft(page.getByRole('status').filter({ hasText: 'Loading alternative solutions…' }))
+			.toBeVisible();
+		await expect.soft(copyAiContext).toBeDisabled();
+		await expect(alternate).toBeHidden();
+		const screenshot = process.env.TROUBLESHOOTING_ALTERNATES_SCREENSHOT;
+		if (screenshot) await page.screenshot({ path: screenshot, animations: 'disabled' });
+		release.resolve();
+		await expect(alternate).toBeVisible();
+		await expect(copyAiContext).toBeEnabled();
+		await expect(page.getByRole('heading', { name: step })).toBeVisible();
+	} finally {
+		release.resolve();
+		for (const id of ids) await request.delete(`${guides}/${id}`);
+	}
+});
+
 test('returns to the last matching page after deleting its only guide', async ({
 	page,
 	request
