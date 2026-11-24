@@ -225,7 +225,7 @@
 	const selectedFunction = $derived.by(() => {
 		const id = page.url.searchParams.get('function');
 		if (fnTerm) return fnFiltered.find((fn) => fn.id === Number(id)) ?? fnView[0];
-		return id === null ? fnItems[0] : fnItems.find((fn) => fn.id === Number(id));
+		return id === null ? fnView[0] : fnItems.find((fn) => fn.id === Number(id));
 	});
 	let paramSearch = $state('');
 	let critSearch = $state('');
