@@ -97,6 +97,15 @@
 	let importMessage = $state('');
 	let generalError = $state('');
 	let fieldErrors = $state<Record<string, string>>({});
+	const matchingErrorCode = $derived(
+		mode === 'alternate' ? matchingProblemTag(errorCode, initialGuide?.error_code) : ''
+	);
+	const matchingFunctionName = $derived(
+		mode === 'alternate' ? matchingProblemTag(functionName, initialGuide?.function_name) : ''
+	);
+	const alternateLinkMissing = $derived(
+		mode === 'alternate' && !matchingErrorCode && !matchingFunctionName
+	);
 	const firstStepError = $derived(
 		fieldErrors.steps ??
 			Object.entries(fieldErrors).find(([key]) => /^steps\.\d+\./.test(key))?.[1] ??
@@ -113,9 +122,14 @@
 
 	const dialogDescription = $derived(
 		mode === 'alternate'
-			? 'A single error code or function can fail in multiple ways. The problem tags below are pre-filled so this guide is automatically linked as an alternative solution.'
+			? 'Document another cause and solution for the same problem.'
 			: 'Document the symptom, root cause, and step-by-step verification guides.'
 	);
+
+	function matchingProblemTag(draft: string, source = ''): string {
+		// Send the original spelling so a match doesn't depend on the database's case folding.
+		return draft.trim().toLowerCase() === source.toLowerCase() ? source : '';
+	}
 
 	function addStep() {
 		steps = [...steps, makeDraftStep()];
@@ -185,7 +199,7 @@
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
-		if (busy || importing) return;
+		if (busy || importing || alternateLinkMissing) return;
 		generalError = '';
 		const normalizedSymptom = trimEmptyListItems(symptom);
 		const normalizedSteps = steps.map((s) => ({
@@ -205,8 +219,8 @@
 			category,
 			severity,
 			device_name: deviceName,
-			function_name: functionName.trim(),
-			error_code: errorCode.trim().toUpperCase(),
+			function_name: matchingFunctionName || functionName.trim(),
+			error_code: matchingErrorCode || errorCode.trim().toUpperCase(),
 			symptom: normalizedSymptom,
 			root_cause: trimEmptyListItems(rootCause),
 			steps: normalizedSteps.map((s) => ({
@@ -268,17 +282,15 @@
 			>
 				<GitBranchPlus size={15} class="text-primary mt-0.5 shrink-0" />
 				<div>
-					<span class="font-semibold">Linked to existing problem:</span>
+					<span class="font-semibold">Original problem tags:</span>
 					<span class="text-muted-foreground ml-1">
-						Sharing Error Code
-						{#if errorCode}<Badge variant="default" class="mx-0.5 font-mono">
-								{errorCode}
+						{#if initialGuide.error_code}<Badge variant="default" class="mx-0.5 font-mono">
+								{initialGuide.error_code}
 							</Badge>{/if}
-						or Function
-						{#if functionName}<Badge variant="outline" class="mx-0.5 font-mono">
-								{functionName}
+						{#if initialGuide.function_name}<Badge variant="outline" class="mx-0.5 font-mono">
+								{initialGuide.function_name}
 							</Badge>{/if}
-						groups this guide alongside <strong>"{initialGuide.title}"</strong> as an alternative solution.
+						Keep at least one of these tags to link to <strong>"{initialGuide.title}"</strong>.
 					</span>
 				</div>
 			</div>
@@ -591,9 +603,18 @@
 			</div>
 		</section>
 
-		<div class="dialog-actions">
+		<div class="dialog-actions flex-wrap">
+			{#if alternateLinkMissing}
+				<p class="text-destructive w-full text-xs" id="alternate-link-hint">
+					Keep at least one Error Code or Related Function Name from the original guide.
+				</p>
+			{/if}
 			<Button type="button" variant="secondary" onclick={() => onOpenChange(false)}>Cancel</Button>
-			<Button type="submit" disabled={busy || importing}>
+			<Button
+				type="submit"
+				disabled={busy || importing || alternateLinkMissing}
+				aria-describedby={alternateLinkMissing ? 'alternate-link-hint' : undefined}
+			>
 				{busy
 					? 'Saving…'
 					: mode === 'edit'

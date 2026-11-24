@@ -55,6 +55,8 @@
 		onDelete: (guide: TroubleshootingGuideDetail) => void;
 	} = $props();
 
+	const canAddAlternate = $derived(Boolean(guide.error_code || guide.function_name));
+
 	function severityOutlineClass(severity: TroubleshootingSeverity): string {
 		const tone = severityTone(severity, severities);
 		if (tone === 'destructive') return 'severity-badge border-destructive text-destructive';
@@ -111,7 +113,11 @@
 				<Button
 					variant="secondary"
 					size="sm"
-					title="Document another root cause or solution for this same problem / error code"
+					disabled={!canAddAlternate}
+					aria-describedby={canAddAlternate ? undefined : 'alternate-tag-hint'}
+					title={canAddAlternate
+						? 'Document another root cause or solution for this same problem / error code'
+						: undefined}
 					onclick={() => onAddAlternate(guide)}
 				>
 					<GitBranchPlus size={14} />
@@ -133,6 +139,12 @@
 		</div>
 
 		<h2 class="text-foreground mt-2.5 text-lg leading-snug font-semibold">{guide.title}</h2>
+		{#if !canAddAlternate}
+			<p id="alternate-tag-hint" class="text-muted-foreground mt-1 text-xs">
+				Edit this guide to add an Error Code or Related Function Name before adding an alternate
+				solution.
+			</p>
+		{/if}
 	</header>
 
 	{#if loadingRelated}
