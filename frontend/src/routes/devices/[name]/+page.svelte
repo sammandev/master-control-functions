@@ -115,10 +115,7 @@
 	let fnRevision = 0;
 	let newFunctionOpen = $state(false);
 	let fnSearch = $state('');
-	const selectedFunction = $derived(
-		fnItems.find((fn) => fn.id === Number(page.url.searchParams.get('function'))) ??
-			(page.url.searchParams.has('function') ? undefined : fnItems[0])
-	);
+	const fnTerm = $derived(fnSearch.trim().toLowerCase());
 
 	// ---- parameters / criteria tabs ----------------------------------------
 	let paramScoped = $state<DeviceDefinitionRow[]>([]);
@@ -214,7 +211,7 @@
 		fnItems.filter((fn) =>
 			`${fn.name} ${fn.source} ${fn.interface} ${fn.description || ''} ${fn.category || ''}`
 				.toLowerCase()
-				.includes(fnSearch.trim().toLowerCase())
+				.includes(fnTerm)
 		)
 	);
 	const fnView = $derived(
@@ -223,6 +220,11 @@
 			fnPage * fnPageSize
 		)
 	);
+	const selectedFunction = $derived.by(() => {
+		const id = page.url.searchParams.get('function');
+		if (fnTerm) return fnFiltered.find((fn) => fn.id === Number(id)) ?? fnView[0];
+		return id === null ? fnItems[0] : fnItems.find((fn) => fn.id === Number(id));
+	});
 	let paramSearch = $state('');
 	let critSearch = $state('');
 	let exSearch = $state('');
@@ -889,7 +891,7 @@
 						>{:else}<p class="banner-empty" role="status">
 							{fnLoading
 								? 'Loading functions...'
-								: fnSearch
+								: fnTerm
 									? 'No matching functions.'
 									: 'No linked functions.'}
 						</p>{/each}
@@ -906,7 +908,7 @@
 								{device}
 								onChanged={refreshFunctions}
 								onInspectDefinition={inspectDefinition}
-							/>{/key}{:else if !fnLoading && fnItems.length}<p class="banner-empty" role="status">
+							/>{/key}{:else if !fnLoading && !fnTerm && fnItems.length}<p class="banner-empty" role="status">
 							This function is not linked to this device. Select a function from the list.
 						</p>{/if}
 				</div>
