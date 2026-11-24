@@ -335,26 +335,41 @@ func listFunctions(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "count functions", err)
 		}
-		items, err := q.ListFunctions(c.Context(), lq.storeParams())
-		if err != nil {
-			return serverError(c, "list functions", err)
-		}
-
-		// Sort and paginate in Go: the knowledge base is workbook-sized
-		// (hundreds of rows), and SQL-level dynamic ORDER BY is not worth
-		// the dialect risk (ADR-0001).
-		if cmp := sortColumns[lq.sortCol]; cmp != nil {
-			sort.SliceStable(items, func(i, j int) bool {
-				c := cmp(items[i], items[j])
-				if lq.sortDesc {
-					return c > 0
-				}
-				return c < 0
+		params := lq.storeParams()
+		var page []store.Function
+		if lq.sortCol == "name" && !c.RequestCtx().QueryArgs().Has("function_id") {
+			page, err = q.ListFunctionsByNamePage(c.Context(), store.ListFunctionsByNamePageParams{
+				Search:         params.Search,
+				Source:         params.Source,
+				Interface:      params.Interface,
+				Category:       params.Category,
+				ExecutionRole:  params.ExecutionRole,
+				ExecutionPhase: params.ExecutionPhase,
+				SortDesc:       lq.sortDesc,
+				PageSize:       lq.pageSize,
+				PageOffset:     lq.offset(),
 			})
+			if err != nil {
+				return serverError(c, "list functions", err)
+			}
+		} else {
+			items, err := q.ListFunctions(c.Context(), params)
+			if err != nil {
+				return serverError(c, "list functions", err)
+			}
+			if cmp := sortColumns[lq.sortCol]; cmp != nil {
+				sort.SliceStable(items, func(i, j int) bool {
+					c := cmp(items[i], items[j])
+					if lq.sortDesc {
+						return c > 0
+					}
+					return c < 0
+				})
+			}
+			locateRow(c, &lq, "function_id", items, func(f store.Function) int64 { return f.ID })
+			start, end := lq.sliceBounds(len(items))
+			page = items[start:end]
 		}
-		locateRow(c, &lq, "function_id", items, func(f store.Function) int64 { return f.ID })
-		start, end := lq.sliceBounds(len(items))
-		page := items[start:end]
 
 		out := make([]fiber.Map, 0, len(page))
 		for _, f := range page {

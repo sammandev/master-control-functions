@@ -12,6 +12,24 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (sqlc.narg('execution_phase')::text IS NULL OR execution_phase = sqlc.narg('execution_phase')::text)
 ORDER BY id;
 
+-- name: ListFunctionsByNamePage :many
+SELECT * FROM functions
+WHERE (sqlc.narg('search')::text IS NULL
+       OR strpos(lower(name || ' ' || description), lower(sqlc.narg('search')::text)) > 0)
+  AND (sqlc.narg('source')::text IS NULL OR source = sqlc.narg('source')::text)
+  AND (sqlc.narg('interface')::text IS NULL OR interface = sqlc.narg('interface')::text)
+  AND (sqlc.narg('category')::text IS NULL OR category = sqlc.narg('category')::text)
+  AND (sqlc.narg('execution_role')::text IS NULL OR execution_role = sqlc.narg('execution_role')::text)
+  AND (sqlc.narg('execution_phase')::text IS NULL OR execution_phase = sqlc.narg('execution_phase')::text)
+-- Match the Go comparator bytewise, keeping the stable ID order even in descending sort.
+ORDER BY
+    (CASE WHEN NOT sqlc.arg('sort_desc')::boolean THEN name END) COLLATE "C",
+    (CASE WHEN NOT sqlc.arg('sort_desc')::boolean THEN source || interface || name END) COLLATE "C",
+    (CASE WHEN sqlc.arg('sort_desc')::boolean THEN name END) COLLATE "C" DESC,
+    (CASE WHEN sqlc.arg('sort_desc')::boolean THEN source || interface || name END) COLLATE "C" DESC,
+    id
+LIMIT sqlc.arg('page_size')::bigint OFFSET sqlc.arg('page_offset')::bigint;
+
 -- name: ListFunctionOptions :many
 -- Match the catalog's ascending name sort, including its bytewise tiebreak.
 SELECT id, name, source, interface FROM functions

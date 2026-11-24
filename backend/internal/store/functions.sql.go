@@ -236,6 +236,82 @@ func (q *Queries) ListFunctions(ctx context.Context, arg ListFunctionsParams) ([
 	return items, nil
 }
 
+const listFunctionsByNamePage = `-- name: ListFunctionsByNamePage :many
+SELECT id, source, interface, name, description, convention, category, execution_role, execution_phase, created_at, updated_at FROM functions
+WHERE ($1::text IS NULL
+       OR strpos(lower(name || ' ' || description), lower($1::text)) > 0)
+  AND ($2::text IS NULL OR source = $2::text)
+  AND ($3::text IS NULL OR interface = $3::text)
+  AND ($4::text IS NULL OR category = $4::text)
+  AND ($5::text IS NULL OR execution_role = $5::text)
+  AND ($6::text IS NULL OR execution_phase = $6::text)
+ORDER BY
+    (CASE WHEN NOT $7::boolean THEN name END) COLLATE "C",
+    (CASE WHEN NOT $7::boolean THEN source || interface || name END) COLLATE "C",
+    (CASE WHEN $7::boolean THEN name END) COLLATE "C" DESC,
+    (CASE WHEN $7::boolean THEN source || interface || name END) COLLATE "C" DESC,
+    id
+LIMIT $9::bigint OFFSET $8::bigint
+`
+
+type ListFunctionsByNamePageParams struct {
+	Search         sql.NullString
+	Source         sql.NullString
+	Interface      sql.NullString
+	Category       sql.NullString
+	ExecutionRole  sql.NullString
+	ExecutionPhase sql.NullString
+	SortDesc       bool
+	PageOffset     int64
+	PageSize       int64
+}
+
+// Match the Go comparator bytewise, keeping the stable ID order even in descending sort.
+func (q *Queries) ListFunctionsByNamePage(ctx context.Context, arg ListFunctionsByNamePageParams) ([]Function, error) {
+	rows, err := q.db.QueryContext(ctx, listFunctionsByNamePage,
+		arg.Search,
+		arg.Source,
+		arg.Interface,
+		arg.Category,
+		arg.ExecutionRole,
+		arg.ExecutionPhase,
+		arg.SortDesc,
+		arg.PageOffset,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Function
+	for rows.Next() {
+		var i Function
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.Interface,
+			&i.Name,
+			&i.Description,
+			&i.Convention,
+			&i.Category,
+			&i.ExecutionRole,
+			&i.ExecutionPhase,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateFunction = `-- name: UpdateFunction :one
 UPDATE functions SET
     description = $1,
