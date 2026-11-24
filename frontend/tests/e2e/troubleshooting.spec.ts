@@ -668,6 +668,78 @@ test('creates, edits, and deletes a troubleshooting guide', async ({ page }) => 
 	);
 });
 
+test('returns to the last matching page after deleting its only guide', async ({
+	page,
+	request
+}) => {
+	const guides = '/api/troubleshooting';
+	const searchTerm = 'Pagination recovery fixture';
+	const unrelatedTitle = 'Outside the pagination search';
+	const ids: number[] = [];
+
+	try {
+		const titles = Array.from(
+			{ length: 21 },
+			(_, index) => `${searchTerm} ${String(index + 1).padStart(2, '0')}`
+		);
+		for (const title of [...titles, unrelatedTitle]) {
+			const created = await request.post(guides, {
+				data: {
+					title,
+					category: 'connection',
+					severity: 'warning',
+					symptom: 'The device loses its connection.',
+					steps: [{ title: 'Check the cable', instruction: 'Reseat the Ethernet cable.' }]
+				}
+			});
+			expect(created.status()).toBe(201);
+			ids.push((await created.json()).id);
+		}
+
+		await page.goto('/troubleshooting');
+		const catalog = page.getByRole('complementary', { name: 'Troubleshooting guides' });
+		const search = catalog.getByRole('searchbox', { name: 'Search troubleshooting guides' });
+		const matchingGuides = catalog.getByRole('button', { name: `Select guide ${searchTerm}` });
+		await search.fill(searchTerm);
+		await expect(catalog.getByText('21 total', { exact: true })).toBeVisible();
+		await expect(catalog.getByRole('button', { name: '20 / page, Page size' })).toBeVisible();
+		await catalog.getByRole('button', { name: 'Next page' }).click();
+		await expect(catalog.getByText('Page 2 of 2', { exact: true })).toBeAttached();
+		await expect(matchingGuides).toHaveCount(1);
+		const deletedTitle = await matchingGuides.locator('strong').innerText();
+
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		const dialog = page.getByRole('alertdialog', { name: 'Delete Troubleshooting Guide?' });
+		const deleted = page.waitForResponse(
+			(response) =>
+				response.request().method() === 'DELETE' &&
+				new URL(response.url()).pathname.startsWith(`${guides}/`)
+		);
+		await dialog.getByRole('button', { name: 'Delete Guide', exact: true }).click();
+		expect((await deleted).status()).toBe(204);
+		await expect(dialog).toBeHidden();
+		await expect(catalog.getByText('20 total', { exact: true })).toBeVisible();
+		await expect(catalog.getByText('Loading troubleshooting guides…')).toBeHidden();
+
+		const screenshot = process.env.TROUBLESHOOTING_DELETE_PAGE_SCREENSHOT;
+		if (screenshot) await page.screenshot({ path: screenshot, animations: 'disabled' });
+
+		await expect(matchingGuides).toHaveCount(20);
+		await expect(catalog.getByText('Page 1 of 1', { exact: true })).toBeAttached();
+		await expect(search).toHaveValue(searchTerm);
+		await expect(catalog.getByText(deletedTitle, { exact: true })).toHaveCount(0);
+		await expect(catalog.getByText(unrelatedTitle, { exact: true })).toHaveCount(0);
+
+		await search.fill('Unmatched pagination fixture');
+		await expect(
+			catalog.getByText('No troubleshooting guides match the current filters.')
+		).toBeVisible();
+		await expect(catalog.getByRole('button', { name: 'Reset filters' })).toBeVisible();
+	} finally {
+		for (const id of ids) await request.delete(`${guides}/${id}`);
+	}
+});
+
 test('metadata refresh failure preserves the current guide list and detail', async ({ page }) => {
 	await mockTroubleshooting(page, { failOneCategoryRefresh: true });
 	await page.goto('/troubleshooting');
