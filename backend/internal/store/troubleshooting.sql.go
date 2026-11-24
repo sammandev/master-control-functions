@@ -249,6 +249,36 @@ func (q *Queries) InsertTroubleshootingStep(ctx context.Context, arg InsertTroub
 	return id, err
 }
 
+const listTroubleshootingDeviceNames = `-- name: ListTroubleshootingDeviceNames :many
+SELECT DISTINCT device_name
+FROM troubleshooting_guides
+WHERE device_name <> ''
+ORDER BY device_name
+`
+
+func (q *Queries) ListTroubleshootingDeviceNames(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listTroubleshootingDeviceNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var device_name string
+		if err := rows.Scan(&device_name); err != nil {
+			return nil, err
+		}
+		items = append(items, device_name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTroubleshootingExportGuides = `-- name: ListTroubleshootingExportGuides :many
 SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
        g.error_code, g.symptom, g.root_cause

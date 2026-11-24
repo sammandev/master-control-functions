@@ -126,3 +126,28 @@ func TestTroubleshootingRelatedEndpointReturnsMoreThanOneHundredSiblings(t *test
 		t.Fatalf("related result = total %d, items %d; want %d excluding source", result.Total, len(result.Items), wantSiblings)
 	}
 }
+
+func TestTroubleshootingDevicesIncludeImportedDeviceNames(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	guide := `{"guides":[{"title":"Bench guide","category":"connection","severity":"high","device_name":"imported_bench","symptom":"Signal lost","steps":[{"title":"Reset","instruction":"Restart"}]}]}`
+	if status, body := uploadGuideTransferBytes(t, app, "commit", "guides.json", []byte(guide)); status != 200 {
+		t.Fatalf("import guide: %d %s", status, body)
+	}
+	if _, body := doRequest(t, app, "GET", "/api/devices"); strings.Contains(body, `"device_name":"IMPORTED_BENCH"`) {
+		t.Fatalf("fixture Device must not be in the Device catalog: %s", body)
+	}
+	resp, body := doRequest(t, app, "GET", "/api/troubleshooting/devices")
+	if resp.StatusCode != 200 {
+		t.Fatalf("list troubleshooting devices: %d %s", resp.StatusCode, body)
+	}
+	var got struct {
+		Items []string `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("decode devices: %v (%s)", err, body)
+	}
+	// Migration 0009 seeds guides on SSH, WIFI_TEST and the blank (Global) scope.
+	if want := []string{"IMPORTED_BENCH", "SSH", "WIFI_TEST"}; strings.Join(got.Items, ",") != strings.Join(want, ",") {
+		t.Fatalf("devices = %v, want %v", got.Items, want)
+	}
+}

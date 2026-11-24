@@ -33,6 +33,12 @@ SELECT id, title, category, severity, device_name, function_name, error_code,
 FROM troubleshooting_guides
 WHERE id = $1;
 
+-- name: ListTroubleshootingDeviceNames :many
+SELECT DISTINCT device_name
+FROM troubleshooting_guides
+WHERE device_name <> ''
+ORDER BY device_name;
+
 -- name: CountTroubleshootingGuides :one
 SELECT COUNT(*)
 FROM troubleshooting_guides g
