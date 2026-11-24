@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strconv"
@@ -116,6 +117,95 @@ func loadMCPCatalog(ctx context.Context, q *store.Queries) (*mcpCatalog, error) 
 	return c, nil
 }
 
+func loadFunctionMCPCatalog(ctx context.Context, q *store.Queries, f store.Function, scope string) (*mcpCatalog, error) {
+	key := naturalKey{f.Source, f.Interface, f.Name}
+	c := &mcpCatalog{
+		grammars: map[naturalKey]store.FunctionGrammar{},
+		audits:   map[naturalKey][]store.ScriptKeyAudit{},
+	}
+	count, err := q.CountFunctionsSharingNaturalName(ctx, store.CountFunctionsSharingNaturalNameParams{
+		Source: f.Source, Name: f.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	c.nameCounts = map[[2]string]int{{f.Source, f.Name}: int(count)}
+	grammar, err := q.GetFunctionGrammar(ctx, store.GetFunctionGrammarParams{
+		FunctionSource: f.Source, FunctionInterface: f.Interface, FunctionName: f.Name,
+	})
+	if err == nil {
+		c.grammars[key] = grammar
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	audits, err := q.ListScriptKeyAudits(ctx, store.ListScriptKeyAuditsParams{
+		FunctionSource: f.Source, FunctionInterface: f.Interface, FunctionName: f.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	c.audits[key] = audits
+
+	paramLinks, err := q.ListFunctionParameterLinksForReadiness(ctx, store.ListFunctionParameterLinksForReadinessParams{
+		FunctionSource: f.Source, FunctionName: f.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var paramNames []string
+	for _, l := range paramLinks {
+		if l.DeviceName == "" || strings.EqualFold(l.DeviceName, scope) {
+			c.paramLinks = append(c.paramLinks, catalogLink{l.Name, f.Source, f.Name, l.DeviceName, l.Position, l.Required == 1})
+			paramNames = append(paramNames, l.Name)
+		}
+	}
+	if len(paramNames) > 0 {
+		namesJSON, _ := json.Marshal(paramNames)
+		params, err := q.ListParameterDefinitionsByNameForReadiness(ctx, string(namesJSON))
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range params {
+			c.paramDefs = append(c.paramDefs, catalogDefinition{d.Name, d.DeviceName, d.Type, d.Cardinality, d.ValuePattern, d.AllowedValues})
+		}
+	}
+	critLinks, err := q.ListFunctionCriteriaLinksForReadiness(ctx, store.ListFunctionCriteriaLinksForReadinessParams{
+		FunctionSource: f.Source, FunctionName: f.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var critNames []string
+	for _, l := range critLinks {
+		if l.DeviceName == "" || strings.EqualFold(l.DeviceName, scope) {
+			c.critLinks = append(c.critLinks, catalogLink{l.Name, f.Source, f.Name, l.DeviceName, l.Position, l.Required == 1})
+			critNames = append(critNames, l.Name)
+		}
+	}
+	if len(critNames) > 0 {
+		namesJSON, _ := json.Marshal(critNames)
+		criteria, err := q.ListCriteriaDefinitionsByNameForReadiness(ctx, string(namesJSON))
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range criteria {
+			c.critDefs = append(c.critDefs, catalogDefinition{d.Name, d.DeviceName, d.Type, d.Cardinality, d.ValuePattern, d.AllowedValues})
+		}
+	}
+	examples, err := q.ListFunctionExamplesForReadiness(ctx, store.ListFunctionExamplesForReadinessParams{
+		FunctionSource: f.Source, FunctionName: f.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range examples {
+		c.examples = append(c.examples, store.Example{
+			ID: e.ID, FunctionSource: f.Source, FunctionName: f.Name, DeviceName: e.DeviceName, Script: e.Script,
+		})
+	}
+	return c, nil
+}
+
 type readinessField struct {
 	Name        string `json:"name"`
 	DeviceName  string `json:"device_name"`
@@ -154,13 +244,17 @@ type readinessReport struct {
 	Warnings   []scriptIssue    `json:"warnings"`
 }
 
-// Readiness statuses: "ready" composes as a single script line, "bundle_ready"
-// only inside INI bundles, "not_ready" neither.
-func (c *mcpCatalog) readiness(f store.Function, device string) readinessReport {
+func readinessDevice(f store.Function, device string) string {
 	scope := normalizeDeviceName(device)
 	if scope == "" {
-		scope = f.Interface
+		return f.Interface
 	}
+	return scope
+}
+
+// Readiness statuses: "ready" composes as a single script line, "bundle_ready"
+// only inside INI bundles, "not_ready" neither.
+func (c *mcpCatalog) readiness(f store.Function, scope string) readinessReport {
 	key := naturalKey{f.Source, f.Interface, f.Name}
 	report := readinessReport{
 		FunctionID: f.ID, Source: f.Source, Interface: f.Interface, Name: f.Name,
@@ -376,11 +470,12 @@ func functionMCPReadiness(q *store.Queries) fiber.Handler {
 		if f.ID == 0 {
 			return err
 		}
-		catalog, err := loadMCPCatalog(c.Context(), q)
+		scope := readinessDevice(f, c.Query("device"))
+		catalog, err := loadFunctionMCPCatalog(c.Context(), q, f, scope)
 		if err != nil {
 			return serverError(c, "load catalog", err)
 		}
-		return c.JSON(catalog.readiness(f, c.Query("device")))
+		return c.JSON(catalog.readiness(f, scope))
 	}
 }
 
@@ -393,7 +488,7 @@ func mcpReadinessSummary(q *store.Queries) fiber.Handler {
 		items := make([]fiber.Map, 0, len(catalog.functions))
 		counts := map[string]int{"ready": 0, "bundle_ready": 0, "not_ready": 0}
 		for _, f := range catalog.functions {
-			r := catalog.readiness(f, "")
+			r := catalog.readiness(f, f.Interface)
 			counts[r.Status]++
 			encoding, scope := "", ""
 			if r.Grammar != nil {

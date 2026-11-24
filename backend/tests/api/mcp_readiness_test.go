@@ -1,13 +1,126 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+
+	"webprogfndb/internal/api"
+	"webprogfndb/internal/db"
+	"webprogfndb/tests/support/testdb"
 )
+
+type readinessRowCounter struct {
+	rows atomic.Int64
+}
+
+func (*readinessRowCounter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
+	return ctx
+}
+
+func (c *readinessRowCounter) TraceQueryEnd(_ context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	c.rows.Add(data.CommandTag.RowsAffected())
+}
+
+func TestMCPReadinessIgnoresUnrelatedCatalogRows(t *testing.T) {
+	d, err := testdb.Open(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.MigratePostgres(d); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := d.Conn(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config *pgx.ConnConfig
+	err = conn.Raw(func(driverConn any) error {
+		config = driverConn.(*stdlib.Conn).Conn().Config()
+		return nil
+	})
+	conn.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	counter := &readinessRowCounter{}
+	config.Tracer = counter
+	traced := stdlib.OpenDB(*config)
+	t.Cleanup(func() { traced.Close() })
+	app := api.New(traced)
+
+	id := createFunctionID(t, app, `{"source":"DLL","interface":"WIFI_TEST","name":"SCOPED_READINESS","convention":2}`)
+	if _, err := d.Exec(`
+		INSERT INTO functions (source, interface, name, created_at, updated_at)
+		VALUES ('DLL', 'IOT', 'SCOPED_READINESS', '', '');
+		INSERT INTO parameter_links (function_source, function_name, name, device_name, required, created_at, updated_at)
+		VALUES ('DLL', 'SCOPED_READINESS', 'ANT', '', 0, '', ''),
+		       ('DLL', 'SCOPED_READINESS', 'ANT', 'KIT', 1, '', '');
+		INSERT INTO parameter_definitions (name, device_name, created_at, updated_at)
+		VALUES ('ANT', 'kit', '', '');
+		INSERT INTO criteria_links (function_source, function_name, name, device_name, created_at, updated_at)
+		VALUES ('DLL', 'SCOPED_READINESS', 'LIMIT', 'KIT', '', '');
+		INSERT INTO criteria_definitions (name, created_at, updated_at)
+		VALUES ('LIMIT', '', '');
+		INSERT INTO examples (function_source, function_name, device_name, script, created_at, updated_at)
+		VALUES ('DLL', 'SCOPED_READINESS', 'KIT', 'bad example', '', '');
+	`); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/functions/" + id + "/mcp-readiness?device=%20kit%20"
+	check := func() (string, int64) {
+		t.Helper()
+		before := counter.rows.Load()
+		resp, body := doRequest(t, app, "GET", path)
+		if resp.StatusCode != 200 {
+			t.Fatalf("readiness: %d %s", resp.StatusCode, body)
+		}
+		return body, counter.rows.Load() - before
+	}
+	want, baseline := check()
+	for _, fragment := range []string{
+		`"device":"KIT"`,
+		`"name":"ANT","device_name":"KIT","required":true,"has_definition":true`,
+		`"name":"LIMIT","device_name":"KIT","required":false,"has_definition":true`,
+		`"code":"ambiguous_function_key"`,
+		`"field":"examples.`,
+	} {
+		if !strings.Contains(want, fragment) {
+			t.Fatalf("missing %s in %s", fragment, want)
+		}
+	}
+	if _, err := d.Exec(`
+		INSERT INTO functions (source, interface, name, created_at, updated_at)
+		SELECT 'DLL', 'WIFI_TEST', 'UNRELATED_' || n, '', '' FROM generate_series(1, 200) AS n;
+		INSERT INTO functions (source, interface, name, created_at, updated_at)
+		VALUES ('BUILT-IN', 'WIFI_TEST', 'SCOPED_READINESS', '', '');
+		INSERT INTO parameter_links (function_source, function_name, name, created_at, updated_at)
+		VALUES ('DLL', 'UNRELATED_1', 'NOISE', '', ''), ('BUILT-IN', 'SCOPED_READINESS', 'NOISE', '', '');
+		INSERT INTO criteria_links (function_source, function_name, name, created_at, updated_at)
+		VALUES ('DLL', 'UNRELATED_1', 'NOISE', '', ''), ('BUILT-IN', 'SCOPED_READINESS', 'NOISE', '', '');
+		INSERT INTO parameter_definitions (name, created_at, updated_at) VALUES ('NOISE', '', '');
+		INSERT INTO criteria_definitions (name, created_at, updated_at) VALUES ('NOISE', '', '');
+		INSERT INTO examples (function_source, function_name, script, created_at, updated_at)
+		VALUES ('DLL', 'UNRELATED_1', 'bad example', '', ''), ('BUILT-IN', 'SCOPED_READINESS', 'bad example', '', '');
+	`); err != nil {
+		t.Fatal(err)
+	}
+	got, grown := check()
+	if got != want {
+		t.Errorf("response changed after unrelated inserts:\ngot %s\nwant %s", got, want)
+	}
+	if baseline == 0 || grown != baseline {
+		t.Fatalf("SQL rows before/after unrelated inserts = %d/%d, want the same positive count", baseline, grown)
+	}
+	t.Logf("SQL rows before/after unrelated inserts = %d/%d", baseline, grown)
+}
 
 type readinessBody struct {
 	Status  string `json:"status"`

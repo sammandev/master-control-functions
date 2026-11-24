@@ -92,5 +92,32 @@ SELECT * FROM parameter_definitions ORDER BY id;
 -- name: ListAllCriteriaDefinitionsForReadiness :many
 SELECT * FROM criteria_definitions ORDER BY id;
 
+-- name: ListFunctionParameterLinksForReadiness :many
+SELECT name, device_name, position, required FROM parameter_links
+WHERE function_source = $1 AND function_name = $2
+ORDER BY id;
+
+-- name: ListFunctionCriteriaLinksForReadiness :many
+SELECT name, device_name, position, required FROM criteria_links
+WHERE function_source = $1 AND function_name = $2
+ORDER BY id;
+
+-- name: ListParameterDefinitionsByNameForReadiness :many
+SELECT name, device_name, type, cardinality, value_pattern, allowed_values
+FROM parameter_definitions
+WHERE name = ANY (ARRAY(SELECT jsonb_array_elements_text(sqlc.arg(names_json)::text::jsonb)))
+ORDER BY id;
+
+-- name: ListCriteriaDefinitionsByNameForReadiness :many
+SELECT name, device_name, type, cardinality, value_pattern, allowed_values
+FROM criteria_definitions
+WHERE name = ANY (ARRAY(SELECT jsonb_array_elements_text(sqlc.arg(names_json)::text::jsonb)))
+ORDER BY id;
+
+-- name: ListFunctionExamplesForReadiness :many
+SELECT id, device_name, script FROM examples
+WHERE function_source = $1 AND function_name = $2
+ORDER BY id;
+
 -- name: ListFunctionsByNaturalName :many
 SELECT * FROM functions WHERE source = $1 AND name = $2 ORDER BY interface;
