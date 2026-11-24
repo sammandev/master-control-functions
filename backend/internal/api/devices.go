@@ -211,7 +211,14 @@ func deleteDevice(db *sql.DB) fiber.Handler {
 		}
 		var inUse *store.DeviceInUseError
 		if errors.As(err, &inUse) {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": inUse.Error(), "sequences": inUse.Sequences})
+			refusal := fiber.Map{"error": inUse.Error()}
+			if len(inUse.Sequences) > 0 {
+				refusal["sequences"] = inUse.Sequences
+			}
+			if len(inUse.Guides) > 0 {
+				refusal["guides"] = inUse.Guides
+			}
+			return c.Status(fiber.StatusConflict).JSON(refusal)
 		}
 		if err != nil {
 			return serverError(c, "delete device", err)

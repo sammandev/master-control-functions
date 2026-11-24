@@ -1,14 +1,25 @@
 package api_test
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 )
+
+// clearSeededGuides drops the migration's sample Troubleshooting guides,
+// some of which are scoped to WIFI_TEST and would block deleting it.
+func clearSeededGuides(t *testing.T, database *sql.DB) {
+	t.Helper()
+	if _, err := database.Exec(`DELETE FROM troubleshooting_guides`); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestDeviceDeleteCascadesAndPreservesSharedData(t *testing.T) {
 	for _, registered := range []bool{false, true} {
 		t.Run(map[bool]string{false: "derived", true: "registered"}[registered], func(t *testing.T) {
 			app, database := newDictionaryTestApp(t)
+			clearSeededGuides(t, database)
 			if registered {
 				if resp, body := registerDevice(t, app, "WIFI_TEST"); resp.StatusCode != 201 {
 					t.Fatalf("register: %d %s", resp.StatusCode, body)
@@ -85,20 +96,20 @@ func TestDeviceDeleteCascadesAndPreservesSharedData(t *testing.T) {
 				}
 			}
 			for query, want := range map[string]int{
-				`SELECT COUNT(*) FROM functions WHERE interface = 'OTHER'`:                              1,
-				`SELECT COUNT(*) FROM parameter_definitions WHERE device_name = ''`:                     1,
-				`SELECT COUNT(*) FROM parameter_definitions WHERE device_name = 'OSP'`:                  1,
-				`SELECT COUNT(*) FROM criteria_definitions WHERE device_name = ''`:                      1,
-				`SELECT COUNT(*) FROM parameter_links WHERE function_name = 'TX_MULTI_VERIFICATION'`:    2,
-				`SELECT COUNT(*) FROM criteria_links WHERE function_name = 'TX_MULTI_VERIFICATION'`:     2,
-				`SELECT COUNT(*) FROM examples WHERE function_name = 'TX_MULTI_VERIFICATION'`:           2,
-				`SELECT COUNT(*) FROM parameter_links WHERE function_name = 'RX_SENSITIVITY'`:           0,
-				`SELECT COUNT(*) FROM criteria_links WHERE function_name = 'RX_SENSITIVITY'`:            0,
-				`SELECT COUNT(*) FROM examples WHERE function_name = 'RX_SENSITIVITY'`:                  0,
-				`SELECT COUNT(*) FROM function_grammars WHERE function_interface = 'OTHER'`:             1,
-				`SELECT COUNT(*) FROM script_key_audits WHERE function_interface = 'OTHER'`:             1,
-				`SELECT COUNT(*) FROM sequences WHERE name = 'untouched' AND updated_at = 'old'`:        1,
-				`SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = 1`:                             2,
+				`SELECT COUNT(*) FROM functions WHERE interface = 'OTHER'`:                           1,
+				`SELECT COUNT(*) FROM parameter_definitions WHERE device_name = ''`:                  1,
+				`SELECT COUNT(*) FROM parameter_definitions WHERE device_name = 'OSP'`:               1,
+				`SELECT COUNT(*) FROM criteria_definitions WHERE device_name = ''`:                   1,
+				`SELECT COUNT(*) FROM parameter_links WHERE function_name = 'TX_MULTI_VERIFICATION'`: 2,
+				`SELECT COUNT(*) FROM criteria_links WHERE function_name = 'TX_MULTI_VERIFICATION'`:  2,
+				`SELECT COUNT(*) FROM examples WHERE function_name = 'TX_MULTI_VERIFICATION'`:        2,
+				`SELECT COUNT(*) FROM parameter_links WHERE function_name = 'RX_SENSITIVITY'`:        0,
+				`SELECT COUNT(*) FROM criteria_links WHERE function_name = 'RX_SENSITIVITY'`:         0,
+				`SELECT COUNT(*) FROM examples WHERE function_name = 'RX_SENSITIVITY'`:               0,
+				`SELECT COUNT(*) FROM function_grammars WHERE function_interface = 'OTHER'`:          1,
+				`SELECT COUNT(*) FROM script_key_audits WHERE function_interface = 'OTHER'`:          1,
+				`SELECT COUNT(*) FROM sequences WHERE name = 'untouched' AND updated_at = 'old'`:     1,
+				`SELECT COUNT(*) FROM sequence_steps WHERE sequence_id = 1`:                          2,
 			} {
 				if err := database.QueryRow(query).Scan(&count); err != nil || count != want {
 					t.Fatalf("%s: count=%d want=%d err=%v", query, count, want, err)
@@ -113,6 +124,7 @@ func TestDeviceDeleteCascadesAndPreservesSharedData(t *testing.T) {
 
 func TestDeviceDeleteRefusedWhileSequenceStepsUseIt(t *testing.T) {
 	app, database := newDictionaryTestApp(t)
+	clearSeededGuides(t, database)
 	if resp, body := registerDevice(t, app, "WIFI_TEST"); resp.StatusCode != 201 {
 		t.Fatalf("register: %d %s", resp.StatusCode, body)
 	}
@@ -160,8 +172,69 @@ func TestDeviceDeleteRefusedWhileSequenceStepsUseIt(t *testing.T) {
 	}
 }
 
+func TestDeviceDeleteRefusedWhileTroubleshootingGuidesUseIt(t *testing.T) {
+	app, database := newDictionaryTestApp(t)
+	clearSeededGuides(t, database)
+	if resp, body := registerDevice(t, app, "WIFI_TEST"); resp.StatusCode != 201 {
+		t.Fatalf("register: %d %s", resp.StatusCode, body)
+	}
+	seedDeviceData(t, func(path, body string) {
+		if resp, result := postJSON(t, app, path, body); resp.StatusCode != 201 {
+			t.Fatalf("seed %s: %d %s", path, resp.StatusCode, result)
+		}
+	})
+	for _, guide := range []struct{ title, device string }{
+		{"Zeta drift", "wifi_test"},
+		{"Alpha timeout", "WIFI_TEST"},
+		{"Global reboot", ""},
+		{"Other device", "OTHER"},
+	} {
+		payload := `{"title":"` + guide.title + `","category":"measurement","severity":"warning","device_name":"` + guide.device + `",
+			"symptom":"fails","steps":[{"title":"Check","instruction":"Look"}]}`
+		if resp, body := postJSON(t, app, "/api/troubleshooting", payload); resp.StatusCode != 201 {
+			t.Fatalf("seed guide %q: %d %s", guide.title, resp.StatusCode, body)
+		}
+	}
+
+	resp, body := doJSON(t, app, "DELETE", "/api/devices/WIFI_TEST", `{"confirmation":"DELETE WIFI_TEST"}`)
+	if resp.StatusCode != 409 {
+		t.Fatalf("delete of a device used by Troubleshooting guides: %d %s", resp.StatusCode, body)
+	}
+	want := `{"error":"WIFI_TEST is used by Troubleshooting guides: Alpha timeout, Zeta drift. Change or delete those guides first.","guides":["Alpha timeout","Zeta drift"]}`
+	if body != want {
+		t.Fatalf("refusal body:\n got %s\nwant %s", body, want)
+	}
+	for query, want := range map[string]int{
+		`SELECT COUNT(*) FROM devices WHERE name = 'WIFI_TEST'`:                       1,
+		`SELECT COUNT(*) FROM functions WHERE interface = 'WIFI_TEST'`:                2,
+		`SELECT COUNT(*) FROM examples WHERE device_name = 'WIFI_TEST'`:               1,
+		`SELECT COUNT(*) FROM troubleshooting_guides WHERE device_name = 'WIFI_TEST'`: 2,
+		`SELECT COUNT(*) FROM troubleshooting_guides`:                                 4,
+	} {
+		var count int
+		if err := database.QueryRow(query).Scan(&count); err != nil || count != want {
+			t.Fatalf("refused delete changed %s: count=%d want=%d err=%v", query, count, want, err)
+		}
+	}
+
+	if _, err := database.Exec(`INSERT INTO sequences (name, created_at, updated_at) VALUES ('Smoke run', 'old', 'old')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO sequence_steps
+		(sequence_id, position, function_source, function_interface, function_name, device_name)
+		VALUES (1, 1, 'DLL', 'WIFI_TEST', 'TX_MULTI_VERIFICATION', '')`); err != nil {
+		t.Fatal(err)
+	}
+	resp, body = doJSON(t, app, "DELETE", "/api/devices/WIFI_TEST", `{"confirmation":"DELETE WIFI_TEST"}`)
+	want = `{"error":"WIFI_TEST is used by Sequences: Smoke run; Troubleshooting guides: Alpha timeout, Zeta drift. Remove those steps and change or delete those guides first.","guides":["Alpha timeout","Zeta drift"],"sequences":["Smoke run"]}`
+	if resp.StatusCode != 409 || body != want {
+		t.Fatalf("refusal naming Sequences and guides: %d\n got %s\nwant %s", resp.StatusCode, body, want)
+	}
+}
+
 func TestDeviceDeleteRollsBackOnFailure(t *testing.T) {
 	app, database := newDictionaryTestApp(t)
+	clearSeededGuides(t, database)
 	if resp, body := registerDevice(t, app, "WIFI_TEST"); resp.StatusCode != 201 {
 		t.Fatalf("register: %d %s", resp.StatusCode, body)
 	}
