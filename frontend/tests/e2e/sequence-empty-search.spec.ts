@@ -8,8 +8,18 @@ test('an empty Sequence catalog shows its catalog empty state', async ({ page })
 
 	await page.goto('/sequences');
 	await expect(page.getByText('0 sequences', { exact: true })).toBeVisible();
-	await expect(page.getByText('No sequences yet.', { exact: true })).toBeVisible();
-	await expect(page.getByText('No sequences match the search.', { exact: true })).toBeHidden();
+	const emptyCatalog = page.getByText('No sequences yet.', { exact: true });
+	const noMatches = page.getByText('No sequences match the search.', { exact: true });
+	const search = page.getByRole('searchbox', { name: 'Search sequences' });
+	await expect(emptyCatalog).toBeVisible();
+	await expect(noMatches).toBeHidden();
+
+	await search.fill('does-not-match-any-sequence');
+	await expect(noMatches).toBeVisible();
+
+	await search.fill('%');
+	await expect(emptyCatalog).toBeVisible();
+	await expect(noMatches).toBeHidden();
 });
 
 test('a settled search with no Sequence matches does not look like an empty catalog', async ({

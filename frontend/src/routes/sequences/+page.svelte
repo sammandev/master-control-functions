@@ -24,6 +24,7 @@
 	let loadError = $state('');
 	let search = $state('');
 	let searchDebounced = $state('');
+	const hasSearchFilter = $derived(searchDebounced.replaceAll('%', '') !== '');
 	let page = $state(1);
 	let pageSize = $state(20);
 	// '' keeps the API's default (name) order until a header is clicked.
@@ -177,7 +178,7 @@
 							Loading…
 						{:else if loadError}
 							Sequences could not be loaded.
-						{:else if total === 0 && !searchDebounced}
+						{:else if total === 0 && !hasSearchFilter}
 							No sequences yet.
 						{:else}
 							No sequences match the search.
