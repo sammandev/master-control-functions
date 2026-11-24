@@ -880,6 +880,61 @@ for (const sharedTag of ['error code', 'function name']) {
 	});
 }
 
+test('clears stale guide counts when a filter request fails', async ({ page, request }) => {
+	const guides = '/api/troubleshooting';
+	const searchTerm = 'Filtered count recovery fixture';
+	const created = await request.post(guides, {
+		data: {
+			title: searchTerm,
+			category: 'connection',
+			severity: 'warning',
+			symptom: 'The device loses its connection.',
+			steps: [{ title: 'Check the cable', instruction: 'Reseat the Ethernet cable.' }]
+		}
+	});
+	expect(created.status()).toBe(201);
+	const { id } = await created.json();
+
+	try {
+		const initial = await request.get(guides);
+		expect(initial.ok()).toBe(true);
+		const { total } = await initial.json();
+		expect(total).toBeGreaterThan(1);
+
+		await page.route(
+			(url) => url.pathname === guides && url.searchParams.get('search') === searchTerm,
+			(route) => route.fulfill({ status: 503, json: { error: 'Guide search unavailable' } }),
+			{ times: 1 }
+		);
+		await page.goto('/troubleshooting');
+		const catalog = page.getByRole('complementary', { name: 'Troubleshooting guides' });
+		const search = catalog.getByRole('searchbox', { name: 'Search troubleshooting guides' });
+		await expect(page.getByText(`${total} guides`, { exact: true })).toBeVisible();
+		await expect(catalog.getByText(`${total} total`, { exact: true })).toBeVisible();
+
+		await search.fill(searchTerm);
+		const error = catalog.getByRole('alert');
+		await expect(error).toContainText('Guide search unavailable');
+		await expect.soft(page.getByText('Count unavailable', { exact: true })).toBeVisible();
+		await expect.soft(page.getByText(`${total} guides`, { exact: true })).toHaveCount(0);
+		await expect.soft(catalog.getByText(/^\d+ total$/)).toHaveCount(0);
+
+		await error.getByRole('button', { name: 'Retry' }).click();
+		await expect(error).toBeHidden();
+		await expect(page.getByText('1 guide', { exact: true })).toBeVisible();
+		await expect(catalog.getByText('1 total', { exact: true })).toBeVisible();
+
+		await search.fill('No matching guide for the count recovery fixture');
+		await expect(
+			catalog.getByText('No troubleshooting guides match the current filters.')
+		).toBeVisible();
+		await expect(page.getByText('0 guides', { exact: true })).toBeVisible();
+		await expect(catalog.getByText('0 total', { exact: true })).toBeVisible();
+	} finally {
+		await request.delete(`${guides}/${id}`);
+	}
+});
+
 test('returns to the last matching page after deleting its only guide', async ({
 	page,
 	request
