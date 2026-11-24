@@ -141,6 +141,29 @@ test('compose a script and save it as an example', async ({ page }) => {
 	).toBeVisible();
 });
 
+test('Composer rejects a Flow value that would add script segments', async ({ page }) => {
+	await page.goto(fnPath);
+	await page.getByRole('button', { name: 'Compose script' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+	await expect(dialog).toBeVisible();
+
+	await dialog.getByLabel(/^ANT ·/).fill('15');
+	await dialog.getByLabel(/^STANDARD ·/).fill('11AX');
+	await dialog.getByLabel(/^FREQ ·/).fill('6165');
+	await dialog.getByLabel(/^BW ·/).fill('20');
+	await dialog.getByLabel(/^DATA_RATE ·/).fill('7');
+	await dialog.getByLabel(/^TX_TARGET_POWER ·/).fill('15');
+	await dialog.getByLabel(/^POWER ·/).fill('5dB');
+	await expect(dialog.getByText(/\|10000\|NEXT\|FAIL$/)).toBeVisible({ timeout: 10_000 });
+
+	await dialog.getByLabel('Flow').fill('NEXT|EXTRA');
+	await expect(dialog.getByText("must not contain '|' or a line break")).toBeVisible({
+		timeout: 10_000
+	});
+	await expect(dialog.getByText('Fix the highlighted fields to preview the script.')).toBeVisible();
+	await expect(dialog.getByText(/^DLLWIFI_TEST\|TX_MULTI_VERIFICATION\|/)).toHaveCount(0);
+});
+
 test('save the latest script when Composer preview responses arrive out of order', async ({
 	page,
 	request

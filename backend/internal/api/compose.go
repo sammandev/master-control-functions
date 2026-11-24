@@ -156,9 +156,13 @@ func validateAndEmit(fn store.Function, params, criteria []composeField, req com
 	}
 	if strings.TrimSpace(req.Flow) == "" {
 		fields["flow"] = "flow segment is required (e.g. NEXT or QUIT)"
+	} else if breaksSegment(req.Flow) {
+		fields["flow"] = segmentDelimiterMessage
 	}
 	if strings.TrimSpace(req.OnFail) == "" {
 		fields["on_fail"] = "on-fail segment is required (e.g. FAIL)"
+	} else if breaksSegment(req.OnFail) {
+		fields["on_fail"] = segmentDelimiterMessage
 	}
 
 	segs.Parameters = emitAssignments(params, req.Parameters, "", fields)
@@ -175,6 +179,14 @@ func validateAndEmit(fn store.Function, params, criteria []composeField, req com
 	}
 	return segs.Prefix + "|" + segs.Function + "|" + segs.Parameters + "|" +
 		segs.Criteria + "|" + segs.TimeoutMs + "|" + segs.Flow + "|" + segs.OnFail, nil
+}
+
+const segmentDelimiterMessage = "must not contain '|' or a line break"
+
+// breaksSegment reports whether a free-text segment value would split the
+// emitted line: '|' adds a segment and a line break splits the script.
+func breaksSegment(v string) bool {
+	return strings.ContainsAny(strings.TrimSpace(v), "|\r\n")
 }
 
 // emitAssignments renders "name=value" segments in field order. Empty

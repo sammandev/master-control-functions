@@ -208,6 +208,46 @@ func TestSequenceStepOrphanAfterFunctionDelete(t *testing.T) {
 	}
 }
 
+// TestSequenceEmitRejectsSegmentDelimiters: a stored step whose Flow or
+// On-fail holds '|' is flagged instead of emitting an extra segment; clean
+// steps still emit.
+func TestSequenceEmitRejectsSegmentDelimiters(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedSequenceFunctions(t, app)
+
+	body := `{"name":"pipes","steps":[` +
+		seqStepA + `,` +
+		strings.Replace(seqStepA, `"flow":"NEXT"`, `"flow":"NEXT|EXTRA"`, 1) + `,` +
+		strings.Replace(seqStepB, `"on_fail":"FAIL"`, `"on_fail":"FAIL|EXTRA"`, 1) + `]}`
+	if resp, body := postJSON(t, app, "/api/sequences", body); resp.StatusCode != 201 {
+		t.Fatalf("create: %d (body: %s)", resp.StatusCode, body)
+	}
+
+	resp, body := doRequest(t, app, "POST", "/api/sequences/1/emit")
+	if resp.StatusCode != 200 {
+		t.Fatalf("emit: %d (body: %s)", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `"text":"DLLTELNET|FN_A|FREQ=10|NULL|1000|NEXT|FAIL"`) {
+		t.Fatalf("joined emission wrong: %s", body)
+	}
+	var out struct {
+		Steps []struct {
+			Script string            `json:"script"`
+			Errors map[string]string `json:"errors"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal([]byte(body), &out); err != nil || len(out.Steps) != 3 {
+		t.Fatalf("decode steps (%v): %s", err, body)
+	}
+	const msg = "must not contain '|' or a line break"
+	for i, field := range map[int]string{1: "flow", 2: "on_fail"} {
+		step := out.Steps[i]
+		if step.Script != "" || len(step.Errors) != 1 || step.Errors[field] != msg {
+			t.Fatalf("step %d: want only %s=%q, got script=%q errors=%v", i+1, field, msg, step.Script, step.Errors)
+		}
+	}
+}
+
 // TestResetLeavesSequencesUntouched: the workbook reset truncates the six
 // entity tables only (ADR-0005); stored sequences survive.
 func TestResetLeavesSequencesUntouched(t *testing.T) {
