@@ -241,7 +241,7 @@ func TestTroubleshootingGuideExportCellLimit(t *testing.T) {
 		var problem struct{ Error string }
 		if err := json.Unmarshal([]byte(body), &problem); err != nil ||
 			res.StatusCode != http.StatusUnprocessableEntity || res.Header.Get("Content-Disposition") != "" ||
-			!strings.Contains(problem.Error, title) || !strings.Contains(problem.Error, field) ||
+			!strings.Contains(problem.Error, fmt.Sprintf("%q (ID %d)", title, id)) || !strings.Contains(problem.Error, field) ||
 			!strings.Contains(problem.Error, "Export as JSON instead.") {
 			t.Errorf("%s limit response for %s: %d %s", format, field, res.StatusCode, body)
 		}

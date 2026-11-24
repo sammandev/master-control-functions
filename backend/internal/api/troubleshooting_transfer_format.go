@@ -245,14 +245,15 @@ func writeTroubleshootingTransfer(doc troubleshootingTransfer, format string, in
 				field = transferGuideFieldLabels[col]
 			}
 			title := []rune(guide.Title)
+			name := guide.Title
 			if len(title) > 80 {
-				name := fmt.Sprintf("%q", string(title[:80])+"…")
-				if guide.ID != nil {
-					name += fmt.Sprintf(" (ID %d)", *guide.ID)
-				}
-				return &troubleshootingXLSXCellLimitError{guide: name, field: field}
+				name = string(title[:80]) + "…"
 			}
-			return &troubleshootingXLSXCellLimitError{guide: fmt.Sprintf("%q", guide.Title), field: field}
+			name = fmt.Sprintf("%q", name)
+			if guide.ID != nil {
+				name += fmt.Sprintf(" (ID %d)", *guide.ID)
+			}
+			return &troubleshootingXLSXCellLimitError{guide: name, field: field}
 		}
 		cell, err := excelize.CoordinatesToCellName(1, row)
 		if err != nil {
