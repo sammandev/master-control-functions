@@ -267,6 +267,126 @@ func (q *Queries) ListCriteriaDefinitions(ctx context.Context, arg ListCriteriaD
 	return items, nil
 }
 
+const listCriteriaDefinitionsPage = `-- name: ListCriteriaDefinitionsPage :many
+SELECT id, name, description, type, unit, default_value, allowed_values, cardinality, value_pattern, required, device_name, created_at, updated_at FROM criteria_definitions
+WHERE ($1::text IS NULL
+       OR lower(name) LIKE lower($1::text)
+       OR lower(description) LIKE lower($1::text))
+  AND ($2::text IS NULL OR device_name = $2::text)
+ORDER BY
+    (CASE WHEN NOT $3::boolean THEN CASE $4::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C",
+    (CASE WHEN $3::boolean THEN CASE $4::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C" DESC,
+    (CASE WHEN $4::text IN ('type', 'updated_at') THEN name END) COLLATE "C",
+    id
+LIMIT $6::bigint OFFSET $5::bigint
+`
+
+type ListCriteriaDefinitionsPageParams struct {
+	Search     sql.NullString
+	DeviceName sql.NullString
+	SortDesc   bool
+	SortCol    string
+	PageOffset int64
+	PageSize   int64
+}
+
+// Match Go's bytewise order; secondary name and stable ID stay ascending.
+func (q *Queries) ListCriteriaDefinitionsPage(ctx context.Context, arg ListCriteriaDefinitionsPageParams) ([]CriteriaDefinition, error) {
+	rows, err := q.db.QueryContext(ctx, listCriteriaDefinitionsPage,
+		arg.Search,
+		arg.DeviceName,
+		arg.SortDesc,
+		arg.SortCol,
+		arg.PageOffset,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CriteriaDefinition
+	for rows.Next() {
+		var i CriteriaDefinition
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Type,
+			&i.Unit,
+			&i.DefaultValue,
+			&i.AllowedValues,
+			&i.Cardinality,
+			&i.ValuePattern,
+			&i.Required,
+			&i.DeviceName,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const locateCriteriaDefinition = `-- name: LocateCriteriaDefinition :one
+WITH target AS (
+    SELECT t.id, t.name,
+           (CASE $1::text WHEN 'name' THEN t.name WHEN 'type' THEN t.type WHEN 'updated_at' THEN t.updated_at END) COLLATE "C" AS sort_key
+    FROM criteria_definitions AS t
+    WHERE t.id = $5
+    AND ($2::text IS NULL
+         OR lower(t.name) LIKE lower($2::text)
+         OR lower(t.description) LIKE lower($2::text))
+    AND ($3::text IS NULL OR t.device_name = $3::text)
+)
+SELECT (1 + (
+    SELECT count(*)
+    FROM criteria_definitions AS d
+    CROSS JOIN LATERAL (
+        SELECT (CASE $1::text WHEN 'name' THEN d.name WHEN 'type' THEN d.type WHEN 'updated_at' THEN d.updated_at END) COLLATE "C" AS sort_key
+    ) AS candidate
+    WHERE ($2::text IS NULL
+         OR lower(d.name) LIKE lower($2::text)
+         OR lower(d.description) LIKE lower($2::text))
+    AND ($3::text IS NULL OR d.device_name = $3::text)
+    AND CASE
+        WHEN target.sort_key IS NULL THEN d.id < target.id
+        WHEN candidate.sort_key = target.sort_key THEN (d.name COLLATE "C", d.id) < (target.name COLLATE "C", target.id)
+        WHEN $4::boolean THEN candidate.sort_key > target.sort_key
+        ELSE candidate.sort_key < target.sort_key
+    END
+))::bigint AS position
+FROM target
+`
+
+type LocateCriteriaDefinitionParams struct {
+	SortCol      string
+	Search       sql.NullString
+	DeviceName   sql.NullString
+	SortDesc     bool
+	DefinitionID int64
+}
+
+func (q *Queries) LocateCriteriaDefinition(ctx context.Context, arg LocateCriteriaDefinitionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, locateCriteriaDefinition,
+		arg.SortCol,
+		arg.Search,
+		arg.DeviceName,
+		arg.SortDesc,
+		arg.DefinitionID,
+	)
+	var position int64
+	err := row.Scan(&position)
+	return position, err
+}
+
 const updateCriteriaDefinition = `-- name: UpdateCriteriaDefinition :one
 UPDATE criteria_definitions SET
     name = $1,
