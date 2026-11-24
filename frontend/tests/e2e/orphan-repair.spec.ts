@@ -44,10 +44,12 @@ for (const { kind, label, device } of [
 			await expect.soft(deviceField).toHaveCSS('opacity', '0.5');
 			const nameField = dialog.getByRole('textbox', { name: 'Name', exact: true });
 			await expect(nameField).toHaveValue(name);
-			await nameField.click({ force: true });
+			await expect.soft(nameField).toHaveCSS('opacity', '0.5');
+			await nameField.click();
 			await page.keyboard.press('End');
 			await page.keyboard.press('X');
-			expect.soft(await nameField.isDisabled(), 'definition name is locked').toBe(true);
+			await expect.soft(nameField, 'definition name is locked').not.toBeEditable();
+			await expect.soft(nameField).toBeFocused();
 
 			const [response] = await Promise.all([
 				page.waitForResponse(
