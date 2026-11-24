@@ -296,7 +296,15 @@
 	<div>
 		<div class="directory-title">
 			<h1>Troubleshooting Guides</h1>
-			<span>{total} {total === 1 ? 'guide' : 'guides'}</span>
+			<span>
+				{#if loadingList}
+					Loading guides…
+				{:else if listError}
+					Count unavailable
+				{:else}
+					{total} {total === 1 ? 'guide' : 'guides'}
+				{/if}
+			</span>
 		</div>
 		<p class="text-muted-foreground mt-1 text-sm">
 			Step-by-step resolution guides for troubleshooting. Multiple solutions can share the same
@@ -406,7 +414,9 @@
 		<div class="rail-controls">
 			<div class="rail-heading">
 				<h2>Troubleshooting Catalog</h2>
-				<span>{total} total</span>
+				{#if !loadingList && !listError}
+					<span>{total} total</span>
+				{/if}
 			</div>
 			<div class="catalog-controls">
 				<div class="guide-search">
