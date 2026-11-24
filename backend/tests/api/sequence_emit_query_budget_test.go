@@ -45,11 +45,22 @@ func TestSequenceEmitQueryBudget(t *testing.T) {
 
 	const wantText = `"text":"DLLTELNET|FN_A|FREQ=10|NULL|1000|NEXT|FAIL\nDLLGPIB|FN_A|FREQ=10|NULL|1000|NEXT|FAIL\nDLLTELNET|FN_A|FREQ=20|NULL|1000|NEXT|FAIL\nDLLGPIB|FN_A|FREQ=10|NULL|1000|NEXT|FAIL"`
 	for request := 1; request <= 2; request++ {
+		expectedText := wantText
+		if request == 2 {
+			if resp, body := doJSON(t, app, "PUT", "/api/parameter-definitions/1",
+				`{"name":"FREQ","type":"int","allowed_values":"{20,30}","cardinality":"SINGLE"}`); resp.StatusCode != 200 {
+				t.Fatalf("update FREQ definition: %d (body: %s)", resp.StatusCode, body)
+			}
+			expectedText = `"text":"DLLTELNET|FN_A|FREQ=20|NULL|1000|NEXT|FAIL"`
+		}
 		before := counter.calls.Load()
 		resp, body := doRequest(t, emitApp, "POST", "/api/sequences/1/emit")
 		calls := counter.calls.Load() - before
-		if resp.StatusCode != 200 || !strings.Contains(body, wantText) {
+		if resp.StatusCode != 200 || !strings.Contains(body, expectedText) {
 			t.Fatalf("emit %d: %d (body: %s)", request, resp.StatusCode, body)
+		}
+		if request == 2 && strings.Count(body, `"FREQ":"must be one of: {20,30}"`) != 3 {
+			t.Fatalf("emit %d: want validation errors on all three steps with FREQ=10 (body: %s)", request, body)
 		}
 		const wantCalls = 1 + 2*3 // step list plus three reads per distinct Function
 		if calls != wantCalls {
