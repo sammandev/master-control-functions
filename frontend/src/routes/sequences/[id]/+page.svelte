@@ -11,6 +11,7 @@
 		deleteSequence,
 		emitSequence,
 		type SequenceDetail,
+		type SequenceStepInput,
 		type EmitResult
 	} from '#lib/sequences.ts';
 	import { parseAssignments } from '#lib/sequence-assignments.ts';
@@ -60,6 +61,7 @@
 	let editDevice = $state('');
 	let editNote = $state('');
 	let stepError = $state('');
+	let stepWritePending = $state(false);
 	$effect(() => {
 		const id = seqId;
 		load(id);
@@ -99,14 +101,23 @@
 	}
 
 	// Returns the failure message ('' on success) so each form shows its own error.
+	// draftIndex maps the open step edit to its new index (null closes it); it runs
+	// before seq changes so the form never renders under another step.
 	async function save(
 		update: Promise<SequenceDetail>,
-		{ reconcileDraft = false } = {}
+		{
+			reconcileDraft = false,
+			draftIndex
+		}: { reconcileDraft?: boolean; draftIndex?: (index: number) => number | null } = {}
 	): Promise<string> {
 		try {
 			const updated = await update;
 			actionError = '';
-			if (reconcileDraft && editingIndex !== null) {
+			if (draftIndex && editingIndex !== null) {
+				const index = draftIndex(editingIndex);
+				if (index === null) cancelStep();
+				else editingIndex = index;
+			} else if (reconcileDraft && editingIndex !== null) {
 				const stepId = seq?.steps[editingIndex]?.id;
 				const index = updated.steps.findIndex((step) => step.id === stepId);
 				if (index === -1) {
@@ -122,6 +133,12 @@
 		} catch (e) {
 			return formatApiError(e);
 		}
+	}
+
+	// Step writes replace step IDs, so only one may be in flight at a time.
+	function writeSteps(id: number, steps: SequenceStepInput[]): Promise<SequenceDetail> {
+		stepWritePending = true;
+		return updateSequenceSteps(id, steps).finally(() => (stepWritePending = false));
 	}
 
 	async function saveMeta() {
@@ -160,7 +177,7 @@
 	}
 
 	async function saveStep() {
-		if (!seq || editingIndex === null) return;
+		if (!seq || editingIndex === null || stepWritePending) return;
 		const parameters = parseAssignments(editParams);
 		if ('error' in parameters) {
 			stepError = parameters.error;
@@ -184,7 +201,7 @@
 		target.on_fail = editOnFail;
 		target.device_name = editDevice;
 		target.note = editNote;
-		const error = await save(updateSequenceSteps(seq.id, steps));
+		const error = await save(writeSteps(seq.id, steps));
 		if (error) {
 			stepError = error;
 			return;
@@ -200,31 +217,28 @@
 	}
 
 	async function move(i: number, dir: -1 | 1) {
-		if (!seq) return;
+		if (!seq || stepWritePending) return;
 		const j = i + dir;
 		if (j < 0 || j >= seq.steps.length) return;
 		const steps = [...seq.steps];
 		const [step] = steps.splice(i, 1);
 		steps.splice(j, 0, step);
-		const error = await save(updateSequenceSteps(seq.id, steps));
-		if (error) {
-			actionError = error;
-			return;
-		}
-		if (editingIndex === i) editingIndex = j;
-		else if (editingIndex === j) editingIndex = i;
+		const error = await save(writeSteps(seq.id, steps), {
+			draftIndex: (index) => (index === i ? j : index === j ? i : index)
+		});
+		if (error) actionError = error;
 	}
 
 	async function removeStep(i: number) {
-		if (!seq || seq.steps.length <= 1) return;
+		if (!seq || seq.steps.length <= 1 || stepWritePending) return;
 		const steps = seq.steps.filter((_, index) => index !== i);
-		const error = await save(updateSequenceSteps(seq.id, steps));
+		const error = await save(writeSteps(seq.id, steps), {
+			draftIndex: (index) => (index === i ? null : index > i ? index - 1 : index)
+		});
 		if (error) {
 			actionError = error;
 			return;
 		}
-		if (editingIndex === i) cancelStep();
-		else if (editingIndex !== null && editingIndex > i) editingIndex -= 1;
 		toast.success('Step removed');
 	}
 
@@ -371,7 +385,7 @@
 							size="icon"
 							variant="outline"
 							aria-label="Move step up"
-							disabled={i === 0}
+							disabled={i === 0 || stepWritePending}
 							onclick={() => move(i, -1)}
 						>
 							↑
@@ -381,7 +395,7 @@
 							size="icon"
 							variant="outline"
 							aria-label="Move step down"
-							disabled={i === seq.steps.length - 1}
+							disabled={i === seq.steps.length - 1 || stepWritePending}
 							onclick={() => move(i, 1)}>↓</Button
 						>
 
@@ -390,7 +404,7 @@
 						<Button
 							type="button"
 							variant="destructive"
-							disabled={seq.steps.length <= 1}
+							disabled={seq.steps.length <= 1 || stepWritePending}
 							onclick={() => removeStep(i)}
 						>
 							Remove
@@ -462,7 +476,7 @@
 								</label>
 							</div>
 							<div class="step-form-actions">
-								<Button type="submit">Save step</Button>
+								<Button type="submit" disabled={stepWritePending}>Save step</Button>
 								<Button type="button" variant="outline" onclick={cancelStep}>Cancel</Button>
 							</div>
 						</form>
