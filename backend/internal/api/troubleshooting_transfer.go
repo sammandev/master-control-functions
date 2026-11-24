@@ -341,12 +341,17 @@ func loadTroubleshootingExport(c fiber.Ctx, q *store.Queries, d *sql.DB, in trou
 	}
 	defer tx.Rollback()
 	q = q.WithTx(tx)
-	ids := in.IDs
-	if in.Scope == "matching" || in.Scope == "all" {
-		params := store.ListTroubleshootingGuidesParams{Limit: math.MaxInt64}
-		if in.Scope == "matching" {
-			params.Search, params.Category, params.DeviceName, params.ErrorCode = troubleshootingFilters(c)
+	if in.Scope == "all" {
+		doc.Guides, err = loadAllTroubleshootingExportGuides(c.Context(), q)
+		if err != nil {
+			return doc, err
 		}
+		return doc, tx.Commit()
+	}
+	ids := in.IDs
+	if in.Scope == "matching" {
+		params := store.ListTroubleshootingGuidesParams{Limit: math.MaxInt64}
+		params.Search, params.Category, params.DeviceName, params.ErrorCode = troubleshootingFilters(c)
 		rows, err := q.ListTroubleshootingGuides(c.Context(), params)
 		if err != nil {
 			return doc, err
@@ -378,6 +383,41 @@ func loadTroubleshootingExport(c fiber.Ctx, q *store.Queries, d *sql.DB, in trou
 		doc.Guides = append(doc.Guides, troubleshootingTransferGuide{ID: &g.ID, troubleshootingBody: b})
 	}
 	return doc, tx.Commit()
+}
+
+func loadAllTroubleshootingExportGuides(ctx context.Context, q *store.Queries) ([]troubleshootingTransferGuide, error) {
+	rows, err := q.ListTroubleshootingExportGuides(ctx)
+	if err != nil {
+		return nil, err
+	}
+	guides := make([]troubleshootingTransferGuide, len(rows))
+	if len(rows) == 0 {
+		return guides, nil
+	}
+	indexByID := make(map[int64]int, len(rows))
+	for i, row := range rows {
+		guides[i] = troubleshootingTransferGuide{
+			ID: &row.ID,
+			troubleshootingBody: troubleshootingBody{
+				Title: row.Title, Category: row.Category, Severity: row.Severity, DeviceName: row.DeviceName,
+				FunctionName: row.FunctionName, ErrorCode: row.ErrorCode, Symptom: row.Symptom, RootCause: row.RootCause,
+				Steps: []troubleshootingStepBody{},
+			},
+		}
+		indexByID[row.ID] = i
+	}
+	steps, err := q.ListTroubleshootingExportSteps(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, step := range steps {
+		if i, ok := indexByID[step.GuideID]; ok {
+			guides[i].Steps = append(guides[i].Steps, troubleshootingStepBody{
+				Title: step.Title, Instruction: step.Instruction, ScriptSnippet: step.ScriptSnippet, Verification: step.Verification,
+			})
+		}
+	}
+	return guides, nil
 }
 
 func zipTroubleshootingTransfer(doc troubleshootingTransfer) ([]byte, error) {

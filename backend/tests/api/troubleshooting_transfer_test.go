@@ -195,3 +195,39 @@ func TestTroubleshootingGuideTransferDownloads(t *testing.T) {
 		t.Fatalf("filtered export: %d %s", status, body)
 	}
 }
+
+func TestTroubleshootingGuideAllExportOrder(t *testing.T) {
+	app, db := newLinksTestApp(t)
+	// Exercise registry order independently of either key or title order.
+	for _, stmt := range []string{
+		`DELETE FROM troubleshooting_guides`,
+		`UPDATE troubleshooting_severities SET sort_order = 10 WHERE key = 'critical'`,
+		`UPDATE troubleshooting_categories SET sort_order = 20 WHERE key = 'connection'`,
+		`INSERT INTO troubleshooting_guides (id, title, category, severity, symptom, created_at, updated_at) VALUES
+			(101, 'Zebra', 'execution', 'high', 'Symptom', '', ''),
+			(102, 'Alpha', 'connection', 'high', 'Symptom', '', ''),
+			(103, 'Aardvark', 'execution', 'critical', 'Symptom', '', ''),
+			(104, 'apple', 'execution', 'high', 'Symptom', '', ''),
+			(105, 'APPLE', 'execution', 'high', 'Symptom', '', '')`,
+		`INSERT INTO troubleshooting_steps (id, guide_id, position, title, instruction, script_snippet, verification) VALUES
+			(101, 104, 2, 'Third', 'Instruction 3', '', 'Verified'),
+			(103, 104, 1, 'Second', 'Instruction 2', '', ''),
+			(102, 104, 1, 'First', 'Instruction 1', E'  Run\n\tCheck', ''),
+			(104, 102, 1, 'Other guide', 'Instruction 4', '', '')`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, all := postJSON(t, app, "/api/troubleshooting/export?search=no-match", `{"format":"json","scope":"all"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("all export: %d: %s", res.StatusCode, all)
+	}
+	res, selected := postJSON(t, app, "/api/troubleshooting/export", `{"format":"json","scope":"selected","ids":[104,105,101,102,103]}`)
+	if res.StatusCode != http.StatusOK || all != selected {
+		t.Fatalf("all export differs from ordered selection (%d):\nall: %s\nselected: %s", res.StatusCode, all, selected)
+	}
+	if !strings.Contains(all, `"steps": []`) {
+		t.Fatalf("expected guides with no steps to export an empty array: %s", all)
+	}
+}
