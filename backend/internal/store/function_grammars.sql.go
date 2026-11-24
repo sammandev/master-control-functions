@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 )
 
 const countFunctionsSharingNaturalName = `-- name: CountFunctionsSharingNaturalName :one
@@ -307,6 +308,184 @@ func (q *Queries) ListAllScriptKeyAudits(ctx context.Context) ([]ScriptKeyAudit,
 	return items, nil
 }
 
+const listCriteriaDefinitionsByNameForReadiness = `-- name: ListCriteriaDefinitionsByNameForReadiness :many
+SELECT name, device_name, type, cardinality, value_pattern, allowed_values
+FROM criteria_definitions
+WHERE name IN (SELECT jsonb_array_elements_text($1::text::jsonb))
+ORDER BY id
+`
+
+type ListCriteriaDefinitionsByNameForReadinessRow struct {
+	Name          string
+	DeviceName    string
+	Type          string
+	Cardinality   string
+	ValuePattern  string
+	AllowedValues string
+}
+
+func (q *Queries) ListCriteriaDefinitionsByNameForReadiness(ctx context.Context, namesJson string) ([]ListCriteriaDefinitionsByNameForReadinessRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCriteriaDefinitionsByNameForReadiness, namesJson)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCriteriaDefinitionsByNameForReadinessRow
+	for rows.Next() {
+		var i ListCriteriaDefinitionsByNameForReadinessRow
+		if err := rows.Scan(
+			&i.Name,
+			&i.DeviceName,
+			&i.Type,
+			&i.Cardinality,
+			&i.ValuePattern,
+			&i.AllowedValues,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFunctionCriteriaLinksForReadiness = `-- name: ListFunctionCriteriaLinksForReadiness :many
+SELECT name, device_name, position, required FROM criteria_links
+WHERE function_source = $1 AND function_name = $2
+ORDER BY id
+`
+
+type ListFunctionCriteriaLinksForReadinessParams struct {
+	FunctionSource string
+	FunctionName   string
+}
+
+type ListFunctionCriteriaLinksForReadinessRow struct {
+	Name       string
+	DeviceName string
+	Position   sql.NullInt64
+	Required   int64
+}
+
+func (q *Queries) ListFunctionCriteriaLinksForReadiness(ctx context.Context, arg ListFunctionCriteriaLinksForReadinessParams) ([]ListFunctionCriteriaLinksForReadinessRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFunctionCriteriaLinksForReadiness, arg.FunctionSource, arg.FunctionName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFunctionCriteriaLinksForReadinessRow
+	for rows.Next() {
+		var i ListFunctionCriteriaLinksForReadinessRow
+		if err := rows.Scan(
+			&i.Name,
+			&i.DeviceName,
+			&i.Position,
+			&i.Required,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFunctionExamplesForReadiness = `-- name: ListFunctionExamplesForReadiness :many
+SELECT id, device_name, script FROM examples
+WHERE function_source = $1 AND function_name = $2
+ORDER BY id
+`
+
+type ListFunctionExamplesForReadinessParams struct {
+	FunctionSource string
+	FunctionName   string
+}
+
+type ListFunctionExamplesForReadinessRow struct {
+	ID         int64
+	DeviceName string
+	Script     string
+}
+
+func (q *Queries) ListFunctionExamplesForReadiness(ctx context.Context, arg ListFunctionExamplesForReadinessParams) ([]ListFunctionExamplesForReadinessRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFunctionExamplesForReadiness, arg.FunctionSource, arg.FunctionName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFunctionExamplesForReadinessRow
+	for rows.Next() {
+		var i ListFunctionExamplesForReadinessRow
+		if err := rows.Scan(&i.ID, &i.DeviceName, &i.Script); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFunctionParameterLinksForReadiness = `-- name: ListFunctionParameterLinksForReadiness :many
+SELECT name, device_name, position, required FROM parameter_links
+WHERE function_source = $1 AND function_name = $2
+ORDER BY id
+`
+
+type ListFunctionParameterLinksForReadinessParams struct {
+	FunctionSource string
+	FunctionName   string
+}
+
+type ListFunctionParameterLinksForReadinessRow struct {
+	Name       string
+	DeviceName string
+	Position   sql.NullInt64
+	Required   int64
+}
+
+func (q *Queries) ListFunctionParameterLinksForReadiness(ctx context.Context, arg ListFunctionParameterLinksForReadinessParams) ([]ListFunctionParameterLinksForReadinessRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFunctionParameterLinksForReadiness, arg.FunctionSource, arg.FunctionName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFunctionParameterLinksForReadinessRow
+	for rows.Next() {
+		var i ListFunctionParameterLinksForReadinessRow
+		if err := rows.Scan(
+			&i.Name,
+			&i.DeviceName,
+			&i.Position,
+			&i.Required,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFunctionsByNaturalName = `-- name: ListFunctionsByNaturalName :many
 SELECT id, source, interface, name, description, convention, category, execution_role, execution_phase, created_at, updated_at FROM functions WHERE source = $1 AND name = $2 ORDER BY interface
 `
@@ -337,6 +516,52 @@ func (q *Queries) ListFunctionsByNaturalName(ctx context.Context, arg ListFuncti
 			&i.ExecutionPhase,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParameterDefinitionsByNameForReadiness = `-- name: ListParameterDefinitionsByNameForReadiness :many
+SELECT name, device_name, type, cardinality, value_pattern, allowed_values
+FROM parameter_definitions
+WHERE name IN (SELECT jsonb_array_elements_text($1::text::jsonb))
+ORDER BY id
+`
+
+type ListParameterDefinitionsByNameForReadinessRow struct {
+	Name          string
+	DeviceName    string
+	Type          string
+	Cardinality   string
+	ValuePattern  string
+	AllowedValues string
+}
+
+func (q *Queries) ListParameterDefinitionsByNameForReadiness(ctx context.Context, namesJson string) ([]ListParameterDefinitionsByNameForReadinessRow, error) {
+	rows, err := q.db.QueryContext(ctx, listParameterDefinitionsByNameForReadiness, namesJson)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListParameterDefinitionsByNameForReadinessRow
+	for rows.Next() {
+		var i ListParameterDefinitionsByNameForReadinessRow
+		if err := rows.Scan(
+			&i.Name,
+			&i.DeviceName,
+			&i.Type,
+			&i.Cardinality,
+			&i.ValuePattern,
+			&i.AllowedValues,
 		); err != nil {
 			return nil, err
 		}
