@@ -31,7 +31,7 @@
 		type DeviceFunctionRow,
 		type DeviceDefinitionRow
 	} from '#lib/devices.ts';
-	import { deleteExample, listExamples, type ExampleRow } from '#lib/examples.ts';
+	import { deleteExample, listExampleMatches, listExamples, type ExampleRow } from '#lib/examples.ts';
 	import type { DefinitionKind, DefinitionRow } from '#lib/definitions.ts';
 	import Breadcrumb from '#lib/components/ui/breadcrumb.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
@@ -157,12 +157,9 @@
 	let deletingExample = $state(false);
 
 	// ---- sorting (ticket 09) ------------------------------------------------
-	// The device list APIs paginate server-side without sort params, so
-	// sorting applies to the loaded page through the shared sortRows
-	// helper. Each tab has one sort state; the Scoped and Resolved-from-
-	// Global tables of a definition tab share it so both groups follow the
-	// same header clicks. '' keeps the API's default order until a header
-	// is clicked.
+	// Lists use sortRows; sorting Examples first loads all matches.
+	// The Scoped and Resolved-from-Global tables of a definition tab share
+	// sort state. '' keeps the API's default order.
 	const FN_SORT_KEYS: Record<string, (row: DeviceFunctionRow) => SortValue> = {
 		name: (r) => r.name,
 		source: (r) => r.source,
@@ -194,6 +191,7 @@
 	let critSortDir = $state<SortDir>('asc');
 	let exSortKey = $state('');
 	let exSortDir = $state<SortDir>('asc');
+	const exSorting = $derived(exSortKey !== '');
 
 	function applyParamSort(col: string) {
 		({ key: paramSortKey, dir: paramSortDir } = nextSort(paramSortKey, paramSortDir, col));
@@ -204,7 +202,11 @@
 	}
 
 	function applyExSort(col: string) {
-		({ key: exSortKey, dir: exSortDir } = nextSort(exSortKey, exSortDir, col));
+		const { key, dir } = nextSort(exSortKey, exSortDir, col);
+		if ((key !== '') !== exSorting) exampleItems = [];
+		exSortKey = key;
+		exSortDir = dir;
+		examplePage = 1;
 	}
 
 	const fnFiltered = $derived(
@@ -290,10 +292,13 @@
 	const selectedParameter = $derived(selectedDefinition(paramScoped, paramGlobal, paramTerm));
 	const selectedCriterion = $derived(selectedDefinition(critScoped, critGlobal, critTerm));
 
+	const sortedExamples = $derived(
+		exSorting ? sortRows(exampleItems, EX_SORT_KEYS[exSortKey]!, exSortDir) : exampleItems
+	);
 	const exampleView = $derived(
-		exSortKey === ''
-			? exampleItems
-			: sortRows(exampleItems, EX_SORT_KEYS[exSortKey]!, exSortDir)
+		exSorting
+			? sortedExamples.slice((examplePage - 1) * examplePageSize, examplePage * examplePageSize)
+			: exampleItems
 	);
 
 	// ---- definition shortcuts (ticket 05) -----------------------------------
@@ -468,7 +473,7 @@
 		critPage = 1;
 		examplePage = 1;
 	});
-	// Pagination and search invalidate the lazy tab caches.
+	// List controls invalidate the lazy tab caches.
 	$effect(() => {
 		void paramPage;
 		void paramPageSize;
@@ -482,8 +487,10 @@
 		critLoaded = false;
 	});
 	$effect(() => {
-		void examplePage;
-		void examplePageSize;
+		if (!exSorting) {
+			void examplePage;
+			void examplePageSize;
+		}
 		void exTerm;
 		exampleLoaded = false;
 	});
@@ -532,6 +539,9 @@
 
 	async function refreshFunctions(deletedId?: number) {
 		const scope = device;
+		exampleRevision++;
+		exampleItems = [];
+		exampleLoaded = false;
 		if (deletedId !== undefined) {
 			fnItems = fnItems.filter((row) => row.id !== deletedId);
 			if (Number(page.url.searchParams.get('function')) === deletedId) {
@@ -645,29 +655,32 @@
 		const scope = device;
 		const revision = deviceRevision;
 		const attempt = ++exampleRevision;
-		const requestedPage = examplePage;
-		const requestedSize = examplePageSize;
+		const sorted = exSorting;
+		const requestedPage = sorted ? undefined : examplePage;
+		const requestedSize = sorted ? undefined : examplePageSize;
 		const search = exTerm;
 		const current = () =>
 			revision === deviceRevision &&
 			attempt === exampleRevision &&
-			requestedPage === examplePage &&
-			requestedSize === examplePageSize &&
-			search === exTerm;
+			search === exTerm &&
+			sorted === exSorting &&
+			(sorted || (requestedPage === examplePage && requestedSize === examplePageSize));
 		exampleLoading = true;
 		exampleError = '';
 		try {
-			const res = await listExamples({
-				device: scope,
-				page: requestedPage,
-				page_size: requestedSize,
-				search
-			});
+			const res = sorted
+				? await listExampleMatches({ device: scope, search }, current)
+				: await listExamples({
+						device: scope,
+						page: requestedPage,
+						page_size: requestedSize,
+						search
+					});
 			if (!current()) return;
-			const last = Math.max(1, Math.ceil(res.total / requestedSize));
-			if (requestedPage > last) {
+			const last = Math.max(1, Math.ceil(res.total / examplePageSize));
+			if (examplePage > last) {
 				examplePage = last;
-				return;
+				if (!sorted) return;
 			}
 			exampleItems = res.items;
 			exampleTotal = res.total;

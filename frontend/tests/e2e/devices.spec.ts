@@ -517,6 +517,74 @@ test('devices: renaming a resolved Global definition keeps scoped details usable
 	await expect(page.getByRole('heading', { name: scoped, exact: true })).toBeVisible();
 });
 
+test('devices: examples sort before paginating', async ({ page, request }) => {
+	const device = 'E2E_EXAMPLES_SORT';
+	let editedExampleId: number | undefined;
+	for (const [name, count] of [
+		['READ_SENSOR10', 20],
+		['READ_SENSOR20', 80],
+		['READ_SENSOR2', 1]
+	] as const) {
+		const fn = await request.post('/api/functions', {
+			data: { source: 'DLL', interface: device, name }
+		});
+		expect(fn.status()).toBe(201);
+		for (let i = 0; i < count; i++) {
+			const example = await request.post('/api/examples', {
+				data: {
+					function_source: 'DLL',
+					function_name: name,
+					device_name: device,
+					script: `DLL${device}|${name}||${5000 + i}|NEXT|FAIL`,
+					meaning: `Sample ${name}`
+				}
+			});
+			expect(example.status()).toBe(201);
+			if (name === 'READ_SENSOR20' && i === 0) editedExampleId = (await example.json()).id;
+		}
+	}
+
+	await page.goto(`/devices/${device}?tab=examples`);
+	const panel = page.getByRole('tabpanel', { name: /^examples/i });
+	const functionHeader = panel.getByRole('button', { name: /^Function/ });
+	const rows = panel.locator('tbody tr');
+	const functions = rows.locator('td:first-child');
+	await expect(functions).toHaveText(Array<string>(20).fill('DLL READ_SENSOR10'));
+
+	await functionHeader.click();
+	await expect(functions).toHaveText([
+		'DLL READ_SENSOR2',
+		...Array<string>(19).fill('DLL READ_SENSOR10')
+	]);
+	await panel.getByRole('button', { name: 'Next page' }).click();
+	await expect(panel.getByText('Page 2 of 6')).toBeVisible();
+	await expect(functions).toHaveText([
+		'DLL READ_SENSOR10',
+		...Array<string>(19).fill('DLL READ_SENSOR20')
+	]);
+
+	const editedScript = `DLL${device}|READ_SENSOR20||9000|NEXT|FAIL`;
+	await page.getByRole('tab', { name: 'Functions', exact: true }).click();
+	await page.getByRole('button', { name: 'Select READ_SENSOR20', exact: true }).click();
+	await page
+		.getByRole('region', { name: 'Function examples', exact: true })
+		.getByRole('button', { name: `Edit example ${editedExampleId}`, exact: true })
+		.click();
+	const dialog = page.getByRole('dialog', { name: /^edit example$/i });
+	await dialog.getByRole('textbox', { name: 'Script', exact: true }).fill(editedScript);
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(dialog).toBeHidden();
+	await page.getByRole('tab', { name: 'Examples', exact: true }).click();
+	await expect(panel.getByText('Page 2 of 6')).toBeVisible();
+	await expect(panel.getByText(editedScript, { exact: true })).toBeVisible();
+
+	await functionHeader.click();
+	await expect(panel.getByText('Page 1 of 6')).toBeVisible();
+	await expect(functions.first()).toHaveText('DLL READ_SENSOR20');
+	await functionHeader.click();
+	await expect(functions.first()).toHaveText('DLL READ_SENSOR10');
+});
+
 test('devices: examples search finds a match on page five', async ({ page, request }) => {
 	const device = 'E2E_EXAMPLES_SEARCH';
 	const functionName = 'READ_SENSOR';
