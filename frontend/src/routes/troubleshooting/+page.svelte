@@ -150,6 +150,8 @@
 
 	async function refreshList(preferId?: number, preservePreferred = false) {
 		const request = listRequestGuard.begin();
+		const requestedPage = page;
+		const requestedPageSize = pageSize;
 		detailRequestGuard.begin();
 		loadingList = true;
 		loadingDetail = false;
@@ -160,10 +162,16 @@
 				category: category !== '_all' ? category : undefined,
 				device: device !== '_all' ? device : undefined,
 				error_code: errorCodeFilter || undefined,
-				page,
-				page_size: pageSize
+				page: requestedPage,
+				page_size: requestedPageSize
 			});
 			if (!listRequestGuard.isCurrent(request)) return;
+			const lastPage = Math.ceil(res.total / requestedPageSize);
+			if (lastPage > 0 && requestedPage > lastPage) {
+				page = lastPage;
+				await refreshList(preferId, preservePreferred);
+				return;
+			}
 			items = res.items;
 			total = res.total;
 
