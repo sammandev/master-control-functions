@@ -78,6 +78,15 @@ SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
 FROM troubleshooting_guides g
 JOIN troubleshooting_severities taxonomy_severity ON taxonomy_severity.key = g.severity
 JOIN troubleshooting_categories taxonomy_category ON taxonomy_category.key = g.category
+WHERE (sqlc.narg('search')::text IS NULL
+       OR lower(g.title) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.symptom) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.root_cause) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.error_code) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.function_name) LIKE lower(sqlc.narg('search')::text))
+  AND (sqlc.narg('category')::text IS NULL OR g.category = sqlc.narg('category')::text)
+  AND (sqlc.narg('device_name')::text IS NULL OR g.device_name = sqlc.narg('device_name')::text)
+  AND (sqlc.narg('error_code')::text IS NULL OR lower(g.error_code) = lower(sqlc.narg('error_code')::text))
 ORDER BY taxonomy_severity.sort_order,
          taxonomy_category.sort_order,
          lower(g.title),
@@ -119,6 +128,16 @@ WHERE guide_id = $1
 ORDER BY position, id;
 
 -- name: ListTroubleshootingExportSteps :many
-SELECT guide_id, title, instruction, script_snippet, verification
-FROM troubleshooting_steps
-ORDER BY guide_id, position, id;
+SELECT s.guide_id, s.title, s.instruction, s.script_snippet, s.verification
+FROM troubleshooting_steps s
+JOIN troubleshooting_guides g ON g.id = s.guide_id
+WHERE (sqlc.narg('search')::text IS NULL
+       OR lower(g.title) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.symptom) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.root_cause) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.error_code) LIKE lower(sqlc.narg('search')::text)
+       OR lower(g.function_name) LIKE lower(sqlc.narg('search')::text))
+  AND (sqlc.narg('category')::text IS NULL OR g.category = sqlc.narg('category')::text)
+  AND (sqlc.narg('device_name')::text IS NULL OR g.device_name = sqlc.narg('device_name')::text)
+  AND (sqlc.narg('error_code')::text IS NULL OR lower(g.error_code) = lower(sqlc.narg('error_code')::text))
+ORDER BY s.guide_id, s.position, s.id;

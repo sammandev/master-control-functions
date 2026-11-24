@@ -231,3 +231,41 @@ func TestTroubleshootingGuideAllExportOrder(t *testing.T) {
 		t.Fatalf("expected guides with no steps to export an empty array: %s", all)
 	}
 }
+
+func TestTroubleshootingGuideMatchingExportOrder(t *testing.T) {
+	app, db := newLinksTestApp(t)
+	for _, stmt := range []string{
+		`DELETE FROM troubleshooting_guides`,
+		`UPDATE troubleshooting_severities SET sort_order = 10 WHERE key = 'critical'`,
+		`INSERT INTO troubleshooting_guides (id, title, category, severity, error_code, symptom, created_at, updated_at) VALUES
+			(201, 'Zebra', 'execution', 'high', 'ERR:7', 'Symptom', '', ''),
+			(202, 'Alpha', 'connection', 'high', 'ERR:8', 'Symptom', '', ''),
+			(203, 'Aardvark', 'execution', 'critical', 'err:7', 'Symptom', '', ''),
+			(204, 'apple', 'execution', 'high', 'ERR:7', 'Symptom', '', ''),
+			(205, 'APPLE', 'execution', 'high', 'ERR:7', 'Symptom', '', '')`,
+		`INSERT INTO troubleshooting_steps (id, guide_id, position, title, instruction, script_snippet, verification) VALUES
+			(201, 204, 2, 'Third', 'Instruction 3', '', 'Verified'),
+			(203, 204, 1, 'Second', 'Instruction 2', '', ''),
+			(202, 204, 1, 'First', 'Instruction 1', E'  Run\n\tCheck', ''),
+			(204, 202, 1, 'Unmatched guide', 'Instruction 4', '', '')`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, matching := postJSON(t, app, "/api/troubleshooting/export?error_code=ERR:7&category=execution", `{"format":"json","scope":"matching"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("matching export: %d: %s", res.StatusCode, matching)
+	}
+	res, selected := postJSON(t, app, "/api/troubleshooting/export", `{"format":"json","scope":"selected","ids":[204,205,201,203]}`)
+	if res.StatusCode != http.StatusOK || matching != selected {
+		t.Fatalf("matching export differs from ordered selection (%d):\nmatching: %s\nselected: %s", res.StatusCode, matching, selected)
+	}
+	if strings.Contains(matching, "Unmatched guide") {
+		t.Fatalf("matching export included steps from a guide outside the filters: %s", matching)
+	}
+	res, body := postJSON(t, app, "/api/troubleshooting/export?search=no-match", `{"format":"json","scope":"matching"}`)
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("empty matching export: %d: %s", res.StatusCode, body)
+	}
+}
