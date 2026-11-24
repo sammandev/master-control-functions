@@ -44,6 +44,16 @@
 	});
 </script>
 
+<svelte:head>
+	{#await content}
+		<title>Functions | MasterControl Functions Database</title>
+	{:then fn}
+		<title>{fn.name} | Functions | MasterControl Functions Database</title>
+	{:catch}
+		<title>Functions | MasterControl Functions Database</title>
+	{/await}
+</svelte:head>
+
 {#await content}
 	<p class="muted" role="status">Loading function...</p>
 {:then fn}
