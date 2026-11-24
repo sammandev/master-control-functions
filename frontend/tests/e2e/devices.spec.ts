@@ -426,6 +426,61 @@ test('devices: renaming a resolved Global definition keeps scoped details usable
 	await expect(page.getByRole('heading', { name: scoped, exact: true })).toBeVisible();
 });
 
+test('devices: examples search finds a match on page five', async ({ page, request }) => {
+	const device = 'E2E_EXAMPLES_SEARCH';
+	const functionName = 'READ_SENSOR';
+	const matchMeaning = 'Read the backup sensor';
+	const evidence = process.env.DEVICE_SEARCH_SCREENSHOT_DIR;
+	const fn = await request.post('/api/functions', {
+		data: { source: 'DLL', interface: device, name: functionName }
+	});
+	expect(fn.status()).toBe(201);
+	for (let i = 1; i <= 81; i++) {
+		const example = await request.post('/api/examples', {
+			data: {
+				function_source: 'DLL',
+				function_name: functionName,
+				device_name: device,
+				script: `DLL${device}|${functionName}||${5000 + i}|NEXT|FAIL`,
+				meaning: i === 81 ? matchMeaning : `Read sensor sample ${i}`
+			}
+		});
+		expect(example.status(), `seed example ${i}`).toBe(201);
+	}
+
+	if (evidence) await page.setViewportSize({ width: 1280, height: 850 });
+	await page.goto(`/devices/${device}?tab=examples`);
+	const panel = page.getByRole('tabpanel', { name: /^examples/i });
+	const search = panel.getByRole('textbox', { name: 'Search device examples' });
+	const match = panel.getByRole('cell', { name: matchMeaning, exact: true });
+	const next = panel.getByRole('button', { name: 'Next page' });
+	const previous = panel.getByRole('button', { name: 'Previous page' });
+
+	for (let i = 2; i <= 5; i++) {
+		await next.click();
+		await expect(panel.getByText(`Page ${i} of 5`)).toBeVisible();
+	}
+	await expect(match).toBeVisible();
+	for (let i = 4; i >= 2; i--) {
+		await previous.click();
+		await expect(panel.getByText(`Page ${i} of 5`)).toBeVisible();
+	}
+	await expect(match).toBeHidden();
+	await search.fill('backup sensor');
+
+	await expect.soft(match).toBeVisible();
+	await expect.soft(panel.getByText('Page 1 of 1')).toBeVisible();
+	if (evidence) {
+		await page.evaluate(() => window.scrollTo(0, 0));
+		await page.screenshot({ path: join(evidence, 'examples.png') });
+	}
+
+	await search.clear();
+	await expect(panel.getByText('Page 1 of 5')).toBeVisible();
+	await expect(panel.getByRole('cell', { name: 'Read sensor sample 1', exact: true })).toBeVisible();
+	await expect(match).toBeHidden();
+});
+
 for (const [tab, kind, noun] of [
 	['parameters', 'parameter-definitions', 'Parameter'],
 	['criteria', 'criteria-definitions', 'Criteria']

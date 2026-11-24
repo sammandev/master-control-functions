@@ -19,6 +19,7 @@ WHERE ($1::text IS NULL OR e.function_source = $1::text)
   AND ($4::text IS NULL
      OR lower(e.function_source) LIKE lower($4::text)
      OR lower(e.function_name) LIKE lower($4::text)
+     OR lower(e.function_source || ' ' || e.function_name) LIKE lower($4::text)
      OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower($4::text)
        OR lower(e.script) LIKE lower($4::text)
        OR lower(e.meaning) LIKE lower($4::text))
@@ -198,6 +199,7 @@ WITH matching_examples AS MATERIALIZED (
       AND ($4::text IS NULL
          OR lower(e.function_source) LIKE lower($4::text)
          OR lower(e.function_name) LIKE lower($4::text)
+         OR lower(e.function_source || ' ' || e.function_name) LIKE lower($4::text)
          OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower($4::text)
          OR lower(e.script) LIKE lower($4::text)
          OR lower(e.meaning) LIKE lower($4::text))

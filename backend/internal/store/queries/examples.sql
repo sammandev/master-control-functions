@@ -14,6 +14,7 @@ WITH matching_examples AS MATERIALIZED (
       AND (sqlc.narg('search')::text IS NULL
          OR lower(e.function_source) LIKE lower(sqlc.narg('search')::text)
          OR lower(e.function_name) LIKE lower(sqlc.narg('search')::text)
+         OR lower(e.function_source || ' ' || e.function_name) LIKE lower(sqlc.narg('search')::text)
          OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower(sqlc.narg('search')::text)
          OR lower(e.script) LIKE lower(sqlc.narg('search')::text)
          OR lower(e.meaning) LIKE lower(sqlc.narg('search')::text))
@@ -60,6 +61,7 @@ WHERE (sqlc.narg('function_source')::text IS NULL OR e.function_source = sqlc.na
   AND (sqlc.narg('search')::text IS NULL
      OR lower(e.function_source) LIKE lower(sqlc.narg('search')::text)
      OR lower(e.function_name) LIKE lower(sqlc.narg('search')::text)
+     OR lower(e.function_source || ' ' || e.function_name) LIKE lower(sqlc.narg('search')::text)
      OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower(sqlc.narg('search')::text)
        OR lower(e.script) LIKE lower(sqlc.narg('search')::text)
        OR lower(e.meaning) LIKE lower(sqlc.narg('search')::text));
