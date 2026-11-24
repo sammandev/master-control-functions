@@ -208,6 +208,38 @@ func TestSequenceStepOrphanAfterFunctionDelete(t *testing.T) {
 	}
 }
 
+// TestSequenceEmitRejectsSegmentDelimiters: a stored step whose Flow or
+// On-fail holds '|' is flagged instead of emitting an extra segment; clean
+// steps still emit.
+func TestSequenceEmitRejectsSegmentDelimiters(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedSequenceFunctions(t, app)
+
+	body := `{"name":"pipes","steps":[` +
+		seqStepA + `,` +
+		strings.Replace(seqStepA, `"flow":"NEXT"`, `"flow":"NEXT|EXTRA"`, 1) + `,` +
+		strings.Replace(seqStepB, `"on_fail":"FAIL"`, `"on_fail":"FAIL|EXTRA"`, 1) + `]}`
+	if resp, body := postJSON(t, app, "/api/sequences", body); resp.StatusCode != 201 {
+		t.Fatalf("create: %d (body: %s)", resp.StatusCode, body)
+	}
+
+	resp, body := doRequest(t, app, "POST", "/api/sequences/1/emit")
+	if resp.StatusCode != 200 {
+		t.Fatalf("emit: %d (body: %s)", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `"text":"DLLTELNET|FN_A|FREQ=10|NULL|1000|NEXT|FAIL"`) {
+		t.Fatalf("joined emission wrong: %s", body)
+	}
+	for _, want := range []string{
+		`"flow":"must not contain '|' or a line break"`,
+		`"on_fail":"must not contain '|' or a line break"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("step not flagged with %s: %s", want, body)
+		}
+	}
+}
+
 // TestResetLeavesSequencesUntouched: the workbook reset truncates the six
 // entity tables only (ADR-0005); stored sequences survive.
 func TestResetLeavesSequencesUntouched(t *testing.T) {
