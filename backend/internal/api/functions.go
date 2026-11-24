@@ -412,34 +412,31 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 			return validationError(c, fields)
 		}
 
-		current, err := q.GetFunction(c.Context(), id)
-		if err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "function not found"})
-		}
-
 		now := time.Now().UTC().Format(time.RFC3339)
-		keyChanged := b.Source != current.Source ||
-			b.Interface != current.Interface ||
-			b.Name != current.Name
 
 		// Key change + field update are two writes: run them in one
 		// transaction so a mid-way failure can't leave a half-updated row.
 		var f store.Function
 		err = func() error {
-			tx, err := d.BeginTx(c.Context(), nil)
+			tx, err := d.BeginTx(c.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
 			if err != nil {
 				return err
 			}
 			defer tx.Rollback()
 			tq := q.WithTx(tx)
-			if keyChanged {
-				if _, err := tq.UpdateFunctionKey(c.Context(), store.UpdateFunctionKeyParams{
+			current, err := tq.GetFunction(c.Context(), id)
+			if err != nil {
+				return err
+			}
+			if b.Source != current.Source || b.Interface != current.Interface || b.Name != current.Name {
+				renamed, err := tq.UpdateFunctionKey(c.Context(), store.UpdateFunctionKeyParams{
 					ID:        id,
 					Source:    b.Source,
 					Interface: b.Interface,
 					Name:      b.Name,
 					UpdatedAt: now,
-				}); err != nil {
+				})
+				if err != nil {
 					return err
 				}
 				rename := store.RenameFunctionGrammarParams{
@@ -451,6 +448,9 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 					return err
 				}
 				if err := tq.RenameScriptKeyAudits(c.Context(), store.RenameScriptKeyAuditsParams(rename)); err != nil {
+					return err
+				}
+				if err := store.RenameFunctionAssociations(c.Context(), tx, current, renamed); err != nil {
 					return err
 				}
 			}
@@ -469,6 +469,9 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 			return tx.Commit()
 		}()
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "function not found"})
+			}
 			if store.IsUniqueViolation(err) {
 				return conflict(c, b)
 			}

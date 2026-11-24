@@ -91,6 +91,99 @@ func TestCreateFunctionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFunctionRenameCarriesLinksAndExamples(t *testing.T) {
+	for _, mode := range []string{"move", "copy", "merge"} {
+		t.Run(mode, func(t *testing.T) {
+			app := newFunctionsTestApp(t)
+			request := func(method, path, body string, status int) string {
+				t.Helper()
+				resp, out := doJSON(t, app, method, path, body)
+				if resp.StatusCode != status {
+					t.Fatalf("%s %s: got %d, want %d: %s", method, path, resp.StatusCode, status, out)
+				}
+				return out
+			}
+			create := func(path, body string) { request("POST", path, body, 201) }
+			create("/api/functions", `{"source":"DLL","interface":"WIFI_TEST","name":"RENAME_ME"}`)
+			create("/api/parameter-definitions", `{"name":"ANT","type":"int"}`)
+			create("/api/criteria-definitions", `{"name":"POWER","type":"double"}`)
+
+			const (
+				parameters = "/parameter-links"
+				criteria   = "/criteria-links"
+				examples   = "/api/examples?function_source=DLL&function_name="
+			)
+			addAssociations := func(path, name, position, meaning string) {
+				create(path+parameters, fmt.Sprintf(`{"name":"ANT","position":%s,"required":true}`, position))
+				create(path+criteria, fmt.Sprintf(`{"name":"POWER","position":%s,"required":true}`, position))
+				create("/api/examples", fmt.Sprintf(`{"function_source":"DLL","function_name":%q,"script":"DLLWIFI_TEST|RENAME_ME|ANT=1|NULL|1000|NEXT|FAIL","meaning":%q}`, name, meaning))
+			}
+			addAssociations("/api/functions/1", "RENAME_ME", "4", "original example")
+
+			if mode == "copy" {
+				create("/api/functions", `{"source":"DLL","interface":"TELNET","name":"RENAME_ME"}`)
+			}
+			if mode == "merge" {
+				create("/api/functions", `{"source":"DLL","interface":"TELNET","name":"RENAMED"}`)
+				addAssociations("/api/functions/2", "RENAMED", "7", "destination example")
+			}
+			checkItems := func(path, key string, expected ...string) {
+				t.Helper()
+				out := request("GET", path, "", 200)
+				var page struct {
+					Items []json.RawMessage `json:"items"`
+				}
+				if err := json.Unmarshal([]byte(out), &page); err != nil {
+					t.Fatalf("decode %s: %v", path, err)
+				}
+				want := 1
+				if key == "" {
+					want = 0
+				}
+				if len(page.Items) != want {
+					t.Errorf("%s: got %d items, want %d: %s", path, len(page.Items), want, out)
+					return
+				}
+				if want == 0 {
+					return
+				}
+				for _, field := range append(expected, fmt.Sprintf(`"function_name":%q`, key)) {
+					if !strings.Contains(string(page.Items[0]), field) {
+						t.Errorf("%s: missing %s: %s", path, field, out)
+					}
+				}
+			}
+			checkOrphans := func(stage string) {
+				t.Helper()
+				out := request("GET", "/api/orphans", "", 200)
+				if !strings.Contains(out, `"total":0`) {
+					t.Errorf("%s rename: expected zero orphans: %s", stage, out)
+				}
+			}
+			checkOrphans("before")
+			request("PUT", "/api/functions/1", `{"source":"DLL","interface":"WIFI_TEST","name":"RENAMED"}`, 200)
+			checkOrphans("after")
+
+			id, position, meaning := `"id":1`, `"position":4`, `"meaning":"original example"`
+			switch mode {
+			case "copy":
+				id = `"id":2`
+				checkItems("/api/functions/2"+parameters, "RENAME_ME", `"id":1`, position)
+				checkItems("/api/functions/2"+criteria, "RENAME_ME", `"id":1`, position)
+				checkItems(examples+"RENAME_ME", "RENAME_ME", `"id":1`, meaning)
+			case "merge":
+				id, position, meaning = `"id":2`, `"position":7`, `"meaning":"destination example"`
+				fallthrough
+			default:
+				checkItems(examples+"RENAME_ME", "")
+			}
+			checkItems("/api/functions/1"+parameters, "RENAMED", id, `"name":"ANT"`, position, `"required":true`, `"resolved":true`)
+			checkItems("/api/functions/1"+criteria, "RENAMED", id, `"name":"POWER"`, position, `"required":true`, `"resolved":true`)
+			checkItems(examples+"RENAMED", "RENAMED", id, meaning, `"function_exists":true`)
+		})
+	}
+}
+
 func TestCreateFunctionValidationFieldErrors(t *testing.T) {
 	app := newFunctionsTestApp(t)
 
