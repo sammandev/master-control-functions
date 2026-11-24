@@ -11,6 +11,7 @@
 	import {
 		importWorkbook,
 		importReset,
+		downloadWorkbook,
 		listImportRuns,
 		getImportRun,
 		ApiError,
@@ -39,6 +40,8 @@
 	let importing = $state(false);
 	let lastResult = $state<ImportResult | null>(null);
 	let actionError = $state('');
+	let exporting = $state(false);
+	let exportError = $state('');
 	let resetOpen = $state(false);
 	let resetTrigger: HTMLElement | null = null;
 	let resultDetailsOpen = $state(false);
@@ -115,11 +118,25 @@
 		await performImport(reset);
 	}
 
+	async function performExport() {
+		if (exporting) return;
+		exporting = true;
+		exportError = '';
+		try {
+			await downloadWorkbook();
+		} catch (e) {
+			exportError = e instanceof Error ? e.message : String(e);
+		} finally {
+			exporting = false;
+		}
+	}
+
 	async function performImport(reset: boolean) {
 		const file = selectedFile;
 		if (!file || importing) return;
 		importing = true;
 		actionError = '';
+		lastResult = null;
 		try {
 			lastResult = reset ? await importReset(file) : await importWorkbook(file);
 			resultDetailsOpen = false;
@@ -246,12 +263,13 @@
 <div class="import-workspace">
 	<div class="import-heading">
 		<h1>Workbook import</h1>
-		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<a class="export-action" href="/api/export" download="knowledge_workbook.xlsx"
-			><Download size={16} /> Export workbook</a
+		<button type="button" class="export-action" disabled={exporting} onclick={performExport}
+			>{#if exporting}<LoaderCircle size={16} class="animate-spin" /> Exporting{:else}<Download
+					size={16}
+				/> Export workbook{/if}</button
 		>
-		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 	</div>
+	{#if exportError}<div class="banner-error" role="alert">{exportError}</div>{/if}
 	<section class="import-section" aria-labelledby="upload-heading" aria-busy={importing}>
 		<div class="section-heading">
 			<h2 id="upload-heading">Upload workbook</h2>
@@ -453,8 +471,11 @@
 		font-size: 0.875rem;
 		font-weight: 500;
 	}
-	.export-action:hover {
+	.export-action:hover:not(:disabled) {
 		background: var(--accent);
+	}
+	.export-action:disabled {
+		opacity: 0.5;
 	}
 	.export-action:focus-visible,
 	.normalization-scroll:focus-visible {

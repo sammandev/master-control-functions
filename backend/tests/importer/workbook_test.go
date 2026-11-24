@@ -154,6 +154,46 @@ func TestParseWorkbookRealFixture(t *testing.T) {
 	}
 }
 
+func TestParseWorkbookCellLimitUsesRawText(t *testing.T) {
+	fixture := openFixture(t)
+	f, err := excelize.OpenReader(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	const sheet, cell = "function_main", "D2"
+	const prefix = "prefix "
+	raw := strings.Repeat("x", 32767)
+	if err := f.SetCellStr(sheet, cell, raw); err != nil {
+		t.Fatal(err)
+	}
+	format := `0;0;0;"prefix "@`
+	style, err := f.NewStyle(&excelize.Style{CustomNumFmt: &format})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SetCellStyle(sheet, cell, cell, style); err != nil {
+		t.Fatal(err)
+	}
+	xlsx, err := f.WriteToBuffer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	formatted, err := f.GetCellValue(sheet, cell)
+	if err != nil || formatted != prefix+raw {
+		t.Fatalf("test cell did not acquire the prefix: length %d, error %v", len(formatted), err)
+	}
+
+	wb, err := importer.ParseWorkbook(xlsx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := wb.Functions[0].Description; got != prefix+raw {
+		t.Fatalf("import changed the formatted description: length %d", len(got))
+	}
+}
+
 func TestParseWorkbookRequiredHeaders(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

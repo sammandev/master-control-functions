@@ -58,6 +58,20 @@ export function importReset(file: File): Promise<ImportResult> {
 	return upload('/api/import/reset', file);
 }
 
+export async function downloadWorkbook(): Promise<void> {
+	const response = await fetch('/api/export');
+	if (!response.ok) {
+		const body: { error?: string } = await response.json().catch(() => ({}));
+		throw new ApiError(response.status, body.error ?? `Export failed (${response.status})`);
+	}
+	const url = URL.createObjectURL(await response.blob());
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = 'knowledge_workbook.xlsx';
+	link.click();
+	setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export async function listImportRuns(): Promise<{ items: ImportRun[] }> {
 	return request<{ items: ImportRun[] }>('/api/import/runs');
 }
