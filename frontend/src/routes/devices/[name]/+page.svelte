@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
 		CircuitBoard,
@@ -238,6 +238,7 @@
 	function setDefinitionSearch(next: 'parameters' | 'criteria', value: string) {
 		const term = value.trim();
 		const previousTerm = next === 'parameters' ? paramTerm : critTerm;
+		if (term !== previousTerm) cancelBookmarkRestore();
 		const selected = next === 'parameters' ? selectedParameter : selectedCriterion;
 		if (
 			!term &&
@@ -324,18 +325,51 @@
 		if (event.target instanceof Element && event.target.closest('button, a')) return;
 		void selectDefinition(next, id);
 	}
+
+	let pendingBookmark: number | null = null;
+	let bookmarkRevision = 0;
+
+	function cancelBookmarkRestore() {
+		pendingBookmark = null;
+		bookmarkRevision++;
+	}
+
+	beforeNavigate(cancelBookmarkRestore);
+	afterNavigate(({ type, from, to }) => {
+		if (type === 'goto' && from?.route.id === to?.route.id) return;
+		if (tab !== 'parameters' && tab !== 'criteria') return;
+		const id = Number(page.url.searchParams.get('definition'));
+		if (!Number.isSafeInteger(id) || id <= 0) return;
+		pendingBookmark = id;
+		restoreBookmarkIfReady();
+	});
+
+	function restoreBookmarkIfReady() {
+		const id = pendingBookmark;
+		const next = tab;
+		if (id === null || (next !== 'parameters' && next !== 'criteria')) return;
+		if (!(next === 'parameters' ? paramLoaded : critLoaded)) return;
+		pendingBookmark = null;
+		if (next === 'parameters' ? paramTerm : critTerm) return;
+		void inspectDefinition(next, id, { restoreBookmark: true });
+	}
+
 	async function inspectDefinition(
 		next: 'parameters' | 'criteria',
 		id: number,
-		{ refresh = false } = {}
+		{ refresh = false, restoreBookmark = false } = {}
 	) {
 		const scope = device;
 		const revision = deviceRevision;
+		const restoreRevision = bookmarkRevision;
 		const filtered = next === 'parameters' ? paramTerm : critTerm;
-		if (next === 'parameters') paramSearch = '';
-		else critSearch = '';
-		if (tab !== next || page.url.searchParams.get('definition') !== String(id)) {
-			await selectDefinition(next, id);
+		if (!restoreBookmark) {
+			cancelBookmarkRestore();
+			if (next === 'parameters') paramSearch = '';
+			else critSearch = '';
+			if (tab !== next || page.url.searchParams.get('definition') !== String(id)) {
+				await selectDefinition(next, id);
+			}
 		}
 		const loaded =
 			next === 'parameters' ? [...paramScoped, ...paramGlobal] : [...critScoped, ...critGlobal];
@@ -343,6 +377,7 @@
 		const size = next === 'parameters' ? paramPageSize : critPageSize;
 		const current = () =>
 			revision === deviceRevision &&
+			(!restoreBookmark || restoreRevision === bookmarkRevision) &&
 			scope === device &&
 			tab === next &&
 			Number(page.url.searchParams.get('definition')) === id &&
@@ -362,6 +397,7 @@
 					return;
 				}
 				if (!result.items.length || requested * size >= result.total) {
+					if (restoreBookmark) return;
 					if (refresh) {
 						await clearDefinitionSelection(next);
 						return;
@@ -370,7 +406,7 @@
 				}
 			}
 		} catch (error) {
-			if (!current()) return;
+			if (!current() || restoreBookmark) return;
 			const message = error instanceof Error ? error.message : String(error);
 			if (next === 'parameters') paramError = message;
 			else critError = message;
@@ -549,6 +585,7 @@
 			paramTotal = res.total;
 			paramGlobalTotal = res.global_total;
 			paramLoaded = true;
+			restoreBookmarkIfReady();
 		} catch (e) {
 			if (!current()) return;
 			paramScoped = [];
@@ -589,6 +626,7 @@
 			critTotal = res.total;
 			critGlobalTotal = res.global_total;
 			critLoaded = true;
+			restoreBookmarkIfReady();
 		} catch (e) {
 			if (!current()) return;
 			critScoped = [];
@@ -1061,6 +1099,8 @@
 						bind:page={paramPage}
 						total={paramTotal}
 						bind:pageSize={paramPageSize}
+						onPageChange={cancelBookmarkRestore}
+						onPageSizeChange={cancelBookmarkRestore}
 					/>
 				</div>
 				<div class="definition-pane">
@@ -1263,6 +1303,8 @@
 						bind:page={critPage}
 						total={critTotal}
 						bind:pageSize={critPageSize}
+						onPageChange={cancelBookmarkRestore}
+						onPageSizeChange={cancelBookmarkRestore}
 					/>
 				</div>
 				<div class="definition-pane">
