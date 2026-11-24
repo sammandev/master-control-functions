@@ -121,6 +121,18 @@ func TestTroubleshootingRegistryListIncludesCountsAndStableUpdates(t *testing.T)
 		}
 	}
 
+	resp, severityBody := doRequest(t, app, "GET", "/api/troubleshooting/severities")
+	if resp.StatusCode != 200 {
+		t.Fatalf("list severities: %d (%s)", resp.StatusCode, severityBody)
+	}
+	severities := registryItems(t, severityBody)
+	if critical := registryItemByKey(t, severities, "critical"); critical.GuideCount != 4 {
+		t.Fatalf("critical guide_count = %d, want 4 seeded guides", critical.GuideCount)
+	}
+	if high := registryItemByKey(t, severities, "high"); high.GuideCount != 0 {
+		t.Fatalf("high guide_count = %d, want 0", high.GuideCount)
+	}
+
 	resp, updatedBody := doJSON(t, app, "PUT", "/api/troubleshooting/severities/critical", `{"label":"Critical Priority","description":"Updated","sort_order":1,"tone":"destructive","key":"renamed","built_in":false}`)
 	if resp.StatusCode != 200 {
 		t.Fatalf("update severity: %d (%s)", resp.StatusCode, updatedBody)
