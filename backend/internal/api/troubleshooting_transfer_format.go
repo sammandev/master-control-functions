@@ -27,6 +27,18 @@ type troubleshootingTransfer struct {
 var transferGuideHeaders = []string{"guide_ref", "id", "title", "category", "severity", "symptom", "root_cause", "error_code", "device_name", "function_name"}
 var transferStepHeaders = []string{"guide_ref", "step_no", "title", "instruction", "script_snippet", "verification"}
 
+var transferGuideFieldLabels = []string{"Guide Reference", "ID", "Title", "Category", "Severity", "Symptom", "Root Cause", "Error Code", "Device", "Function"}
+var transferStepFieldLabels = []string{"Guide Reference", "Step Number", "Title", "Instruction", "Snippet", "Verification"}
+
+type troubleshootingXLSXCellLimitError struct {
+	guide string
+	field string
+}
+
+func (e *troubleshootingXLSXCellLimitError) Error() string {
+	return fmt.Sprintf("Guide %s: %s exceeds Excel's 32,767-character cell limit. Export as JSON instead.", e.guide, e.field)
+}
+
 func parseTroubleshootingTransfer(r io.Reader, format string) (troubleshootingTransfer, error) {
 	switch format {
 	case "json":
@@ -218,11 +230,30 @@ func writeTroubleshootingTransfer(doc troubleshootingTransfer, format string, in
 	if _, err := book.NewSheet("Steps"); err != nil {
 		return nil, err
 	}
-	writeRow := func(sheet string, row int, values []string) error {
+	writeRow := func(sheet string, row int, values []string, guide *troubleshootingTransferGuide, step int) error {
 		for col, value := range values {
-			if len(utf16.Encode([]rune(value))) > 32767 {
+			if len(utf16.Encode([]rune(value))) <= excelize.TotalCellChars {
+				continue
+			}
+			if guide == nil {
 				return fmt.Errorf("%s row %d column %d exceeds the Excel cell character limit", sheet, row, col+1)
 			}
+			var field string
+			if step > 0 {
+				field = fmt.Sprintf("Step %d / %s", step, transferStepFieldLabels[col])
+			} else {
+				field = transferGuideFieldLabels[col]
+			}
+			title := []rune(guide.Title)
+			name := guide.Title
+			if len(title) > 80 {
+				name = string(title[:80]) + "…"
+			}
+			name = fmt.Sprintf("%q", name)
+			if guide.ID != nil {
+				name += fmt.Sprintf(" (ID %d)", *guide.ID)
+			}
+			return &troubleshootingXLSXCellLimitError{guide: name, field: field}
 		}
 		cell, err := excelize.CoordinatesToCellName(1, row)
 		if err != nil {
@@ -230,10 +261,10 @@ func writeTroubleshootingTransfer(doc troubleshootingTransfer, format string, in
 		}
 		return book.SetSheetRow(sheet, cell, &values)
 	}
-	if err := writeRow("Guides", 1, transferGuideHeaders); err != nil {
+	if err := writeRow("Guides", 1, transferGuideHeaders, nil, 0); err != nil {
 		return nil, err
 	}
-	if err := writeRow("Steps", 1, transferStepHeaders); err != nil {
+	if err := writeRow("Steps", 1, transferStepHeaders, nil, 0); err != nil {
 		return nil, err
 	}
 	stepRow := 2
@@ -242,11 +273,11 @@ func writeTroubleshootingTransfer(doc troubleshootingTransfer, format string, in
 		if g.ID != nil {
 			id = strconv.FormatInt(*g.ID, 10)
 		}
-		if err := writeRow("Guides", i+2, []string{ref, id, g.Title, g.Category, g.Severity, g.Symptom, g.RootCause, g.ErrorCode, g.DeviceName, g.FunctionName}); err != nil {
+		if err := writeRow("Guides", i+2, []string{ref, id, g.Title, g.Category, g.Severity, g.Symptom, g.RootCause, g.ErrorCode, g.DeviceName, g.FunctionName}, &g, 0); err != nil {
 			return nil, err
 		}
 		for n, s := range g.Steps {
-			if err := writeRow("Steps", stepRow, []string{ref, strconv.Itoa(n + 1), s.Title, s.Instruction, s.ScriptSnippet, s.Verification}); err != nil {
+			if err := writeRow("Steps", stepRow, []string{ref, strconv.Itoa(n + 1), s.Title, s.Instruction, s.ScriptSnippet, s.Verification}, &g, n+1); err != nil {
 				return nil, err
 			}
 			stepRow++
@@ -257,7 +288,7 @@ func writeTroubleshootingTransfer(doc troubleshootingTransfer, format string, in
 			return nil, err
 		}
 		for i, row := range instructions {
-			if err := writeRow("Instructions", i+1, row); err != nil {
+			if err := writeRow("Instructions", i+1, row, nil, 0); err != nil {
 				return nil, err
 			}
 		}
