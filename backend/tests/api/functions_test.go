@@ -247,6 +247,51 @@ func TestListFunctionsPaginationContract(t *testing.T) {
 	}
 }
 
+func TestListFunctionsNamePagesMatchGoSort(t *testing.T) {
+	d, err := testdb.Open(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.MigratePostgres(d); err != nil {
+		t.Fatal(err)
+	}
+	app := api.New(d)
+	for _, row := range []struct{ source, device, name string }{
+		{"DLL", "RS232", "a"},
+		{"DLL", "RS232", "é"},
+		{"DLL", "RS232", "Z"},
+		{"DLL", "RS232", "B2"},
+		{"DLL", "RS232", "B10"},
+		{"DLL", "TELNET", "Twin"},
+		{"BUILT-IN", "RS232", "Twin"},
+		{"DLL", "RS232", "Twin"},
+		// Distinct natural keys can compare equal when concatenated.
+		{"DLL", "X", "Twin"},
+		{"DLLX", "", "Twin"},
+		{"DLL", "RS232", "ä"},
+	} {
+		if _, err := d.Exec(`
+			INSERT INTO functions (source, interface, name, created_at, updated_at)
+			VALUES ($1, $2, $3, '', '')`, row.source, row.device, row.name); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, order := range []string{"asc", "desc"} {
+		for _, filter := range []string{"", "&search=tWiN&source=DLL"} {
+			for _, page := range []string{"1", "2", "3", "4", "5", "6", "7", "999999999999999999999"} {
+				url := fmt.Sprintf("/api/functions?sort=name&order=%s&page_size=2&page=%s%s", order, page, filter)
+				// An unknown positive locate ID uses Go sorting without moving the page.
+				wantResp, want := doRequest(t, app, "GET", url+"&function_id=9223372036854775807")
+				gotResp, got := doRequest(t, app, "GET", url)
+				if gotResp.StatusCode != http.StatusOK || wantResp.StatusCode != http.StatusOK || got != want {
+					t.Errorf("%s: SQL page (%d) %s; Go page (%d) %s", url, gotResp.StatusCode, got, wantResp.StatusCode, want)
+				}
+			}
+		}
+	}
+}
+
 func TestListFunctionsLocatesRowByID(t *testing.T) {
 	app := newFunctionsTestApp(t)
 	seedFunctions(t, app)
