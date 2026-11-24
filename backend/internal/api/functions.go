@@ -2,6 +2,8 @@ package api
 
 import (
 	"database/sql"
+	"errors"
+	"math"
 	"slices"
 	"sort"
 	"strconv"
@@ -265,7 +267,9 @@ func parseListQuery(c fiber.Ctx) listQuery {
 		lq.sortCol = ""
 	}
 	lq.sortDesc = strings.EqualFold(c.Query("order"), "desc")
-	if p, err := strconv.ParseInt(c.Query("page"), 10, 64); err == nil && p > 0 {
+	rawPage := c.Query("page")
+	if p, err := strconv.ParseInt(rawPage, 10, 64); p > 0 && (err == nil ||
+		errors.Is(err, strconv.ErrRange) && strings.Trim(strings.TrimPrefix(rawPage, "+"), "0123456789") == "") {
 		lq.page = p
 	}
 	if ps, err := strconv.ParseInt(c.Query("page_size"), 10, 64); err == nil && ps > 0 {
@@ -275,6 +279,19 @@ func parseListQuery(c fiber.Ctx) listQuery {
 		lq.pageSize = 100
 	}
 	return lq
+}
+
+func (lq listQuery) offset() int64 {
+	pageIndex := lq.page - 1
+	if pageIndex > math.MaxInt64/lq.pageSize {
+		return math.MaxInt64
+	}
+	return pageIndex * lq.pageSize
+}
+
+func (lq listQuery) sliceBounds(length int) (int64, int64) {
+	start := min(lq.offset(), int64(length))
+	return start, start + min(lq.pageSize, int64(length)-start)
 }
 
 func (lq *listQuery) storeParams() store.ListFunctionsParams {
@@ -338,14 +355,7 @@ func listFunctions(q *store.Queries) fiber.Handler {
 			})
 		}
 		locateRow(c, &lq, "function_id", items, func(f store.Function) int64 { return f.ID })
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(items)) {
-			start = int64(len(items))
-		}
-		end := start + lq.pageSize
-		if end > int64(len(items)) {
-			end = int64(len(items))
-		}
+		start, end := lq.sliceBounds(len(items))
 		page := items[start:end]
 
 		out := make([]fiber.Map, 0, len(page))

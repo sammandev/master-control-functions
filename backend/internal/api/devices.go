@@ -327,14 +327,7 @@ func deviceFunctions(q *store.Queries) fiber.Handler {
 			return serverError(c, "list device functions", err)
 		}
 		lq := parseListQuery(c)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(rows)) {
-			start = int64(len(rows))
-		}
-		end := start + lq.pageSize
-		if end > int64(len(rows)) {
-			end = int64(len(rows))
-		}
+		start, end := lq.sliceBounds(len(rows))
 		items := make([]fiber.Map, 0, end-start)
 		for _, f := range rows[start:end] {
 			items = append(items, functionResponse(f))

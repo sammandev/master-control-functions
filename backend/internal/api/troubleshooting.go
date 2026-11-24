@@ -264,7 +264,7 @@ func listTroubleshootingGuides(q *store.Queries) fiber.Handler {
 			DeviceName: deviceName,
 			ErrorCode:  errorCode,
 			Limit:      lq.pageSize,
-			Offset:     (lq.page - 1) * lq.pageSize,
+			Offset:     lq.offset(),
 		})
 		if err != nil {
 			return serverError(c, "list troubleshooting guides", err)
