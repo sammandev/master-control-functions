@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,6 +27,33 @@ func seedTwoFunctionsWithExamples(t *testing.T, app *fiber.App) {
 	if resp, body := postJSON(t, app, "/api/examples",
 		`{"function_source":"DLL","function_name":"FN_TWO","device_name":"IOT","script":"DLLWIFI_TEST|G|B=2|NULL|1000|QUIT|FAIL","meaning":"locks the tester"}`); resp.StatusCode != 201 {
 		t.Fatalf("seed example 2: %d (body: %s)", resp.StatusCode, body)
+	}
+}
+
+func TestExampleFunctionNames(t *testing.T) {
+	app, d := newLinksTestApp(t)
+	const path = "/api/examples/function-names"
+	if resp, body := doRequest(t, app, "GET", path); resp.StatusCode != 200 || body != `{"items":[]}` {
+		t.Fatalf("empty names: %d (body: %s)", resp.StatusCode, body)
+	}
+
+	seedTwoFunctionsWithExamples(t, app)
+	if resp, body := postJSON(t, app, "/api/functions",
+		`{"source":"DLL","interface":"TELNET","name":"NO_EXAMPLES"}`); resp.StatusCode != 201 {
+		t.Fatalf("seed function without examples: %d (body: %s)", resp.StatusCode, body)
+	}
+	_, err := d.Exec(`INSERT INTO examples
+		(function_source, function_name, device_name, script, meaning, created_at, updated_at)
+		VALUES
+			('EXE', 'FN_ONE', '', 'duplicate name script', 'duplicate name meaning', '', ''),
+			('DLL', 'ORPHAN_FN', 'TELNET', 'orphan script', 'orphan meaning', '', '')`)
+	if err != nil {
+		t.Fatalf("seed duplicate and orphan names: %v", err)
+	}
+
+	if resp, body := doRequest(t, app, "GET", path); resp.StatusCode != 200 ||
+		body != `{"items":["FN_ONE","FN_TWO","ORPHAN_FN"]}` {
+		t.Fatalf("distinct example names: %d (body: %s)", resp.StatusCode, body)
 	}
 }
 
@@ -122,6 +151,80 @@ func TestExamplesFunctionFilterAndSearch(t *testing.T) {
 	_, body = doRequest(t, app, "GET", "/api/examples")
 	if !strings.Contains(body, `"total":2`) {
 		t.Fatalf("total wrong: %s", body)
+	}
+}
+
+func TestExamplesSearchByFunctionLabel(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedTwoFunctionsWithExamples(t, app)
+
+	resp, body := doRequest(t, app, "GET", "/api/examples?search=dll%20fn_one")
+	if resp.StatusCode != 200 || !strings.Contains(body, `"total":1`) ||
+		!strings.Contains(body, `"meaning":"resets the DUT"`) ||
+		strings.Contains(body, `"meaning":"locks the tester"`) {
+		t.Fatalf("function label search: %d (body: %s)", resp.StatusCode, body)
+	}
+}
+
+func TestExamplesPagination(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedTwoFunctionsWithExamples(t, app)
+
+	for _, tc := range []struct {
+		name     string
+		query    string
+		page     int64
+		pageSize int64
+		ids      []int64
+	}{
+		{"first page", "page_size=1", 1, 1, []int64{2}},
+		{"second page", "page=2&page_size=1", 2, 1, []int64{1}},
+		{"past the end", "page=3&page_size=1", 3, 1, nil},
+		{"64-bit offset", "page=4294967297&page_size=1", 4294967297, 1, nil},
+		{"overflowing offset", "page=4611686018427387905&page_size=4", 4611686018427387905, 4, nil},
+		{"locate overrides deep page", "page=9223372036854775807&page_size=2&example_id=1", 1, 2, []int64{2, 1}},
+		{"missing ID preserves page", "page=2&page_size=1&example_id=999", 2, 1, []int64{1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, body := doRequest(t, app, "GET", "/api/examples?"+tc.query)
+			var result struct {
+				Items []struct{ ID int64 }
+				Total int64
+				Page  int64
+				Size  int64 `json:"page_size"`
+			}
+			if err := json.Unmarshal([]byte(body), &result); err != nil || resp.StatusCode != 200 {
+				t.Fatalf("list examples: %d (body: %s, decode error: %v)", resp.StatusCode, body, err)
+			}
+			ids := make([]int64, 0, len(result.Items))
+			for _, item := range result.Items {
+				ids = append(ids, item.ID)
+			}
+			if result.Total != 2 || result.Page != tc.page || result.Size != tc.pageSize ||
+				result.Items == nil || !slices.Equal(ids, tc.ids) {
+				t.Fatalf("unexpected page: %s", body)
+			}
+		})
+	}
+}
+
+func TestExamplesLocatePageByID(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedTwoFunctionsWithExamples(t, app)
+
+	// Device ordering puts example 2 (IOT) before example 1 (WIFI_TEST).
+	resp, body := doRequest(t, app, "GET", "/api/examples?page=1&page_size=1&example_id=1")
+	if resp.StatusCode != 200 || !strings.Contains(body, `"page":2`) ||
+		!strings.Contains(body, `"total":2`) || !strings.Contains(body, `"id":1`) ||
+		strings.Contains(body, `"id":2`) {
+		t.Fatalf("located page: %d (body: %s)", resp.StatusCode, body)
+	}
+
+	resp, body = doRequest(t, app, "GET", "/api/examples?device=IOT&page=1&page_size=1&example_id=1")
+	if resp.StatusCode != 200 || !strings.Contains(body, `"page":1`) ||
+		!strings.Contains(body, `"total":1`) || !strings.Contains(body, `"id":2`) ||
+		strings.Contains(body, `"id":1`) {
+		t.Fatalf("excluded example changed the requested page or filters: %d (body: %s)", resp.StatusCode, body)
 	}
 }
 

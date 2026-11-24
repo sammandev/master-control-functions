@@ -49,7 +49,6 @@ export interface SequenceListResult {
 	page_size: number;
 }
 
-// The write payload: PUT is a full replace of meta + ordered steps.
 export interface SequenceStepInput {
 	function_source: string;
 	function_interface: string;
@@ -70,10 +69,18 @@ export interface SequenceInput {
 }
 
 export async function listSequences(
-	params: { search?: string; page?: number; page_size?: number } = {}
+	params: {
+		search?: string;
+		sort?: string;
+		order?: 'asc' | 'desc';
+		page?: number;
+		page_size?: number;
+	} = {}
 ): Promise<SequenceListResult> {
 	const qs = new URLSearchParams();
 	if (params.search) qs.set('search', params.search);
+	if (params.sort) qs.set('sort', params.sort);
+	if (params.order) qs.set('order', params.order);
 	if (params.page) qs.set('page', String(params.page));
 	if (params.page_size) qs.set('page_size', String(params.page_size));
 	const suffix = qs.size > 0 ? `?${qs.toString()}` : '';
@@ -92,10 +99,23 @@ export async function createSequence(body: SequenceInput): Promise<SequenceDetai
 	});
 }
 
-// Full replace: name/description plus the ordered step array in one write.
-export async function updateSequence(id: number, body: SequenceInput): Promise<SequenceDetail> {
-	return request<SequenceDetail>(`/api/sequences/${id}`, {
+export async function updateSequenceSteps(
+	id: number,
+	steps: SequenceStepInput[]
+): Promise<SequenceDetail> {
+	return request<SequenceDetail>(`/api/sequences/${id}/steps`, {
 		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ steps })
+	});
+}
+
+export async function updateSequenceMeta(
+	id: number,
+	body: Pick<SequenceInput, 'name' | 'description'>
+): Promise<SequenceDetail> {
+	return request<SequenceDetail>(`/api/sequences/${id}`, {
+		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(body)
 	});

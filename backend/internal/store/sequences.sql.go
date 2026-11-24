@@ -262,12 +262,23 @@ func (q *Queries) ListSequenceSteps(ctx context.Context, sequenceID int64) ([]Li
 const listSequences = `-- name: ListSequences :many
 SELECT s.id, s.name, s.description, s.created_at, s.updated_at,
        (SELECT COUNT(*) FROM sequence_steps st WHERE st.sequence_id = s.id) AS step_count
-FROM sequences s
-WHERE ($1::text IS NULL
-       OR lower(s.name) LIKE lower($1::text)
-       OR lower(s.description) LIKE lower($1::text))
+FROM (
+    SELECT id, name, description, created_at, updated_at
+    FROM sequences
+    WHERE ($1::text IS NULL
+           OR lower(name) LIKE lower($1::text)
+           OR lower(description) LIKE lower($1::text))
+    ORDER BY name, id
+    LIMIT $3::bigint OFFSET $2::bigint
+) s
 ORDER BY s.name, s.id
 `
+
+type ListSequencesParams struct {
+	Search     sql.NullString
+	PageOffset int64
+	PageLimit  sql.NullInt64
+}
 
 type ListSequencesRow struct {
 	ID          int64
@@ -278,8 +289,8 @@ type ListSequencesRow struct {
 	StepCount   int64
 }
 
-func (q *Queries) ListSequences(ctx context.Context, search sql.NullString) ([]ListSequencesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSequences, search)
+func (q *Queries) ListSequences(ctx context.Context, arg ListSequencesParams) ([]ListSequencesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSequences, arg.Search, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +319,24 @@ func (q *Queries) ListSequences(ctx context.Context, search sql.NullString) ([]L
 	return items, nil
 }
 
-const updateSequenceMeta = `-- name: UpdateSequenceMeta :exec
+const touchSequence = `-- name: TouchSequence :execrows
+UPDATE sequences SET updated_at = $1 WHERE id = $2
+`
+
+type TouchSequenceParams struct {
+	UpdatedAt string
+	ID        int64
+}
+
+func (q *Queries) TouchSequence(ctx context.Context, arg TouchSequenceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchSequence, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updateSequenceMeta = `-- name: UpdateSequenceMeta :execrows
 UPDATE sequences SET name = $1, description = $2, updated_at = $3 WHERE id = $4
 `
 
@@ -319,12 +347,15 @@ type UpdateSequenceMetaParams struct {
 	ID          int64
 }
 
-func (q *Queries) UpdateSequenceMeta(ctx context.Context, arg UpdateSequenceMetaParams) error {
-	_, err := q.db.ExecContext(ctx, updateSequenceMeta,
+func (q *Queries) UpdateSequenceMeta(ctx context.Context, arg UpdateSequenceMetaParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateSequenceMeta,
 		arg.Name,
 		arg.Description,
 		arg.UpdatedAt,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

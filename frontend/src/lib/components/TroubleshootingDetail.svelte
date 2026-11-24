@@ -3,6 +3,7 @@
 		AlertTriangle,
 		CheckCircle2,
 		Copy,
+		Download,
 		FileCode2,
 		GitBranchPlus,
 		Layers,
@@ -31,22 +32,26 @@
 	let {
 		guide,
 		relatedGuides = [],
+		loadingRelated = false,
 		categories = [],
 		severities = [],
 		onSelectGuide,
 		onFilterErrorCode,
 		onAddAlternate,
 		onEdit,
+		onExport,
 		onDelete
 	}: {
 		guide: TroubleshootingGuideDetail;
 		relatedGuides?: TroubleshootingGuideListItem[];
+		loadingRelated?: boolean;
 		categories?: TroubleshootingCategory[];
 		severities?: RegistrySeverity[];
 		onSelectGuide: (id: number) => void;
 		onFilterErrorCode?: (errorCode: string) => void;
 		onAddAlternate: (guide: TroubleshootingGuideDetail) => void;
 		onEdit: (guide: TroubleshootingGuideDetail) => void;
+		onExport: (guide: TroubleshootingGuideDetail) => void;
 		onDelete: (guide: TroubleshootingGuideDetail) => void;
 	} = $props();
 
@@ -96,6 +101,7 @@
 				<Button
 					variant="secondary"
 					size="sm"
+					disabled={loadingRelated}
 					title="Copy structured Markdown diagnostic context for AI assistants"
 					onclick={copyAiContext}
 				>
@@ -115,6 +121,10 @@
 					<Pencil size={14} />
 					<span>Edit</span>
 				</Button>
+				<Button variant="secondary" size="sm" onclick={() => onExport(guide)}>
+					<Download size={14} />
+					<span>Export</span>
+				</Button>
 				<Button variant="destructive" size="sm" onclick={() => onDelete(guide)}>
 					<Trash2 size={14} />
 					<span>Delete</span>
@@ -125,7 +135,14 @@
 		<h2 class="text-foreground mt-2.5 text-lg leading-snug font-semibold">{guide.title}</h2>
 	</header>
 
-	{#if relatedGuides.length > 0}
+	{#if loadingRelated}
+		<section
+			aria-label="Alternative Solutions"
+			class="border-primary/25 bg-primary/5 rounded-lg border p-3.5"
+		>
+			<p class="text-muted-foreground text-xs" role="status">Loading alternative solutions…</p>
+		</section>
+	{:else if relatedGuides.length > 0}
 		<section
 			aria-label="Alternative Solutions"
 			class="border-primary/25 bg-primary/5 rounded-lg border p-3.5"

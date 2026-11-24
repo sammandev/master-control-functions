@@ -110,6 +110,9 @@ func TestComposeValidationRejections(t *testing.T) {
 		{"forbidden char", `{"parameters":{"ANT":"a|b","STANDARD":"X","FREQ":"1","BW":"20"},"criteria":{},"timeout_ms":"1","flow":"NEXT","on_fail":"FAIL"}`, []string{`"ANT":"must not contain`}},
 		{"bad timeout", `{"parameters":{"ANT":"15","STANDARD":"X","FREQ":"1","BW":"20"},"criteria":{},"timeout_ms":"abc","flow":"NEXT","on_fail":"FAIL"}`, []string{`"timeout_ms":"timeout-ms must be a positive integer`}},
 		{"missing flow", `{"parameters":{"ANT":"15","STANDARD":"X","FREQ":"1","BW":"20"},"criteria":{},"timeout_ms":"1","on_fail":"FAIL"}`, []string{`"flow":"flow segment is required`}},
+		{"pipe in flow", `{"parameters":{"ANT":"15","STANDARD":"X","FREQ":"1","BW":"20"},"criteria":{},"timeout_ms":"1","flow":"NEXT|EXTRA","on_fail":"FAIL"}`, []string{`"flow":"must not contain '|' or a line break"`}},
+		{"line break in flow", `{"parameters":{"ANT":"15","STANDARD":"X","FREQ":"1","BW":"20"},"criteria":{},"timeout_ms":"1","flow":"NEXT\nSECOND","on_fail":"FAIL"}`, []string{`"flow":"must not contain '|' or a line break"`}},
+		{"pipe in on-fail", `{"parameters":{"ANT":"15","STANDARD":"X","FREQ":"1","BW":"20"},"criteria":{},"timeout_ms":"1","flow":"NEXT","on_fail":"FAIL|EXTRA"}`, []string{`"on_fail":"must not contain '|' or a line break"`}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

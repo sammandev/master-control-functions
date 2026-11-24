@@ -1,8 +1,11 @@
 package api_test
 
 import (
+	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -13,6 +16,119 @@ import (
 
 	"webprogfndb/internal/importer"
 )
+
+func TestWorkbookExportRefusesOversizedCell(t *testing.T) {
+	app, d := newImportTestAppWithDB(t)
+	ctx := context.Background()
+	atLimit := strings.Repeat("🙂", 16383) + "x"
+	var id int64
+	err := d.QueryRowContext(ctx, `INSERT INTO functions (source, interface, name, description, created_at, updated_at)
+		VALUES ('DLL', 'IOT', 'LONG_DESCRIPTION', $1, now(), now()) RETURNING id`, atLimit).Scan(&id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xlsx, response := exportWorkbookBytes(t, app)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("export at limit: %d: %s", response.StatusCode, xlsx)
+	}
+	wb, err := importer.ParseWorkbook(bytes.NewReader(xlsx))
+	if err != nil || len(wb.Functions) != 1 || wb.Functions[0].Description != atLimit {
+		t.Fatalf("text at the Excel cell limit did not round-trip: %v", err)
+	}
+
+	oversized := atLimit + "tail"
+	if _, err := d.ExecContext(ctx, "UPDATE functions SET description = $1 WHERE id = $2", oversized, id); err != nil {
+		t.Fatal(err)
+	}
+	xlsx, response = exportWorkbookBytes(t, app)
+	if response.StatusCode == http.StatusOK {
+		wb, err := importer.ParseWorkbook(bytes.NewReader(xlsx))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ct, body := multipartBody(t, "file", "roundtrip.xlsx", xlsx)
+		importResponse, result := postFile(t, app, "/api/import", ct, body)
+		var stored string
+		if err := d.QueryRowContext(ctx, "SELECT description FROM functions WHERE id = $1", id).Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		t.Fatalf("export returned 200 and shortened the cell from %d to %d bytes; re-import returned %d and stored %d bytes (response: %s)",
+			len(oversized), len(wb.Functions[0].Description), importResponse.StatusCode, len(stored), result)
+	}
+	if response.StatusCode != http.StatusConflict || response.Header.Get("Content-Disposition") != "" {
+		t.Fatalf("expected a conflict without an attachment, got %d: %s", response.StatusCode, xlsx)
+	}
+	for _, fragment := range []string{"function_main", "D2", "description", "LONG_DESCRIPTION", "32771", "32767"} {
+		if !strings.Contains(string(xlsx), fragment) {
+			t.Errorf("export error did not include %q: %s", fragment, xlsx)
+		}
+	}
+}
+
+func TestWorkbookImportRefusesOversizedCellBeforeReset(t *testing.T) {
+	app, d := newImportTestAppWithDB(t)
+	ctx := context.Background()
+	if _, err := d.ExecContext(ctx, `INSERT INTO functions (source, interface, name, description, created_at, updated_at)
+		VALUES ('DLL', 'IOT', 'LONG_DESCRIPTION', 'description-placeholder', now(), now())`); err != nil {
+		t.Fatal(err)
+	}
+	xlsx, response := exportWorkbookBytes(t, app)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("export fixture: %d", response.StatusCode)
+	}
+	archive, err := zip.NewReader(bytes.NewReader(xlsx), int64(len(xlsx)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var malformed bytes.Buffer
+	writer := zip.NewWriter(&malformed)
+	for _, entry := range archive.File {
+		if entry.Name != "xl/sharedStrings.xml" {
+			if err := writer.Copy(entry); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		r, err := entry.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(r)
+		r.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		part, err := writer.Create(entry.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(bytes.Replace(data, []byte("description-placeholder"), []byte(strings.Repeat("x", 32768)), 1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ct, body := multipartBody(t, "file", "oversized.xlsx", malformed.Bytes())
+	for _, path := range []string{"/api/import", "/api/import/reset"} {
+		response, result := postFile(t, app, path, ct, body)
+		if response.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("%s: expected 422, got %d: %s", path, response.StatusCode, result)
+		}
+		for _, fragment := range []string{"function_main", "D2", "32768", "32767"} {
+			if !strings.Contains(result, fragment) {
+				t.Errorf("%s error did not include %q: %s", path, fragment, result)
+			}
+		}
+	}
+	var stored string
+	if err := d.QueryRowContext(ctx, "SELECT description FROM functions WHERE name = 'LONG_DESCRIPTION'").Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != "description-placeholder" {
+		t.Fatal("failed import changed the stored description")
+	}
+}
 
 // importFixture imports the real source workbook with reset.
 func importFixture(t *testing.T, app *fiber.App) string {
@@ -271,6 +387,51 @@ func TestExportReimportIdempotent(t *testing.T) {
 		!reflect.DeepEqual(first.CriteriaLinks, second.CriteriaLinks) ||
 		!reflect.DeepEqual(first.Examples, second.Examples) {
 		t.Fatalf("export changed after re-import — the re-import was not idempotent")
+	}
+}
+
+func TestExportResetRestoresGlobalFunctions(t *testing.T) {
+	app := newImportTestApp(t)
+	for _, input := range []string{
+		`{"source":"DLL","interface":"","name":"GLOBAL_FN","description":"Global function"}`,
+		`{"source":"DLL","interface":"WIFI_TEST","name":"SCOPED_FN"}`,
+	} {
+		if resp, body := postJSON(t, app, "/api/functions", input); resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create function: %d (body: %s)", resp.StatusCode, body)
+		}
+	}
+
+	xlsx, resp := exportWorkbookBytes(t, app)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("export: %d (body: %s)", resp.StatusCode, xlsx)
+	}
+	ct, body := multipartBody(t, "file", "export.xlsx", xlsx)
+	resp, result := postFile(t, app, "/api/import/reset", ct, body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reset import: %d (body: %s)", resp.StatusCode, result)
+	}
+	var run importer.RunResult
+	if err := json.Unmarshal([]byte(result), &run); err != nil {
+		t.Fatalf("decode reset import: %v", err)
+	}
+	if run.Counts["functions"] != 2 || len(run.Skipped) != 0 {
+		t.Fatalf("reset import did not restore both functions: %s", result)
+	}
+
+	restored, resp := exportWorkbookBytes(t, app)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("export after reset: %d (body: %s)", resp.StatusCode, restored)
+	}
+	wb, err := importer.ParseWorkbook(bytes.NewReader(restored))
+	if err != nil {
+		t.Fatalf("parse export after reset: %v", err)
+	}
+	want := []importer.FunctionRow{
+		{Source: "DLL", Interface: "", Name: "GLOBAL_FN", Description: "Global function"},
+		{Source: "DLL", Interface: "WIFI_TEST", Name: "SCOPED_FN"},
+	}
+	if !reflect.DeepEqual(wb.Functions, want) {
+		t.Fatalf("restored functions = %+v, want %+v", wb.Functions, want)
 	}
 }
 

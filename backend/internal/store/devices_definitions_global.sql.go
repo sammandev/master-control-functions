@@ -9,40 +9,6 @@ import (
 	"context"
 )
 
-const countGlobalCriteriaDefinitionsForScope = `-- name: CountGlobalCriteriaDefinitionsForScope :one
-SELECT COUNT(*)
-FROM criteria_definitions cd
-WHERE cd.device_name = ''
-  AND EXISTS (SELECT 1 FROM criteria_links cl
-              WHERE cl.name = cd.name AND cl.device_name = $1)
-  AND NOT EXISTS (SELECT 1 FROM criteria_definitions s
-                  WHERE s.name = cd.name AND s.device_name = $1)
-`
-
-func (q *Queries) CountGlobalCriteriaDefinitionsForScope(ctx context.Context, device string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countGlobalCriteriaDefinitionsForScope, device)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countGlobalParameterDefinitionsForScope = `-- name: CountGlobalParameterDefinitionsForScope :one
-SELECT COUNT(*)
-FROM parameter_definitions pd
-WHERE pd.device_name = ''
-  AND EXISTS (SELECT 1 FROM parameter_links pl
-              WHERE pl.name = pd.name AND pl.device_name = $1)
-  AND NOT EXISTS (SELECT 1 FROM parameter_definitions s
-                  WHERE s.name = pd.name AND s.device_name = $1)
-`
-
-func (q *Queries) CountGlobalParameterDefinitionsForScope(ctx context.Context, device string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countGlobalParameterDefinitionsForScope, device)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const listGlobalCriteriaDefinitionsForScope = `-- name: ListGlobalCriteriaDefinitionsForScope :many
 SELECT cd.id, cd.name, cd.description, cd.type, cd.unit, cd.default_value, cd.allowed_values, cd.cardinality, cd.value_pattern, cd.required, cd.device_name, cd.created_at, cd.updated_at
 FROM criteria_definitions cd
@@ -102,6 +68,8 @@ WHERE pd.device_name = ''
 ORDER BY pd.name
 `
 
+// Global definitions resolved by a device's links: a link in the device
+// references the name and no device-scoped sibling shadows it.
 func (q *Queries) ListGlobalParameterDefinitionsForScope(ctx context.Context, device string) ([]ParameterDefinition, error) {
 	rows, err := q.db.QueryContext(ctx, listGlobalParameterDefinitionsForScope, device)
 	if err != nil {

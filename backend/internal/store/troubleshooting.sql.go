@@ -249,6 +249,106 @@ func (q *Queries) InsertTroubleshootingStep(ctx context.Context, arg InsertTroub
 	return id, err
 }
 
+const listTroubleshootingExportGuides = `-- name: ListTroubleshootingExportGuides :many
+SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
+       g.error_code, g.symptom, g.root_cause
+FROM troubleshooting_guides g
+JOIN troubleshooting_severities taxonomy_severity ON taxonomy_severity.key = g.severity
+JOIN troubleshooting_categories taxonomy_category ON taxonomy_category.key = g.category
+ORDER BY taxonomy_severity.sort_order,
+         taxonomy_category.sort_order,
+         lower(g.title),
+         g.id
+`
+
+type ListTroubleshootingExportGuidesRow struct {
+	ID           int64
+	Title        string
+	Category     string
+	Severity     string
+	DeviceName   string
+	FunctionName string
+	ErrorCode    string
+	Symptom      string
+	RootCause    string
+}
+
+func (q *Queries) ListTroubleshootingExportGuides(ctx context.Context) ([]ListTroubleshootingExportGuidesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTroubleshootingExportGuides)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTroubleshootingExportGuidesRow
+	for rows.Next() {
+		var i ListTroubleshootingExportGuidesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Category,
+			&i.Severity,
+			&i.DeviceName,
+			&i.FunctionName,
+			&i.ErrorCode,
+			&i.Symptom,
+			&i.RootCause,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTroubleshootingExportSteps = `-- name: ListTroubleshootingExportSteps :many
+SELECT guide_id, title, instruction, script_snippet, verification
+FROM troubleshooting_steps
+ORDER BY guide_id, position, id
+`
+
+type ListTroubleshootingExportStepsRow struct {
+	GuideID       int64
+	Title         string
+	Instruction   string
+	ScriptSnippet string
+	Verification  string
+}
+
+func (q *Queries) ListTroubleshootingExportSteps(ctx context.Context) ([]ListTroubleshootingExportStepsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTroubleshootingExportSteps)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTroubleshootingExportStepsRow
+	for rows.Next() {
+		var i ListTroubleshootingExportStepsRow
+		if err := rows.Scan(
+			&i.GuideID,
+			&i.Title,
+			&i.Instruction,
+			&i.ScriptSnippet,
+			&i.Verification,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTroubleshootingGuides = `-- name: ListTroubleshootingGuides :many
 SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
        g.error_code, g.symptom, g.root_cause, g.created_at, g.updated_at,

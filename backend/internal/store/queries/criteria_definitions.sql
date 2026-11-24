@@ -6,13 +6,15 @@ SELECT * FROM criteria_definitions
 WHERE (sqlc.narg('search')::text IS NULL
        OR lower(name) LIKE lower(sqlc.narg('search')::text)
        OR lower(description) LIKE lower(sqlc.narg('search')::text))
+  AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text)
 ORDER BY id;
 
 -- name: CountCriteriaDefinitions :one
 SELECT COUNT(*) FROM criteria_definitions
 WHERE (sqlc.narg('search')::text IS NULL
        OR lower(name) LIKE lower(sqlc.narg('search')::text)
-       OR lower(description) LIKE lower(sqlc.narg('search')::text));
+       OR lower(description) LIKE lower(sqlc.narg('search')::text))
+  AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text);
 
 -- name: InsertCriteriaDefinition :one
 INSERT INTO criteria_definitions (

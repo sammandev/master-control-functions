@@ -209,6 +209,60 @@ test('standalone Function header uses a full-width searchable switcher', async (
 	expect(errors).toEqual([]);
 });
 
+test('Function switcher shares an in-flight request and retries a failed load', async ({ page }) => {
+	await mockFunctionCatalog(page);
+	let requests = 0;
+	const failure = Promise.withResolvers<void>();
+	await page.route('**/api/functions/options', async (route) => {
+		if (++requests > 1) return route.fallback();
+		await failure.promise;
+		await route.fulfill({ status: 503, json: { error: 'Options unavailable' } });
+	});
+	await page.goto('/functions/1');
+
+	const trigger = page.getByRole('button', { name: 'Switch function' });
+	const popup = page.getByRole('dialog', { name: 'Choose Switch function' });
+	const search = popup.getByRole('combobox', { name: 'Search options' });
+	const loading = popup.getByRole('status');
+	await trigger.click();
+	await expect(loading).toHaveText('Loading functions…');
+	await search.press('Escape');
+	await trigger.click();
+	await expect(loading).toHaveText('Loading functions…');
+	expect(requests).toBe(1);
+
+	failure.resolve();
+	await expect(page.getByRole('alert')).toContainText('Options unavailable');
+	await search.press('Escape');
+	await trigger.click();
+	await expect(popup.getByRole('option')).toHaveCount(2);
+	await expect(page.getByText('Options unavailable')).toBeHidden();
+	expect(requests).toBe(2);
+});
+
+test('Function switcher refreshes on next open after a Function rename', async ({ page }) => {
+	await mockFunctionCatalog(page);
+	await page.goto('/functions/1');
+	const trigger = page.getByRole('button', { name: 'Switch function' });
+	const popup = page.getByRole('dialog', { name: 'Choose Switch function' });
+	await trigger.click();
+	await expect(popup.getByRole('option')).toHaveText([
+		'RX_PER (BUILT-IN / GPIB)',
+		'TX_MULTI_VERIFICATION (DLL / WIFI_TEST)'
+	]);
+	await popup.getByRole('combobox').press('Escape');
+	await page.getByRole('button', { name: 'Edit function', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Edit Function #1' });
+	await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('A_FUNCTION');
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(trigger).toHaveText('A_FUNCTION');
+	await trigger.click();
+	await expect(popup.getByRole('option')).toHaveText([
+		'A_FUNCTION (DLL / WIFI_TEST)',
+		'RX_PER (BUILT-IN / GPIB)'
+	]);
+});
+
 test('Device field links open and highlight definitions beyond the first page', async ({
 	page
 }) => {
@@ -479,6 +533,9 @@ test('Examples main search and function dropdown cover complete example identiti
 		created_at: '2026-10-07',
 		updated_at: '2026-10-07'
 	}));
+	await page.route('**/api/examples/function-names', (route) =>
+		route.fulfill({ json: { items: ['TX_MATCH', 'LATE_ORPHAN'] } })
+	);
 	const requests: URLSearchParams[] = [];
 	await page.route('**/api/examples?*', (route) => {
 		const query = new URL(route.request().url()).searchParams;
@@ -1002,6 +1059,7 @@ async function mockDeviceHub(page: Page, functionName = 'TX_MULTI_VERIFICATION')
 					}
 				]
 			};
+		else if (url.pathname === '/api/examples/function-names') json = { items: [functionName] };
 		else if (url.pathname === '/api/examples') {
 			const device = url.searchParams.get('device');
 			json = {
@@ -1065,6 +1123,15 @@ async function mockFunctionCatalog(page: Page) {
 	];
 	const requests: URLSearchParams[] = [];
 	const mutations: { method: string; path: string; body: Record<string, unknown> | null }[] = [];
+	await page.route('**/api/functions/options', (route) =>
+		route.fulfill({
+			json: {
+				items: functions
+					.map(({ id, name, source, interface: scope }) => ({ id, name, source, interface: scope }))
+					.sort((a, b) => a.name.localeCompare(b.name))
+			}
+		})
+	);
 	await page.route('**/api/functions/facets', (route) =>
 		route.fulfill({
 			json: {
@@ -1198,10 +1265,13 @@ async function mockDictionary(page: Page, kind: DefinitionKind) {
 			return route.fulfill({ status: 500, json: { error: 'Unexpected dictionary mutation' } });
 		const query = new URL(route.request().url()).searchParams;
 		requests.push(query);
-		const matches = rows.filter((row) =>
-			`${row.name} ${row.description}`
-				.toLowerCase()
-				.includes((query.get('search') ?? '').toLowerCase())
+		const device = query.get('device');
+		const matches = rows.filter(
+			(row) =>
+				(device === null || row.device_name === device) &&
+				`${row.name} ${row.description}`
+					.toLowerCase()
+					.includes((query.get('search') ?? '').toLowerCase())
 		);
 		const sort =
 			query.get('sort') === 'type'
@@ -1213,8 +1283,9 @@ async function mockDictionary(page: Page, kind: DefinitionKind) {
 			(left, right) =>
 				left[sort].localeCompare(right[sort]) * (query.get('order') === 'desc' ? -1 : 1)
 		);
-		const number = Number(query.get('page') ?? 1);
+		const index = matches.findIndex((row) => row.id === Number(query.get('definition_id')));
 		const size = Number(query.get('page_size') ?? 20);
+		const number = index < 0 ? Number(query.get('page') ?? 1) : Math.floor(index / size) + 1;
 		return route.fulfill({
 			json: {
 				items: matches.slice((number - 1) * size, number * size),
@@ -1380,7 +1451,7 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 		await page.goBack();
 		await expect(detail.getByText('WIFI_TEST', { exact: true })).toBeVisible();
 	});
-	test(`${kind} dictionary filters complete Device results and keeps Global distinct`, async ({
+	test(`${kind} dictionary requests only the current Device page and keeps Global distinct`, async ({
 		page
 	}) => {
 		const { rows, requests } = await mockDictionary(page, kind);
@@ -1394,6 +1465,9 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 		rows.push({ ...rows[1], id: 200, name: 'LATE_DEVICE_DEFINITION' });
 		await page.goto(`/${kind}?device=WIFI_TEST`);
 		await expect(page.getByText('2 entries', { exact: true })).toBeVisible();
+		expect(
+			requests.map((query) => [query.get('device'), query.get('page'), query.get('page_size')])
+		).toEqual([['WIFI_TEST', '1', '20']]);
 		const list = page.getByRole('complementary', { name: 'Definitions list', exact: true });
 		await list
 			.getByRole('button', { name: 'Select LATE_DEVICE_DEFINITION (WIFI_TEST)', exact: true })
@@ -1403,13 +1477,15 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 				.getByRole('region', { name: 'Definition details', exact: true })
 				.getByRole('heading', { name: 'LATE_DEVICE_DEFINITION', exact: true })
 		).toBeVisible();
-		expect(
-			requests.some((query) => query.get('page') === '2' && query.get('page_size') === '100')
-		).toBe(true);
 		await page.getByRole('button', { name: /^Filter definitions by Device:/ }).click();
 		await page.getByRole('option', { name: 'Global definitions', exact: true }).click();
 		await expect(page).toHaveURL(/device=_global/);
 		await expect(page.getByText('101 entries', { exact: true })).toBeVisible();
+		expect(requests.at(-1)?.get('device')).toBe('');
+		await page.getByRole('button', { name: 'Next page', exact: true }).click();
+		await expect(page.getByText('Page 2 of 6', { exact: true })).toBeVisible();
+		await expect.poll(() => requests.at(-1)?.get('page')).toBe('2');
+		expect(requests.at(-1)?.get('device')).toBe('');
 		await expect(
 			list.getByRole('button', { name: 'Select ANT (WIFI_TEST)', exact: true })
 		).toHaveCount(0);
@@ -2618,7 +2694,13 @@ test('Functions catalog retries failed discovery without stale details', async (
 			: route.fulfill({ json: { items: [functions[0]], total: 1, page: 1, page_size: 20 } });
 	});
 	await page.goto('/functions?function=1');
+	const railCount = page
+		.getByRole('complementary', { name: 'Functions list', exact: true })
+		.locator('.rail-heading span');
 	await expect(page.getByRole('alert')).toContainText('Catalog unavailable');
+	await expect(page.getByText('Count unavailable', { exact: true })).toBeVisible();
+	await expect(page.getByText('0 functions', { exact: true })).toHaveCount(0);
+	await expect(railCount).toHaveCount(0);
 	await expect(
 		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
 	).toHaveCount(0);
@@ -2626,6 +2708,8 @@ test('Functions catalog retries failed discovery without stale details', async (
 	await expect(
 		page.getByRole('heading', { name: 'TX_MULTI_VERIFICATION', exact: true })
 	).toBeVisible();
+	await expect(page.getByText('1 functions', { exact: true })).toBeVisible();
+	await expect(railCount).toHaveText('1');
 	expect(attempts).toBe(2);
 });
 
@@ -3988,6 +4072,9 @@ test('Examples workspace filters Global results and reaches later API pages', as
 		created_at: '2026-10-07',
 		updated_at: '2026-10-07'
 	}));
+	await page.route('**/api/examples/function-names', (route) =>
+		route.fulfill({ json: { items: ['TX_MATCH'] } })
+	);
 	const requests: URLSearchParams[] = [];
 	await page.route(/\/api\/examples(?:\?.*)?$/, (route) => {
 		const query = new URL(route.request().url()).searchParams;
@@ -4373,8 +4460,7 @@ function emitSequenceText(sequence: SequenceDetail) {
 	};
 }
 
-// Stateful fake of the sequences API: records every request and applies
-// PUT as a full replace, so tests can assert the exact write payload.
+// Stateful fake of the sequences API, including separate step and metadata writes.
 async function mockSequenceStore(
 	page: Page,
 	initial: SequenceDetail[],
@@ -4390,13 +4476,13 @@ async function mockSequenceStore(
 	let failDetail = options.failDetailOnce ?? false;
 	let rejectSave = options.rejectSaveOnce;
 	let nextStepId = 1000;
-	await page.route(/\/api\/sequences(?:\/\d+(?:\/emit)?)?(?:\?.*)?$/, async (route) => {
+	await page.route(/\/api\/sequences(?:\/\d+(?:\/(?:emit|steps))?)?(?:\?.*)?$/, async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());
 		const raw = request.postData();
 		const body: unknown = raw ? JSON.parse(raw) : null;
 		requests.push({ method: request.method(), path: url.pathname, search: url.search, body });
-		const match = /^\/api\/sequences(?:\/(\d+)(\/emit)?)?$/.exec(url.pathname);
+		const match = /^\/api\/sequences(?:\/(\d+)(?:\/(emit|steps))?)?$/.exec(url.pathname);
 		if (!match) return route.fallback();
 		if (!match[1]) {
 			if (failList) {
@@ -4425,7 +4511,7 @@ async function mockSequenceStore(
 		}
 		const sequence = sequences.find((row) => row.id === Number(match[1]));
 		if (!sequence) return route.fulfill({ status: 404, json: { error: 'Sequence not found' } });
-		if (match[2]) return route.fulfill({ json: emitSequenceText(sequence) });
+		if (match[2] === 'emit') return route.fulfill({ json: emitSequenceText(sequence) });
 		if (request.method() === 'GET') {
 			if (failDetail) {
 				failDetail = false;
@@ -4433,24 +4519,28 @@ async function mockSequenceStore(
 			}
 			return route.fulfill({ json: sequence });
 		}
-		if (request.method() === 'PUT') {
+		if (request.method() === 'PUT' || request.method() === 'PATCH') {
 			if (rejectSave) {
 				const { error, fields } = rejectSave;
 				rejectSave = undefined;
 				return route.fulfill({ status: 422, json: { error, fields } });
 			}
 			const input = body as SequenceInput;
-			sequence.name = input.name;
-			sequence.description = input.description;
-			sequence.steps = input.steps.map((step, index) => {
-				const stored = step as Partial<SequenceStep>;
-				return {
-					...step,
-					id: stored.id ?? nextStepId++,
-					position: index + 1,
-					function_exists: stored.function_exists ?? true
-				};
-			});
+			if (match[2] !== 'steps') {
+				sequence.name = input.name;
+				sequence.description = input.description;
+			}
+			if (request.method() === 'PUT') {
+				sequence.steps = input.steps.map((step, index) => {
+					const stored = step as Partial<SequenceStep>;
+					return {
+						...step,
+						id: nextStepId++,
+						position: index + 1,
+						function_exists: stored.function_exists ?? true
+					};
+				});
+			}
 			sequence.updated_at = '2026-10-08';
 			return route.fulfill({ json: sequence });
 		}
@@ -4649,16 +4739,22 @@ test('Sequence rename keeps the ordered steps unchanged', async ({ page }) => {
 		])
 	]);
 	await page.goto('/sequences/1');
+	const firstStep = page.locator('.steps > li').first();
+	await firstStep.getByRole('button', { name: 'Edit', exact: true }).click();
+	await firstStep.getByLabel('Note', { exact: true }).fill('Unsaved draft');
 	await page.getByRole('button', { name: 'Rename', exact: true }).click();
 	await page.getByLabel('Sequence name', { exact: true }).fill('TRANSMIT_CHECK_V2');
 	await page.getByLabel('Description', { exact: true }).fill('bench sequence');
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByText('Sequence updated', { exact: true })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'TRANSMIT_CHECK_V2', exact: true })).toBeVisible();
-	const renamed = store.requests.filter((r) => r.method === 'PUT').at(-1)!.body as SequenceInput;
-	expect(renamed.name).toBe('TRANSMIT_CHECK_V2');
-	expect(renamed.description).toBe('bench sequence');
-	expect(renamed.steps.map((step) => step.function_name)).toEqual([
+	await expect(firstStep.getByLabel('Note', { exact: true })).toHaveValue('Unsaved draft');
+	const renames = store.requests.filter((r) => r.method === 'PATCH' || r.method === 'PUT');
+	expect(renames).toMatchObject([
+		{ method: 'PATCH', body: { name: 'TRANSMIT_CHECK_V2', description: 'bench sequence' } }
+	]);
+	expect(renames[0].body).not.toHaveProperty('steps');
+	expect(store.sequences[0].steps.map((step) => step.function_name)).toEqual([
 		'TX_MULTI_VERIFICATION',
 		'RX_PER'
 	]);
@@ -4692,13 +4788,22 @@ test('Sequence step validation errors stay beside the open step editor', async (
 	await expect(page.getByRole('alert')).toHaveCount(1);
 });
 
-test('Composer adds its step to an existing sequence from the Sequence entry point', async ({
+test('Composer adds a step without restoring old Sequence metadata', async ({
 	page
 }) => {
 	await mockDeviceHub(page);
 	const store = await mockSequenceStore(page, [
 		sequenceDetail(1, 'TRANSMIT_CHECK', [sequenceStep(1)])
 	]);
+	await page.route('**/api/sequences/1', (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		const sequence = store.sequences[0];
+		const snapshot = { ...sequence };
+		// Another tab saves metadata between the composer's read and write.
+		sequence.name = 'RENAMED_CHECK';
+		sequence.description = 'Saved in another tab';
+		return route.fulfill({ json: snapshot });
+	});
 	await page.route('**/api/functions/1/compose', (route) =>
 		route.fulfill({ json: { script: 'TX|ANT=1' } })
 	);
@@ -4715,6 +4820,10 @@ test('Composer adds its step to an existing sequence from the Sequence entry poi
 	await page.getByRole('option', { name: 'TRANSMIT_CHECK (1 steps)' }).click();
 	await dialog.getByRole('button', { name: 'Add step' }).click();
 	await expect(dialog.getByText('Added as a new step.')).toBeVisible();
+	expect(store.sequences[0]).toMatchObject({
+		name: 'RENAMED_CHECK',
+		description: 'Saved in another tab'
+	});
 	const appended = store.requests.filter((r) => r.method === 'PUT').at(-1)!.body as SequenceInput;
 	expect(appended.steps.map((step) => step.function_name)).toEqual([
 		'TX_MULTI_VERIFICATION',

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ArrowDown, ArrowUp, LockKeyhole, Trash2 } from '@lucide/svelte';
+	import { ArrowDown, ArrowUp, LockKeyhole, Plus, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import AlertDialog from './ui/alert-dialog.svelte';
 	import Badge from './ui/badge.svelte';
@@ -12,6 +12,8 @@
 	import * as Tabs from './ui/tabs';
 	import { formatApiError } from '../client';
 	import {
+		createTroubleshootingCategory,
+		createTroubleshootingSeverity,
 		deleteTroubleshootingCategory,
 		deleteTroubleshootingSeverity,
 		reorderTroubleshootingCategory,
@@ -23,6 +25,7 @@
 	} from '../troubleshooting-registry';
 
 	type Kind = 'category' | 'severity';
+	const labelKinds = ['category', 'severity'] as const;
 
 	class EditableRow {
 		key: string;
@@ -101,6 +104,9 @@
 	let replacement = $state('');
 	let deleting = $state(false);
 	let deleteError = $state('');
+	let newLabels = $state({ category: '', severity: '' });
+	let addErrors = $state({ category: '', severity: '' });
+	let adding = $state<Kind | null>(null);
 	let blockDeleteClose = false;
 
 	function reconcileRows<T extends TroubleshootingCategory | TroubleshootingSeverity>(
@@ -148,6 +154,28 @@
 			await onChanged();
 		} catch (failure) {
 			toast.error(formatApiError(failure));
+		}
+	}
+
+	async function addLabel(kind: Kind) {
+		const label = newLabels[kind].trim();
+		if (adding || !label) return;
+		adding = kind;
+		addErrors[kind] = '';
+		try {
+			if (kind === 'category') {
+				const created = await createTroubleshootingCategory({ label });
+				categoryRows = [...categoryRows, new EditableRow(created)];
+			} else {
+				const created = await createTroubleshootingSeverity({ label, tone: 'outline' });
+				severityRows = [...severityRows, new EditableRow(created)];
+			}
+			newLabels[kind] = '';
+			await refreshAfterChange();
+		} catch (failure) {
+			addErrors[kind] = formatApiError(failure);
+		} finally {
+			adding = null;
 		}
 	}
 
@@ -276,24 +304,51 @@
 <Dialog
 	{open}
 	{onOpenChange}
-	title="Manage Troubleshooting Lists"
-	description="Edit labels, descriptions, display order, severity tones, and custom values."
+	title="Manage Labels"
+	description="Add and edit the categories and severities used on troubleshooting guides."
 	class="max-w-[880px]"
 >
 	<Tabs.Root bind:value={tab} activationMode="automatic">
 		<Tabs.List
-			aria-label="Troubleshooting lists"
+			aria-label="Troubleshooting labels"
 			class="bg-card sticky top-0 z-10 mb-4 grid w-full grid-cols-2 py-1"
 		>
-			<Tabs.Trigger value="category">Categories</Tabs.Trigger>
-			<Tabs.Trigger value="severity">Severities</Tabs.Trigger>
+			<Tabs.Trigger value="category">
+				Categories <span aria-hidden="true">({categoryRows.length})</span>
+			</Tabs.Trigger>
+			<Tabs.Trigger value="severity">
+				Severities <span aria-hidden="true">({severityRows.length})</span>
+			</Tabs.Trigger>
 		</Tabs.List>
 
-		{#each ['category', 'severity'] as currentKind (currentKind)}
-			<Tabs.Content value={currentKind} class="outline-none">
+		{#each labelKinds as kind (kind)}
+			<Tabs.Content value={kind} class="outline-none">
 				<div class="flex flex-col gap-3">
-					{#each rowsFor(currentKind as Kind) as row, index (row.key)}
-						{@const kind = currentKind as Kind}
+					<form
+						class="border-border bg-muted/30 grid gap-2 rounded-md border p-3"
+						onsubmit={(event) => {
+							event.preventDefault();
+							void addLabel(kind);
+						}}
+					>
+						<label for={`new-${kind}-label`} class="text-sm font-semibold">New {kind} label</label>
+						<div class="flex flex-wrap items-center gap-2">
+							<Input
+								id={`new-${kind}-label`}
+								class="min-w-40 flex-1"
+								bind:value={newLabels[kind]}
+								disabled={adding === kind}
+								placeholder={kind === 'category' ? 'e.g. Network setup' : 'e.g. Needs review'}
+							/>
+							<Button type="submit" disabled={!!adding || !newLabels[kind].trim()}>
+								<Plus size={14} />{adding === kind ? 'Adding…' : `Add ${kind}`}
+							</Button>
+						</div>
+						{#if addErrors[kind]}<p role="alert" class="text-destructive text-sm">
+								{addErrors[kind]}
+							</p>{/if}
+					</form>
+					{#each rowsFor(kind) as row, index (row.key)}
 						{@const rows = rowsFor(kind)}
 						<section
 							class="border-border bg-background overflow-hidden rounded-md border"
@@ -399,6 +454,10 @@
 									</p>{/if}
 							</div>
 						</section>
+					{:else}
+						<p class="text-muted-foreground p-3 text-sm">
+							No {kind === 'category' ? 'categories' : 'severities'} yet. Add a label to get started.
+						</p>
 					{/each}
 				</div>
 			</Tabs.Content>
@@ -418,7 +477,7 @@
 			closeDelete();
 		}}
 		title={`Delete ${deleteTarget.row.label}?`}
-		description={`${deleteTarget.row.guide_count} ${deleteTarget.row.guide_count === 1 ? 'guide uses' : 'guides use'} this ${deleteTarget.kind}. Choose a remaining ${deleteTarget.kind} before deletion.`}
+		description={`${deleteTarget.row.guide_count} ${deleteTarget.row.guide_count === 1 ? 'guide uses' : 'guides use'} this ${deleteTarget.kind}. Select a replacement to use before permanently deleting the label.`}
 		confirmLabel={`Delete ${deleteTarget.kind}`}
 		onConfirm={confirmDelete}
 	>

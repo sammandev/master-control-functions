@@ -8,7 +8,12 @@
 	import { resolve } from '$app/paths';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { Plus, RefreshCw, ChevronRight, Search } from '@lucide/svelte';
-	import { listExamples, deleteExample, type ExampleRow } from '#lib/examples.ts';
+	import {
+		listExamples,
+		listExampleFunctionNames,
+		deleteExample,
+		type ExampleRow
+	} from '#lib/examples.ts';
 	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
@@ -57,16 +62,7 @@
 		functionLoading = true;
 		functionError = '';
 		try {
-			const result = await listExamples({ page: 1, page_size: 100 });
-			const names = result.items.map((row) => row.function_name);
-			let loaded = result.items.length;
-			for (let next = 2; loaded < result.total; next++) {
-				const more = await listExamples({ page: next, page_size: 100 });
-				if (!more.items.length) throw new Error('The example list changed. Please retry.');
-				names.push(...more.items.map((row) => row.function_name));
-				loaded += more.items.length;
-			}
-			functionNames = names;
+			functionNames = (await listExampleFunctionNames()).items;
 		} catch (error) {
 			functionError = error instanceof Error ? error.message : String(error);
 		} finally {
@@ -92,10 +88,17 @@
 		const request: { params: typeof params; deviceFilter: string | null } = JSON.parse(requestKey);
 		return load(request.params, request.deviceFilter);
 	});
-	function setQuery(key: string, value: string, reset = true, replaceState = false) {
+	function navigateQuery(query: SvelteURLSearchParams, replaceState = false) {
 		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
-		const query = new SvelteURLSearchParams(routePage.url.searchParams.toString());
 		query.delete('source');
+
+		return goto(resolve(`examples?${query.toString()}`), {
+			reset: false,
+			replace: replaceState
+		});
+	}
+	function setQuery(key: string, value: string, reset = true, replaceState = false) {
+		const query = new SvelteURLSearchParams(routePage.url.searchParams.toString());
 		if (value) query.set(key, value);
 		else query.delete(key);
 		if (reset) {
@@ -103,10 +106,7 @@
 			query.delete('example');
 		}
 
-		return goto(resolve(`examples?${query.toString()}`), {
-			reset: false,
-			replace: replaceState
-		});
+		return navigateQuery(query, replaceState);
 	}
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	function scheduleSearch(term: string) {
@@ -120,18 +120,12 @@
 		revision++;
 		clearTimeout(searchTimer);
 	});
+	function apiDevice(device: string | null) {
+		return device === null ? undefined : device === '_global' ? '' : device;
+	}
 	async function load(query: typeof params, device: string | null) {
 		const attempt = ++revision;
-		const result = await listExamples({
-			function_name: query.function_name,
-			search: query.search,
-			// Absent = every Device; '' = Global-only (the API sends the key
-			// whenever it is defined, so the blank string filters blank-scope
-			// examples instead of meaning "no filter").
-			device: device === null ? undefined : device === '_global' ? '' : device,
-			page: query.page,
-			page_size: query.page_size
-		});
+		const result = await listExamples({ ...query, device: apiDevice(device) });
 		if (attempt !== revision) return result;
 		const last = Math.max(1, Math.ceil(result.total / query.page_size));
 		if (query.page > last) {
@@ -144,6 +138,35 @@
 		)
 			await setQuery('example', result.items[0] ? String(result.items[0].id) : '', false, true);
 		return result;
+	}
+
+	async function selectCreatedExample(row: ExampleRow) {
+		clearTimeout(searchTimer);
+		const from = routePage.url.href;
+		const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
+		const lookup = { page_size: params.page_size, example_id: row.id };
+		const device = deviceFilter;
+		let result = await listExamples({ ...params, ...lookup, device: apiDevice(device) });
+		if (!result.items.some((item) => item.id === row.id)) {
+			const functionName =
+				location.get('function_name') === row.function_name ? row.function_name : undefined;
+			location.delete('search');
+			if (!functionName) location.delete('function_name');
+			if (device !== null) location.set('device', row.device_name || '_global');
+			result = await listExamples({
+				...lookup,
+				function_name: functionName,
+				device: device === null ? undefined : row.device_name
+			});
+		}
+		if (routePage.url.href !== from) return;
+		if (!result.items.some((item) => item.id === row.id))
+			throw new Error('The saved example is no longer available.');
+
+		if (result.page > 1) location.set('page', String(result.page));
+		else location.delete('page');
+		location.set('example', String(row.id));
+		await navigateQuery(location);
 	}
 
 	// ---- dialog + confirm state -------------------------------------------
@@ -312,7 +335,16 @@
 	editRow={editTarget}
 	prefillDevice={deviceFilter && deviceFilter !== '_global' ? deviceFilter : ''}
 	onsaved={async (row) => {
-		await setQuery('example', String(row.id), false);
+		if (editTarget) await setQuery('example', String(row.id), false);
+		else {
+			try {
+				await selectCreatedExample(row);
+			} catch (error) {
+				toast.error('Example saved, but could not open it', {
+					description: error instanceof Error ? error.message : String(error)
+				});
+			}
+		}
 		retry++;
 		void loadFunctionNames();
 	}}

@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -245,6 +247,42 @@ func TestListFunctionsPaginationContract(t *testing.T) {
 	}
 }
 
+func TestListFunctionsLocatesRowByID(t *testing.T) {
+	app := newFunctionsTestApp(t)
+	seedFunctions(t, app)
+
+	_, body := doRequest(t, app, "GET", "/api/functions?search=TX_MULTI_VERIFICATION")
+	id := firstIDIn(t, body)
+
+	// Name-asc puts TX_MULTI_VERIFICATION fifth: page 3 at page_size 2.
+	resp, body := doRequest(t, app, "GET", fmt.Sprintf("/api/functions?page=1&page_size=2&sort=name&order=asc&function_id=%d", id))
+	if resp.StatusCode != 200 {
+		t.Fatalf("list status = %d (body: %s)", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `"page":3`) || !strings.Contains(body, `"name":"TX_MULTI_VERIFICATION"`) {
+		t.Fatalf("function_id should open the page holding the row: %s", body)
+	}
+
+	_, body = doRequest(t, app, "GET", "/api/functions?page=2&page_size=2&sort=name&order=asc&function_id=999999")
+	if !strings.Contains(body, `"page":2`) || !strings.Contains(body, `"name":"OPEN"`) {
+		t.Fatalf("an unknown function_id should keep the requested page: %s", body)
+	}
+}
+
+// firstIDIn returns the id of the first item in a list response body.
+func firstIDIn(t *testing.T, body string) int64 {
+	t.Helper()
+	var list struct {
+		Items []struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(body), &list); err != nil || len(list.Items) == 0 {
+		t.Fatalf("no items in list body (%v): %s", err, body)
+	}
+	return list.Items[0].ID
+}
+
 func TestListFunctionsSearch(t *testing.T) {
 	app := newFunctionsTestApp(t)
 	seedFunctions(t, app)
@@ -265,6 +303,19 @@ func TestListFunctionsSearch(t *testing.T) {
 	if !strings.Contains(body, `"total":1`) {
 		t.Fatalf("description search should match 1 row: %s", body)
 	}
+}
+
+func TestListFunctionsSearchAcrossNameAndDescription(t *testing.T) {
+	app := newFunctionsTestApp(t)
+	if resp, body := postJSON(t, app, "/api/functions", `{"source":"BUILT-IN","interface":"TEST PROGRAM","name":"ARITHMETIC","description":"Performs arithmetic at 100% using C:\\TEMP"}`); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("seed failed: %s", body)
+	}
+
+	wantNames(t, app, "?search=%20aRiThMeTiC%20Performs%20", "ARITHMETIC")
+	wantNames(t, app, "?search=arithmetic%20%20performs")
+	wantNames(t, app, "?search=ARITHMETI_%20Performs")
+	wantNames(t, app, "?search=Performs%25")
+	wantNames(t, app, "?search=100%25%20using%20C%3A%5CTEMP", "ARITHMETIC")
 }
 
 func TestListFunctionsFilter(t *testing.T) {

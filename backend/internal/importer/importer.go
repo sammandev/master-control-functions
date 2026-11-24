@@ -58,8 +58,8 @@ func Import(ctx context.Context, db *sql.DB, wb *Workbook, fileName string, rese
 	}
 
 	for _, r := range wb.Functions {
-		if r.Source == "" || r.Interface == "" {
-			res.Skipped = append(res.Skipped, SkippedRow{Table: "functions", RowKey: r.Name, Reason: "missing source or interface"})
+		if r.Source == "" {
+			res.Skipped = append(res.Skipped, SkippedRow{Table: "functions", RowKey: r.Name, Reason: "missing source"})
 			continue
 		}
 		if _, err := q.UpsertFunctionNatural(ctx, store.UpsertFunctionNaturalParams{

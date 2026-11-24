@@ -6,14 +6,17 @@
 	import { goto } from '$app/navigation';
 	import {
 		getSequence,
-		updateSequence,
+		updateSequenceSteps,
+		updateSequenceMeta,
 		deleteSequence,
 		emitSequence,
 		type SequenceDetail,
-		type SequenceInput,
+		type SequenceStepInput,
 		type EmitResult
 	} from '#lib/sequences.ts';
+	import { parseAssignments } from '#lib/sequence-assignments.ts';
 	import { formatApiError } from '#lib/client.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import { toast } from 'svelte-sonner';
 	import Breadcrumb from '#lib/components/ui/breadcrumb.svelte';
 	import Button from '#lib/components/ui/button.svelte';
@@ -23,7 +26,7 @@
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import { RefreshCw } from '@lucide/svelte';
 
-	// The steps array is the source of truth; every mutation is a full-replace PUT.
+	// Step writes replace the ordered step list; metadata is saved separately.
 	// Reorder stays button-driven and gives no toast; durable saves and deletes toast.
 	let seqId = $derived(Number(page.params.id));
 
@@ -35,6 +38,7 @@
 	let emit = $state<EmitResult | null>(null);
 	let emitLoading = $state(false);
 	let emitFailed = $state(false);
+	const emitGuard = createLatestRequestGuard();
 
 	// ---- header edit -------------------------------------------------------
 	let editMeta = $state(false);
@@ -57,6 +61,7 @@
 	let editDevice = $state('');
 	let editNote = $state('');
 	let stepError = $state('');
+	let stepWritePending = $state(false);
 	$effect(() => {
 		const id = seqId;
 		load(id);
@@ -78,37 +83,51 @@
 
 	async function refreshEmit() {
 		if (!seq) return;
+		const request = emitGuard.begin();
 		emitLoading = true;
 		try {
-			emit = await emitSequence(seq.id);
+			const result = await emitSequence(seq.id);
+			if (!emitGuard.isCurrent(request)) return;
+			emit = result;
 			emitFailed = false;
 		} catch (e) {
+			if (!emitGuard.isCurrent(request)) return;
 			emit = null;
 			emitFailed = true;
 			actionError = e instanceof Error ? e.message : String(e);
 		} finally {
-			emitLoading = false;
+			if (emitGuard.isCurrent(request)) emitLoading = false;
 		}
 	}
 
-	// The stored step carries id/position/function_exists on top of the
-	// SequenceStepInput shape; the server's step decoder ignores unknown
-	// fields, so the spread is a sufficient copy for the full-replace PUT.
-	function toInput(): SequenceInput {
-		if (!seq) throw new Error('sequence not loaded');
-		return {
-			name: seq.name,
-			description: seq.description,
-			steps: seq.steps.map((s) => ({ ...s }))
-		};
-	}
-
 	// Returns the failure message ('' on success) so each form shows its own error.
-	async function put(body: SequenceInput): Promise<string> {
-		if (!seq) return 'Sequence is not loaded.';
+	// draftIndex maps the open step edit to its new index (null closes it); it runs
+	// before seq changes so the form never renders under another step.
+	async function save(
+		update: Promise<SequenceDetail>,
+		{
+			reconcileDraft = false,
+			draftIndex
+		}: { reconcileDraft?: boolean; draftIndex?: (index: number) => number | null } = {}
+	): Promise<string> {
 		try {
-			seq = await updateSequence(seq.id, body);
+			const updated = await update;
 			actionError = '';
+			if (draftIndex && editingIndex !== null) {
+				const index = draftIndex(editingIndex);
+				if (index === null) cancelStep();
+				else editingIndex = index;
+			} else if (reconcileDraft && editingIndex !== null) {
+				const stepId = seq?.steps[editingIndex]?.id;
+				const index = updated.steps.findIndex((step) => step.id === stepId);
+				if (index === -1) {
+					cancelStep();
+					actionError = 'Steps changed. Reopen the step to continue editing.';
+				} else {
+					editingIndex = index;
+				}
+			}
+			seq = updated;
 			await refreshEmit();
 			return '';
 		} catch (e) {
@@ -116,12 +135,18 @@
 		}
 	}
 
+	// Step writes replace step IDs, so only one may be in flight at a time.
+	function writeSteps(id: number, steps: SequenceStepInput[]): Promise<SequenceDetail> {
+		stepWritePending = true;
+		return updateSequenceSteps(id, steps).finally(() => (stepWritePending = false));
+	}
+
 	async function saveMeta() {
 		if (!seq || !nameDraft.trim()) return;
-		const body = toInput();
-		body.name = nameDraft.trim();
-		body.description = descDraft;
-		const error = await put(body);
+		const error = await save(
+			updateSequenceMeta(seq.id, { name: nameDraft.trim(), description: descDraft }),
+			{ reconcileDraft: true }
+		);
 		if (error) {
 			actionError = error;
 			return;
@@ -151,43 +176,32 @@
 		editNote = s.note;
 	}
 
-	// name=value lines → map. This edits the stored name-keyed values; the
-	// pipe script grammar is never parsed (steps are the source of truth).
-	function parseAssignments(text: string): Record<string, string> {
-		const out: Record<string, string> = {};
-		for (const line of text.split('\n')) {
-			const t = line.trim();
-			if (!t) continue;
-			const eq = t.indexOf('=');
-			if (eq <= 0) continue;
-			out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
-		}
-		return out;
-	}
-
 	async function saveStep() {
-		if (!seq || editingIndex === null) return;
-		const malformed = [editParams, editCriteria]
-			.flatMap((text) => text.split('\n'))
-			.find((line) => line.trim() !== '' && !line.includes('='));
-		if (malformed !== undefined) {
-			stepError = `Use name=value on each line: "${malformed.trim()}"`;
+		if (!seq || editingIndex === null || stepWritePending) return;
+		const parameters = parseAssignments(editParams);
+		if ('error' in parameters) {
+			stepError = parameters.error;
 			return;
 		}
-		const body = toInput();
-		const target = body.steps[editingIndex];
+		const criteria = parseAssignments(editCriteria);
+		if ('error' in criteria) {
+			stepError = criteria.error;
+			return;
+		}
+		const steps = seq.steps.map((step) => ({ ...step }));
+		const target = steps[editingIndex];
 		if (!target) return;
 		target.function_source = editFnSource.trim();
 		target.function_interface = editFnInterface.trim();
 		target.function_name = editFnName.trim();
-		target.parameters = parseAssignments(editParams);
-		target.criteria = parseAssignments(editCriteria);
+		target.parameters = parameters.values;
+		target.criteria = criteria.values;
 		target.timeout_ms = editTimeout;
 		target.flow = editFlow;
 		target.on_fail = editOnFail;
 		target.device_name = editDevice;
 		target.note = editNote;
-		const error = await put(body);
+		const error = await save(writeSteps(seq.id, steps));
 		if (error) {
 			stepError = error;
 			return;
@@ -203,32 +217,28 @@
 	}
 
 	async function move(i: number, dir: -1 | 1) {
-		if (!seq) return;
+		if (!seq || stepWritePending) return;
 		const j = i + dir;
 		if (j < 0 || j >= seq.steps.length) return;
-		const body = toInput();
-		const [step] = body.steps.splice(i, 1);
-		body.steps.splice(j, 0, step);
-		const error = await put(body);
-		if (error) {
-			actionError = error;
-			return;
-		}
-		if (editingIndex === i) editingIndex = j;
-		else if (editingIndex === j) editingIndex = i;
+		const steps = [...seq.steps];
+		const [step] = steps.splice(i, 1);
+		steps.splice(j, 0, step);
+		const error = await save(writeSteps(seq.id, steps), {
+			draftIndex: (index) => (index === i ? j : index === j ? i : index)
+		});
+		if (error) actionError = error;
 	}
 
 	async function removeStep(i: number) {
-		if (!seq || seq.steps.length <= 1) return;
-		const body = toInput();
-		body.steps.splice(i, 1);
-		const error = await put(body);
+		if (!seq || seq.steps.length <= 1 || stepWritePending) return;
+		const steps = seq.steps.filter((_, index) => index !== i);
+		const error = await save(writeSteps(seq.id, steps), {
+			draftIndex: (index) => (index === i ? null : index > i ? index - 1 : index)
+		});
 		if (error) {
 			actionError = error;
 			return;
 		}
-		if (editingIndex === i) cancelStep();
-		else if (editingIndex !== null && editingIndex > i) editingIndex -= 1;
 		toast.success('Step removed');
 	}
 
@@ -244,7 +254,7 @@
 	}
 
 	async function copyAll() {
-		if (!emit?.text) return;
+		if (emitLoading || !emit?.text) return;
 		await copyText(emit.text);
 	}
 </script>
@@ -330,7 +340,9 @@
 		<div class="section-heading">
 			<h2 id="emitted-heading">Emitted text</h2>
 			{#if emit?.text}
-				<Button type="button" variant="outline" size="sm" onclick={copyAll}>Copy all</Button>
+				<Button type="button" variant="outline" size="sm" disabled={emitLoading} onclick={copyAll}>
+					Copy all
+				</Button>
 			{/if}
 		</div>
 		{#if emitLoading}
@@ -373,7 +385,7 @@
 							size="icon"
 							variant="outline"
 							aria-label="Move step up"
-							disabled={i === 0}
+							disabled={i === 0 || stepWritePending}
 							onclick={() => move(i, -1)}
 						>
 							↑
@@ -383,7 +395,7 @@
 							size="icon"
 							variant="outline"
 							aria-label="Move step down"
-							disabled={i === seq.steps.length - 1}
+							disabled={i === seq.steps.length - 1 || stepWritePending}
 							onclick={() => move(i, 1)}>↓</Button
 						>
 
@@ -392,7 +404,7 @@
 						<Button
 							type="button"
 							variant="destructive"
-							disabled={seq.steps.length <= 1}
+							disabled={seq.steps.length <= 1 || stepWritePending}
 							onclick={() => removeStep(i)}
 						>
 							Remove
@@ -464,7 +476,7 @@
 								</label>
 							</div>
 							<div class="step-form-actions">
-								<Button type="submit">Save step</Button>
+								<Button type="submit" disabled={stepWritePending}>Save step</Button>
 								<Button type="button" variant="outline" onclick={cancelStep}>Cancel</Button>
 							</div>
 						</form>

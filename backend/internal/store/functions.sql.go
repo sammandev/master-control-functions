@@ -13,8 +13,7 @@ import (
 const countFunctions = `-- name: CountFunctions :one
 SELECT COUNT(*) FROM functions
 WHERE ($1::text IS NULL
-       OR lower(name) LIKE lower($1::text)
-       OR lower(description) LIKE lower($1::text))
+       OR strpos(lower(name || ' ' || description), lower($1::text)) > 0)
   AND ($2::text IS NULL OR source = $2::text)
   AND ($3::text IS NULL OR interface = $3::text)
   AND ($4::text IS NULL OR category = $4::text)
@@ -133,11 +132,51 @@ func (q *Queries) InsertFunction(ctx context.Context, arg InsertFunctionParams) 
 	return i, err
 }
 
+const listFunctionOptions = `-- name: ListFunctionOptions :many
+SELECT id, name, source, interface FROM functions
+ORDER BY name COLLATE "C", (source || interface || name) COLLATE "C", id
+`
+
+type ListFunctionOptionsRow struct {
+	ID        int64
+	Name      string
+	Source    string
+	Interface string
+}
+
+// Match the catalog's ascending name sort, including its bytewise tiebreak.
+func (q *Queries) ListFunctionOptions(ctx context.Context) ([]ListFunctionOptionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFunctionOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFunctionOptionsRow
+	for rows.Next() {
+		var i ListFunctionOptionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Source,
+			&i.Interface,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFunctions = `-- name: ListFunctions :many
 SELECT id, source, interface, name, description, convention, category, execution_role, execution_phase, created_at, updated_at FROM functions
 WHERE ($1::text IS NULL
-       OR lower(name) LIKE lower($1::text)
-       OR lower(description) LIKE lower($1::text))
+       OR strpos(lower(name || ' ' || description), lower($1::text)) > 0)
   AND ($2::text IS NULL OR source = $2::text)
   AND ($3::text IS NULL OR interface = $3::text)
   AND ($4::text IS NULL OR category = $4::text)

@@ -141,6 +141,135 @@ test('compose a script and save it as an example', async ({ page }) => {
 	).toBeVisible();
 });
 
+test('Composer rejects a Flow value that would add script segments', async ({ page }) => {
+	await page.goto(fnPath);
+	await page.getByRole('button', { name: 'Compose script' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+	await expect(dialog).toBeVisible();
+
+	await dialog.getByLabel(/^ANT ·/).fill('15');
+	await dialog.getByLabel(/^STANDARD ·/).fill('11AX');
+	await dialog.getByLabel(/^FREQ ·/).fill('6165');
+	await dialog.getByLabel(/^BW ·/).fill('20');
+	await dialog.getByLabel(/^DATA_RATE ·/).fill('7');
+	await dialog.getByLabel(/^TX_TARGET_POWER ·/).fill('15');
+	await dialog.getByLabel(/^POWER ·/).fill('5dB');
+	await expect(dialog.getByText(/\|10000\|NEXT\|FAIL$/)).toBeVisible({ timeout: 10_000 });
+
+	await dialog.getByLabel('Flow').fill('NEXT|EXTRA');
+	await expect(dialog.getByText("must not contain '|' or a line break")).toBeVisible({
+		timeout: 10_000
+	});
+	await expect(dialog.getByText('Fix the highlighted fields to preview the script.')).toBeVisible();
+	await expect(dialog.getByText(/^DLLWIFI_TEST\|TX_MULTI_VERIFICATION\|/)).toHaveCount(0);
+});
+
+test('save the latest script when Composer preview responses arrive out of order', async ({
+	page,
+	request
+}, testInfo) => {
+	const composePath = `/api${fnPath}/compose`;
+	const olderTimeout = '23123';
+	const latestTimeout = '34123';
+	const olderRequested = Promise.withResolvers<void>();
+	const releaseOlder = Promise.withResolvers<void>();
+	await page.route(composePath, async (route) => {
+		if (route.request().postDataJSON().timeout_ms !== olderTimeout) {
+			await route.continue();
+			return;
+		}
+		const response = await route.fetch();
+		olderRequested.resolve();
+		await releaseOlder.promise;
+		await route.fulfill({ response });
+	});
+
+	await page.goto(fnPath);
+	await page.getByRole('button', { name: 'Compose script' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+	await dialog.getByLabel(/^ANT ·/).fill('15');
+	await dialog.getByLabel(/^STANDARD ·/).fill('11AX');
+	await dialog.getByLabel(/^FREQ ·/).fill('6165');
+	await dialog.getByLabel(/^BW ·/).fill('20');
+	await dialog.getByLabel(/^DATA_RATE ·/).fill('7');
+	await dialog.getByLabel(/^TX_TARGET_POWER ·/).fill('15');
+	await dialog.getByLabel(/^POWER ·/).fill('5dB');
+	await expect(dialog.getByText(/\|POWER=5dB\|10000\|NEXT\|FAIL$/)).toBeVisible();
+
+	const meaning = 'Composer out-of-order preview regression';
+	await dialog.getByText('Save as example').click();
+	await dialog.getByLabel('Meaning').fill(meaning);
+
+	const timeout = dialog.getByLabel('Timeout-ms');
+	await timeout.fill(olderTimeout);
+	await olderRequested.promise;
+	await timeout.fill(latestTimeout);
+	const latestPreview = dialog.getByText(/\|POWER=5dB\|34123\|NEXT\|FAIL$/);
+	await expect(latestPreview).toBeVisible();
+	const latestScript = await latestPreview.innerText();
+
+	const olderResponse = page.waitForResponse(
+		(response) =>
+			new URL(response.url()).pathname === composePath &&
+			response.request().postDataJSON().timeout_ms === olderTimeout
+	);
+	releaseOlder.resolve();
+	const older = await olderResponse;
+	expect(older.ok()).toBe(true);
+	expect(await older.finished()).toBeNull();
+
+	const savedResponse = page.waitForResponse(
+		(response) => response.url().endsWith('/api/examples') && response.request().method() === 'POST'
+	);
+	await dialog.getByRole('button', { name: 'Save example' }).click();
+	const saved = await savedResponse;
+	expect(saved.status()).toBe(201);
+	const { id } = await saved.json();
+	const persisted = await request.get(`/api/examples/${id}`);
+	expect(persisted.status()).toBe(200);
+
+	await page.goto('/examples');
+	await page.getByLabel('Search examples').fill(meaning);
+	const details = page.getByRole('region', { name: 'Example details' });
+	await expect(details.getByText(meaning)).toBeVisible();
+	await details.screenshot({ path: testInfo.outputPath('persisted-example.png') });
+	expect((await persisted.json()).script).toBe(latestScript);
+});
+
+test('keep an edited Example script draft when Composer refreshes the preview', async ({
+	page
+}, testInfo) => {
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await page.goto(fnPath);
+	await page.getByRole('button', { name: 'Compose script' }).click();
+
+	const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+	await dialog.getByLabel(/^ANT ·/).fill('15');
+	await dialog.getByLabel(/^STANDARD ·/).fill('11AX');
+	await dialog.getByLabel(/^FREQ ·/).fill('6165');
+	await dialog.getByLabel(/^BW ·/).fill('20');
+	await dialog.getByLabel(/^DATA_RATE ·/).fill('7');
+	await dialog.getByLabel(/^TX_TARGET_POWER ·/).fill('15');
+	await dialog.getByLabel(/^POWER ·/).fill('5dB');
+
+	await dialog.getByText('Save as example').click();
+	const draft = dialog.getByLabel('Script (editable)');
+	const timeout = dialog.getByLabel('Timeout-ms');
+	await timeout.fill('23123');
+	const preview = dialog.getByText(/\|POWER=5dB\|23123\|NEXT\|FAIL$/);
+	await expect(preview).toBeVisible();
+	const generated = await preview.innerText();
+	await expect(draft).toHaveValue(generated);
+
+	const edited = generated.replace('|23123|', '|60000|');
+	await draft.fill(edited);
+	await expect(draft).toHaveValue(edited);
+	await timeout.fill('34123');
+	await expect(dialog.getByText(/\|POWER=5dB\|34123\|NEXT\|FAIL$/)).toBeVisible();
+	await dialog.screenshot({ path: testInfo.outputPath('example-draft.png') });
+	await expect(draft).toHaveValue(edited);
+});
+
 test('view the orphan report', async ({ page }) => {
 	await page.goto('/orphans');
 
@@ -287,4 +416,109 @@ test('sequence: emit, reorder and add a composer step', async ({ page, request }
 			.filter({ hasText: 'Sequence deleted' })
 	).toBeVisible();
 	await expect(page).toHaveURL(/\/sequences$/);
+});
+
+test('Composer can select a sequence it just created without reopening the section', async ({
+	page,
+	request
+}) => {
+	const seqName = 'New Composer sequence';
+	const created = await request.post('/api/sequences', {
+		data: {
+			name: 'Existing Composer sequence',
+			description: '',
+			steps: [
+				{
+					function_source: 'DLL',
+					function_interface: 'WIFI_TEST',
+					function_name: 'TX_MULTI_VERIFICATION'
+				}
+			]
+		}
+	});
+	expect(created.status()).toBe(201);
+	const { id: existingId } = (await created.json()) as { id: number };
+	let newId: number | undefined;
+
+	try {
+		await page.goto(fnPath);
+		await page.getByRole('button', { name: 'Compose script' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+		await dialog.getByText('Add to sequence').click();
+		const target = dialog.getByRole('button', { name: 'Target sequence' });
+		await expect(target).toBeVisible();
+		await dialog.getByLabel('Sequence name').fill(seqName);
+
+		const creation = page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname === '/api/sequences' &&
+				response.request().method() === 'POST'
+		);
+		await dialog.getByRole('button', { name: 'Create sequence with this step' }).click();
+		const response = await creation;
+		expect(response.status()).toBe(201);
+		newId = ((await response.json()) as { id: number }).id;
+		await expect(dialog.getByText(`Created sequence '${seqName}' with this step.`)).toBeVisible();
+
+		await target.click();
+		const picker = page.getByRole('dialog', { name: 'Choose Target sequence' });
+		await picker.getByRole('option', { name: `${seqName} (1 steps)` }).click({ timeout: 5000 });
+		await expect(target).toHaveText(`${seqName} (1 steps)`);
+	} finally {
+		if (newId !== undefined) await request.delete(`/api/sequences/${newId}`);
+		await request.delete(`/api/sequences/${existingId}`);
+	}
+});
+
+test('Composer can find and append to a sequence beyond the first 100', async ({
+	page,
+	request
+}) => {
+	const prefix = `Composer sequence ${Date.now()}`;
+	const targetName = `${prefix} 103`;
+	const sequenceIds: number[] = [];
+	try {
+		for (let index = 1; index <= 103; index++) {
+			const name = `${prefix} ${String(index).padStart(3, '0')}`;
+			const created = await request.post('/api/sequences', {
+				data: {
+					name,
+					description: '',
+					steps: [
+						{
+							function_source: 'DLL',
+							function_interface: 'WIFI_TEST',
+							function_name: 'TX_MULTI_VERIFICATION'
+						}
+					]
+				}
+			});
+			expect(created.status(), name).toBe(201);
+			const { id } = (await created.json()) as { id: number };
+			sequenceIds.push(id);
+		}
+
+		await page.goto(fnPath);
+		await page.getByRole('button', { name: 'Compose script' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Script Composer' });
+		await dialog.getByText('Add to sequence').click();
+		await dialog.getByRole('button', { name: 'Target sequence' }).click();
+		const picker = page.getByRole('dialog', { name: 'Choose Target sequence' });
+		await picker.getByRole('combobox', { name: 'Search options' }).fill(targetName);
+		const target = picker.getByRole('option', { name: `${targetName} (1 steps)` });
+		await expect(target).toBeVisible();
+		await target.click();
+		await dialog.getByRole('button', { name: 'Add step' }).click();
+		await expect(dialog.getByText('Added as a new step.')).toBeVisible();
+
+		const saved = await request.get(`/api/sequences/${sequenceIds.at(-1)}`);
+		expect(saved.status()).toBe(200);
+		const detail = (await saved.json()) as { steps: { function_name: string }[] };
+		expect(detail.steps).toHaveLength(2);
+		expect(detail.steps[1].function_name).toBe('TX_MULTI_VERIFICATION');
+	} finally {
+		for (const id of sequenceIds) {
+			await request.delete(`/api/sequences/${id}`);
+		}
+	}
 });

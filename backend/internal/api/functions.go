@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,18 +50,36 @@ func cmpBy(key func(store.Function) string) func(a, b store.Function) int {
 	}
 }
 
-// registerFunctionRoutes wires the /api/functions CRUD endpoints.
-// registerFunctionRoutes mounts the function endpoints. The facets route
-// is registered BEFORE the :id route so it is not shadowed by it; the
-// facets.sql queries return one DISTINCT list per enum column.
+// registerFunctionRoutes mounts static paths before :id so they are not shadowed.
 func registerFunctionRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Post("/api/functions", createFunction(q))
 	app.Get("/api/functions", listFunctions(q))
-	// Facets before :id so "facets" is not captured as an id.
 	app.Get("/api/functions/facets", functionFacets(q))
+	app.Get("/api/functions/options", listFunctionOptions(q))
 	app.Get("/api/functions/:id", getFunction(q))
 	app.Put("/api/functions/:id", updateFunction(q, d))
 	app.Delete("/api/functions/:id", deleteFunction(q))
+}
+
+type functionOption struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	Interface string `json:"interface"`
+}
+
+func listFunctionOptions(q *store.Queries) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		rows, err := q.ListFunctionOptions(c.Context())
+		if err != nil {
+			return serverError(c, "list function options", err)
+		}
+		items := make([]functionOption, 0, len(rows))
+		for _, row := range rows {
+			items = append(items, functionOption(row))
+		}
+		return c.JSON(fiber.Map{"items": items})
+	}
 }
 
 // functionFacets serves the distinct enum values for the functions list
@@ -213,29 +232,20 @@ func serverError(c fiber.Ctx, action string, err error) error {
 	})
 }
 
-// likePattern wraps the search term for a substring LIKE match. The query
-// cannot use an ESCAPE clause (sqlc's SQLite grammar rejects it), so
-// multi-character wildcards are neutralized by stripping them; `_`
-// remains and behaves as a single-character wildcard — which still
-// matches the literal character, and domain names are underscore-heavy
-// (e.g. TX_MULTI_VERIFICATION stays searchable).
+// likePattern wraps the search term for a substring LIKE match. PostgreSQL
+// uses backslash as LIKE's default escape character, so a literal backslash
+// is doubled. User-supplied % is stripped; _ remains a single-character wildcard.
 func likePattern(search string) string {
-	cleaned := strings.Map(func(r rune) rune {
-		switch r {
-		case '\\', '%':
-			return -1
-		}
-		return r
-	}, strings.TrimSpace(search))
+	cleaned := strings.ReplaceAll(strings.TrimSpace(search), "%", "")
 	if cleaned == "" {
 		return ""
 	}
-	return "%" + cleaned + "%"
+	return "%" + strings.ReplaceAll(cleaned, `\`, `\\`) + "%"
 }
 
-// listQuery holds the parsed query-string parameters for GET /api/functions.
+// listQuery holds the parsed list query-string parameters.
 type listQuery struct {
-	search   *string
+	search   string
 	filters  map[string]*string
 	sortCol  string
 	sortDesc bool
@@ -244,21 +254,14 @@ type listQuery struct {
 }
 
 func parseListQuery(c fiber.Ctx) listQuery {
-	lq := listQuery{filters: map[string]*string{}, page: 1, pageSize: 20}
-	if s := strings.TrimSpace(c.Query("search")); s != "" {
-		if p := likePattern(s); p != "" {
-			lq.search = &p
-		}
-	}
+	lq := listQuery{search: c.Query("search"), filters: map[string]*string{}, page: 1, pageSize: 20}
 	for _, f := range []string{"source", "interface", "category", "execution_role", "execution_phase"} {
 		if v := strings.TrimSpace(c.Query(f)); v != "" {
 			lq.filters[f] = &v
 		}
 	}
+	// Each list handler checks sortCol against its own sort keys.
 	lq.sortCol = strings.TrimSpace(c.Query("sort"))
-	if _, ok := sortColumns[lq.sortCol]; !ok {
-		lq.sortCol = ""
-	}
 	lq.sortDesc = strings.EqualFold(c.Query("order"), "desc")
 	if p, err := strconv.ParseInt(c.Query("page"), 10, 64); err == nil && p > 0 {
 		lq.page = p
@@ -274,7 +277,7 @@ func parseListQuery(c fiber.Ctx) listQuery {
 
 func (lq *listQuery) storeParams() store.ListFunctionsParams {
 	return store.ListFunctionsParams{
-		Search:         nullStrPtr(lq.search),
+		Search:         nullStrPtr(&lq.search),
 		Source:         nullStrPtr(lq.filters["source"]),
 		Interface:      nullStrPtr(lq.filters["interface"]),
 		Category:       nullStrPtr(lq.filters["category"]),
@@ -285,12 +288,25 @@ func (lq *listQuery) storeParams() store.ListFunctionsParams {
 
 func (lq *listQuery) countParams() store.CountFunctionsParams {
 	return store.CountFunctionsParams{
-		Search:         nullStrPtr(lq.search),
+		Search:         nullStrPtr(&lq.search),
 		Source:         nullStrPtr(lq.filters["source"]),
 		Interface:      nullStrPtr(lq.filters["interface"]),
 		Category:       nullStrPtr(lq.filters["category"]),
 		ExecutionRole:  nullStrPtr(lq.filters["execution_role"]),
 		ExecutionPhase: nullStrPtr(lq.filters["execution_phase"]),
+	}
+}
+
+// locateRow moves lq to the page holding the row whose id is in the param
+// query, so a client can open a just-saved row wherever it sorts. An absent
+// or unknown id keeps the requested page.
+func locateRow[T any](c fiber.Ctx, lq *listQuery, param string, rows []T, idOf func(T) int64) {
+	id, err := strconv.ParseInt(c.Query(param), 10, 64)
+	if err != nil || id <= 0 {
+		return
+	}
+	if index := slices.IndexFunc(rows, func(row T) bool { return idOf(row) == id }); index >= 0 {
+		lq.page = int64(index)/lq.pageSize + 1
 	}
 }
 
@@ -319,6 +335,7 @@ func listFunctions(q *store.Queries) fiber.Handler {
 				return c < 0
 			})
 		}
+		locateRow(c, &lq, "function_id", items, func(f store.Function) int64 { return f.ID })
 		start := (lq.page - 1) * lq.pageSize
 		if start > int64(len(items)) {
 			start = int64(len(items))

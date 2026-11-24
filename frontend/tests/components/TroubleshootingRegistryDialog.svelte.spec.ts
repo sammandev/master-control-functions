@@ -77,9 +77,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('TroubleshootingRegistryDialog', () => {
 	it('shows registry status and keeps delete visible with built-in protection', async () => {
 		renderDialog();
-		await expect
-			.element(page.getByRole('dialog', { name: 'Manage Troubleshooting Lists' }))
-			.toBeVisible();
+		await expect.element(page.getByRole('dialog', { name: 'Manage Labels' })).toBeVisible();
 		await expect.element(page.getByRole('tab', { name: 'Categories' })).toBeVisible();
 		await expect.element(page.getByRole('tab', { name: 'Severities' })).toBeVisible();
 		const categoriesPanel = page.getByRole('tabpanel', { name: 'Categories' });
@@ -104,6 +102,28 @@ describe('TroubleshootingRegistryDialog', () => {
 			await expect.element(page.getByRole('option', { name: tone })).toBeVisible();
 		}
 		await expect.element(page.getByRole('option').nth(4)).not.toBeInTheDocument();
+	});
+
+	it('adds a category inline from the empty state', async () => {
+		const fetchMock = vi.fn<typeof fetch>(async () =>
+			jsonResponse({ ...categories[1], label: 'New Category' }, 201)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const { onChanged } = renderDialog({ categories: [] });
+		await expect.element(page.getByText('No categories yet.', { exact: false })).toBeVisible();
+		const add = page.getByRole('button', { name: 'Add category' });
+		await expect.element(add).toBeDisabled();
+		await page.getByRole('textbox', { name: 'New category label' }).fill('New Category');
+		await add.click();
+
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe('/api/troubleshooting/categories');
+		expect(init?.method).toBe('POST');
+		expect(JSON.parse(String(init?.body))).toEqual({ label: 'New Category' });
+		await expect
+			.element(page.getByRole('textbox', { name: 'New Category label', exact: true }).last())
+			.toHaveValue('New Category');
+		expect(onChanged).toHaveBeenCalledOnce();
 	});
 
 	it('saves edited metadata with the preserved stable key and supported severity tone', async () => {

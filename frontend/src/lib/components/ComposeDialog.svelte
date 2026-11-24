@@ -11,6 +11,7 @@
 	} from '#lib/compose.ts';
 	import { ApiError, formatApiError } from '#lib/client.ts';
 	import { createExample } from '#lib/examples.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import Dialog from '#lib/components/ui/dialog.svelte';
 	import Select from '#lib/components/ui/select.svelte';
 	import Tooltip from '#lib/components/ui/tooltip.svelte';
@@ -25,7 +26,7 @@
 		listSequences,
 		getSequence,
 		createSequence,
-		updateSequence,
+		updateSequenceSteps,
 		type SequenceListItem
 	} from '#lib/sequences.ts';
 
@@ -68,6 +69,7 @@
 	let onFail = $state('FAIL');
 
 	// ---- preview -----------------------------------------------------------
+	const previewRequestGuard = createLatestRequestGuard();
 	let preview = $state('');
 	let fieldErrors = $state<Record<string, string>>({});
 	let composeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -76,6 +78,7 @@
 	let saveDevice = $state('');
 	let saveMeaning = $state('');
 	let saveScript = $state('');
+	let saveScriptEdited = false;
 	let saving = $state(false);
 	let savedNote = $state('');
 	let saveError = $state('');
@@ -87,6 +90,8 @@
 	});
 
 	async function loadMeta(id: number) {
+		clearTimeout(composeTimer);
+		previewRequestGuard.begin();
 		loading = true;
 		loadError = '';
 		meta = null;
@@ -134,15 +139,17 @@
 	// Live preview: debounced compose call; the server is the single
 	// source of truth for the grammar, so the preview shows either the
 	// emitted script or the field-level rejections.
-	function previewScript() {
+	function previewScript(request = previewRequestGuard.begin()) {
 		if (!meta) return;
 		composeScript(fnId, currentRequest())
 			.then((res) => {
+				if (!previewRequestGuard.isCurrent(request)) return;
 				preview = res.script;
-				saveScript = res.script;
+				if (!saveScriptEdited) saveScript = res.script;
 				fieldErrors = {};
 			})
 			.catch((e) => {
+				if (!previewRequestGuard.isCurrent(request)) return;
 				preview = '';
 				if (e instanceof ApiError) {
 					fieldErrors = e.fields;
@@ -154,7 +161,8 @@
 
 	function schedulePreview() {
 		clearTimeout(composeTimer);
-		composeTimer = setTimeout(previewScript, 300);
+		const request = previewRequestGuard.begin();
+		composeTimer = setTimeout(() => previewScript(request), 300);
 	}
 
 	async function copyScript() {
@@ -197,14 +205,24 @@
 	let seqSaving = $state(false);
 	let seqNoteSaved = $state('');
 	let seqError = $state('');
+	const sequenceListGuard = createLatestRequestGuard();
 
 	// Reload on every open: a sequence may have been created since the
 	// dialog was last shown.
 	async function reloadSequences() {
+		const request = sequenceListGuard.begin();
 		try {
-			seqs = (await listSequences({ page_size: 200 })).items;
+			const pageSize = 100;
+			const first = await listSequences({ page: 1, page_size: pageSize });
+			const items = first.items;
+			const pageCount = Math.ceil(first.total / first.page_size);
+			for (let page = 2; page <= pageCount; page++) {
+				const result = await listSequences({ page, page_size: pageSize });
+				items.push(...result.items);
+			}
+			if (sequenceListGuard.isCurrent(request)) seqs = items;
 		} catch {
-			seqs = [];
+			if (sequenceListGuard.isCurrent(request)) seqs = [];
 		}
 	}
 
@@ -232,22 +250,17 @@
 		try {
 			const step = stepFromForm();
 			if (seqPick === 'new') {
-				await createSequence({
+				const created = await createSequence({
 					name: seqNewName.trim(),
 					description: seqNewDesc,
 					steps: [step]
 				});
-				seqNoteSaved = `Created sequence '${seqNewName.trim()}' with this step.`;
+				await reloadSequences();
+				seqNoteSaved = `Created sequence '${created.name}' with this step.`;
 			} else {
 				const id = Number(seqPick);
 				const current = await getSequence(id);
-				await updateSequence(id, {
-					name: current.name,
-					description: current.description,
-					// Server ignores the read-model extras (id/position/
-					// function_exists) on each spread step.
-					steps: [...current.steps.map((s) => ({ ...s })), step]
-				});
+				await updateSequenceSteps(id, [...current.steps, step]);
 				seqNoteSaved = 'Added as a new step.';
 			}
 			toast.success(seqNoteSaved);
@@ -399,7 +412,12 @@
 				<div class="field">
 					<Label for="compose-save-script">Script (editable)</Label>
 
-					<Textarea id="compose-save-script" rows={2} bind:value={saveScript} />
+					<Textarea
+						id="compose-save-script"
+						rows={2}
+						bind:value={saveScript}
+						oninput={() => (saveScriptEdited = true)}
+					/>
 				</div>
 				<div class="grid grid-cols-2 gap-2">
 					<div class="field mb-0">

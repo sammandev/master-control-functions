@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -103,10 +104,24 @@ func listExampleItem(r store.ListExamplesRow) exampleResponse {
 // registerExampleRoutes wires the /api/examples endpoints.
 func registerExampleRoutes(app *fiber.App, q *store.Queries) {
 	app.Get("/api/examples", listExamples(q))
+	app.Get("/api/examples/function-names", listExampleFunctionNames(q))
 	app.Post("/api/examples", createExample(q))
 	app.Get("/api/examples/:id", getExample(q))
 	app.Put("/api/examples/:id", updateExample(q))
 	app.Delete("/api/examples/:id", deleteExample(q))
+}
+
+func listExampleFunctionNames(q *store.Queries) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		names, err := q.ListExampleFunctionNames(c.Context())
+		if err != nil {
+			return serverError(c, "list example function names", err)
+		}
+		if names == nil {
+			names = []string{}
+		}
+		return c.JSON(fiber.Map{"items": names})
+	}
 }
 
 // exampleFilters reads the list filters: function_source, function_name,
@@ -147,22 +162,27 @@ func listExamples(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "count examples", err)
 		}
+
+		lq := parseListQuery(c)
+		params.PageSize = lq.pageSize
+		// An overflowing offset is past the end, not a wrapped page near the start.
+		params.RequestedOffset = math.MaxInt64
+		if pageIndex := lq.page - 1; pageIndex <= math.MaxInt64/lq.pageSize {
+			params.RequestedOffset = pageIndex * lq.pageSize
+		}
+		if id, err := strconv.ParseInt(c.Query("example_id"), 10, 64); err == nil && id > 0 {
+			params.ExampleID = sql.NullInt64{Int64: id, Valid: true}
+		}
+
 		rows, err := q.ListExamples(c.Context(), params)
 		if err != nil {
 			return serverError(c, "list examples", err)
 		}
-		// Go-side pagination over the SQL-sorted rows (device, id).
-		lq := parseListQuery(c)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(rows)) {
-			start = int64(len(rows))
+		if len(rows) > 0 {
+			lq.page = rows[0].PageOffset/lq.pageSize + 1
 		}
-		end := start + lq.pageSize
-		if end > int64(len(rows)) {
-			end = int64(len(rows))
-		}
-		items := make([]exampleResponse, 0, end-start)
-		for _, r := range rows[start:end] {
+		items := make([]exampleResponse, 0, len(rows))
+		for _, r := range rows {
 			items = append(items, listExampleItem(r))
 		}
 		return c.JSON(fiber.Map{

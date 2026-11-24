@@ -6,7 +6,8 @@
 	import Input from '#lib/components/ui/input.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
 	import SortHead from '#lib/components/SortHead.svelte';
-	import { nextSort, sortRows, type SortDir } from '#lib/table-sort.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
+	import { nextSort, type SortDir } from '#lib/table-sort.ts';
 	import {
 		Table,
 		TableHeader,
@@ -23,33 +24,49 @@
 	let loadError = $state('');
 	let search = $state('');
 	let searchDebounced = $state('');
+	const hasSearchFilter = $derived(searchDebounced.replaceAll('%', '') !== '');
 	let page = $state(1);
 	let pageSize = $state(20);
+	// '' keeps the API's default (name) order until a header is clicked.
+	let sortKey = $state('');
+	let sortDir = $state<SortDir>('asc');
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	const listRequestGuard = createLatestRequestGuard();
 
 	// Reload whenever any list parameter changes; the search term enters
 	// through its debounced snapshot so typing does not fire a request
 	// per keystroke.
 	$effect(() => {
 		void searchDebounced;
+		void sortKey;
+		void sortDir;
 		void page;
 		void pageSize;
 		load();
 	});
 
 	async function load() {
+		const request = listRequestGuard.begin();
 		loading = true;
 		loadError = '';
 		try {
-			const res = await listSequences({ search: searchDebounced, page, page_size: pageSize });
+			const res = await listSequences({
+				search: searchDebounced,
+				sort: sortKey || undefined,
+				order: sortKey ? sortDir : undefined,
+				page,
+				page_size: pageSize
+			});
+			if (!listRequestGuard.isCurrent(request)) return;
 			items = res.items;
 			total = res.total;
 		} catch (e) {
+			if (!listRequestGuard.isCurrent(request)) return;
 			items = [];
 			total = 0;
 			loadError = e instanceof Error ? e.message : String(e);
 		} finally {
-			loading = false;
+			if (listRequestGuard.isCurrent(request)) loading = false;
 		}
 	}
 
@@ -62,29 +79,12 @@
 	}
 
 	// ---- sorting (ticket 09) ------------------------------------------------
-	// The sequences API paginates server-side without sort params, so
-	// sorting applies to the loaded page through the shared sortRows
-	// helper. '' keeps the API's default order until a header is clicked.
-	const SEQUENCE_SORT_KEYS: Record<
-		string,
-		(row: SequenceListItem) => string | number | null | undefined
-	> = {
-		name: (r) => r.name,
-		description: (r) => r.description || '',
-		steps: (r) => r.step_count,
-		updated: (r) => r.updated_at
-	};
-
-	let sortKey = $state('');
-	let sortDir = $state<SortDir>('asc');
-
+	// The API sorts the whole filtered list before paging, so a new sort
+	// starts again from the first page.
 	function applySort(col: string) {
 		({ key: sortKey, dir: sortDir } = nextSort(sortKey, sortDir, col));
+		page = 1;
 	}
-
-	const view = $derived(
-		sortKey === '' ? items : sortRows(items, SEQUENCE_SORT_KEYS[sortKey]!, sortDir)
-	);
 </script>
 
 <h1 class="mt-2 mb-4 text-xl font-semibold">Sequences</h1>
@@ -151,15 +151,15 @@
 				/>
 				<SortHead
 					label="Updated"
-					col="updated"
+					col="updated_at"
 					active={sortKey}
 					dir={sortDir}
-					onclick={() => applySort('updated')}
+					onclick={() => applySort('updated_at')}
 				/>
 			</TableRow>
 		</TableHeader>
 		<TableBody>
-			{#each view as s (s.id)}
+			{#each items as s (s.id)}
 				<TableRow>
 					<TableCell>
 						<a
@@ -178,7 +178,7 @@
 							Loading…
 						{:else if loadError}
 							Sequences could not be loaded.
-						{:else if total === 0}
+						{:else if total === 0 && !hasSearchFilter}
 							No sequences yet.
 						{:else}
 							No sequences match the search.

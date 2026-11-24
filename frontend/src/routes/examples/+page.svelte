@@ -8,6 +8,8 @@
 	// details and explicit CRUD.
 </script>
 
+<svelte:head><title>Examples | MasterControl Functions Database</title></svelte:head>
+
 <h1 class="mt-2 mb-4 text-xl font-semibold">Examples</h1>
 
 <p class="text-muted-foreground mb-4 text-xs">

@@ -44,6 +44,7 @@ export interface ListParams {
 	order?: 'asc' | 'desc';
 	page?: number;
 	page_size?: number;
+	function_id?: number;
 }
 
 // Shared client plumbing lives in client.ts; re-exported here so existing
@@ -64,12 +65,21 @@ function withQuery(params: ListParams): string {
 	if (params.order) qs.set('order', params.order);
 	if (params.page) qs.set('page', String(params.page));
 	if (params.page_size) qs.set('page_size', String(params.page_size));
+	if (params.function_id) qs.set('function_id', String(params.function_id));
 	const s = qs.toString();
 	return s ? `?${s}` : '';
 }
 
 export async function listFunctions(params: ListParams = {}): Promise<ListResult> {
 	return request<ListResult>(`/api/functions${withQuery(params)}`);
+}
+
+export type FunctionOption = Pick<FunctionRow, 'id' | 'name' | 'source' | 'interface'>;
+
+export async function listFunctionOptions(
+	signal: AbortSignal
+): Promise<{ items: FunctionOption[] }> {
+	return request('/api/functions/options', { signal });
 }
 
 // Distinct enum values for the functions list filter bar (ticket 09).

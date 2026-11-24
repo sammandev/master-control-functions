@@ -54,18 +54,22 @@ export async function listDefinitions(
 	kind: DefinitionKind,
 	params: {
 		search?: string;
+		device?: string;
 		sort?: string;
 		order?: 'asc' | 'desc';
 		page?: number;
 		page_size?: number;
+		definition_id?: number;
 	}
 ): Promise<DefinitionListResult> {
 	const qs = new URLSearchParams();
 	if (params.search) qs.set('search', params.search);
+	if (params.device !== undefined) qs.set('device', params.device);
 	if (params.sort) qs.set('sort', params.sort);
 	if (params.order) qs.set('order', params.order);
 	if (params.page) qs.set('page', String(params.page));
 	if (params.page_size) qs.set('page_size', String(params.page_size));
+	if (params.definition_id) qs.set('definition_id', String(params.definition_id));
 	const s = qs.toString();
 	return request<DefinitionListResult>(`/api/${kind}${s ? `?${s}` : ''}`);
 }

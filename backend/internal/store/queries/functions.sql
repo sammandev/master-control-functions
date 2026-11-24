@@ -4,8 +4,7 @@ SELECT * FROM functions WHERE id = $1;
 -- name: ListFunctions :many
 SELECT * FROM functions
 WHERE (sqlc.narg('search')::text IS NULL
-       OR lower(name) LIKE lower(sqlc.narg('search')::text)
-       OR lower(description) LIKE lower(sqlc.narg('search')::text))
+       OR strpos(lower(name || ' ' || description), lower(sqlc.narg('search')::text)) > 0)
   AND (sqlc.narg('source')::text IS NULL OR source = sqlc.narg('source')::text)
   AND (sqlc.narg('interface')::text IS NULL OR interface = sqlc.narg('interface')::text)
   AND (sqlc.narg('category')::text IS NULL OR category = sqlc.narg('category')::text)
@@ -13,11 +12,15 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (sqlc.narg('execution_phase')::text IS NULL OR execution_phase = sqlc.narg('execution_phase')::text)
 ORDER BY id;
 
+-- name: ListFunctionOptions :many
+-- Match the catalog's ascending name sort, including its bytewise tiebreak.
+SELECT id, name, source, interface FROM functions
+ORDER BY name COLLATE "C", (source || interface || name) COLLATE "C", id;
+
 -- name: CountFunctions :one
 SELECT COUNT(*) FROM functions
 WHERE (sqlc.narg('search')::text IS NULL
-       OR lower(name) LIKE lower(sqlc.narg('search')::text)
-       OR lower(description) LIKE lower(sqlc.narg('search')::text))
+       OR strpos(lower(name || ' ' || description), lower(sqlc.narg('search')::text)) > 0)
   AND (sqlc.narg('source')::text IS NULL OR source = sqlc.narg('source')::text)
   AND (sqlc.narg('interface')::text IS NULL OR interface = sqlc.narg('interface')::text)
   AND (sqlc.narg('category')::text IS NULL OR category = sqlc.narg('category')::text)

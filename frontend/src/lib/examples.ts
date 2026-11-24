@@ -24,6 +24,7 @@ export interface ExampleListParams {
 	search?: string;
 	page?: number;
 	page_size?: number;
+	example_id?: number;
 }
 
 export interface ExampleListResult {
@@ -59,8 +60,13 @@ export async function listExamples(params: ExampleListParams = {}): Promise<Exam
 	if (params.search) qs.set('search', params.search);
 	if (params.page) qs.set('page', String(params.page));
 	if (params.page_size) qs.set('page_size', String(params.page_size));
+	if (params.example_id) qs.set('example_id', String(params.example_id));
 	const suffix = qs.size > 0 ? `?${qs.toString()}` : '';
 	return request<ExampleListResult>(`/api/examples${suffix}`);
+}
+
+export async function listExampleFunctionNames(): Promise<{ items: string[] }> {
+	return request<{ items: string[] }>('/api/examples/function-names');
 }
 
 export async function createExample(body: ExampleInput): Promise<ExampleRow> {

@@ -61,6 +61,23 @@ func nullableStringCell(v sql.NullString) string {
 	return v.String
 }
 
+type exportRow struct {
+	id     int64
+	name   string
+	values []interface{}
+}
+
+type ExportCellLimitError struct {
+	Sheet, Cell, Field, Name string
+	ID                       int64
+	Length                   int
+}
+
+func (e *ExportCellLimitError) Error() string {
+	return fmt.Sprintf("Cannot export workbook: %s record #%d (%.80q), field %s (cell %s), contains %d UTF-16 code units. Excel allows at most %d; the stored value has not changed.",
+		e.Sheet, e.ID, e.Name, e.Field, e.Cell, e.Length, excelize.TotalCellChars)
+}
+
 // Export reads every table and writes the six-sheet xlsx to w. Rows keep
 // their import order (id order), which is the source file's row order.
 func Export(ctx context.Context, db *sql.DB, w io.Writer) error {
@@ -70,11 +87,11 @@ func Export(ctx context.Context, db *sql.DB, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("list functions: %w", err)
 	}
-	params, err := q.ListParameterDefinitions(ctx, sql.NullString{})
+	params, err := q.ListParameterDefinitions(ctx, store.ListParameterDefinitionsParams{})
 	if err != nil {
 		return fmt.Errorf("list parameter definitions: %w", err)
 	}
-	criteria, err := q.ListCriteriaDefinitions(ctx, sql.NullString{})
+	criteria, err := q.ListCriteriaDefinitions(ctx, store.ListCriteriaDefinitionsParams{})
 	if err != nil {
 		return fmt.Errorf("list criteria definitions: %w", err)
 	}
@@ -93,10 +110,7 @@ func Export(ctx context.Context, db *sql.DB, w io.Writer) error {
 
 	f := excelize.NewFile()
 	defer f.Close()
-	// One entry per sheet: the data rows in order, each row a
-	// []interface{} in the original column layout. Statically typed so
-	// &row below is *[]interface{} (excelize rejects *interface{}).
-	rows := map[string][][]interface{}{
+	rows := map[string][]exportRow{
 		"function_main":      functionCells(fns),
 		"parameter_main":     parameterDefinitionCells(params),
 		"criteria_main":      criteriaDefinitionCells(criteria),
@@ -125,7 +139,17 @@ func Export(ctx context.Context, db *sql.DB, w io.Writer) error {
 			if err != nil {
 				return fmt.Errorf("cell name for row %d of %s: %w", i+2, sheet, err)
 			}
-			if err := f.SetSheetRow(sheet, cellName, &r); err != nil {
+			for j, value := range r.values {
+				text, ok := value.(string)
+				if !ok {
+					continue
+				}
+				if n := cellTextLength(text); n > excelize.TotalCellChars {
+					cell, _ := excelize.CoordinatesToCellName(j+1, i+2)
+					return &ExportCellLimitError{Sheet: sheet, Cell: cell, Field: header[j], Name: r.name, ID: r.id, Length: n}
+				}
+			}
+			if err := f.SetSheetRow(sheet, cellName, &r.values); err != nil {
 				return fmt.Errorf("row %d of %s: %w", i+2, sheet, err)
 			}
 		}
@@ -133,31 +157,31 @@ func Export(ctx context.Context, db *sql.DB, w io.Writer) error {
 	return f.Write(w)
 }
 
-func functionCells(rows []store.Function) [][]interface{} {
-	out := make([][]interface{}, 0, len(rows))
+func functionCells(rows []store.Function) []exportRow {
+	out := make([]exportRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, []interface{}{
+		out = append(out, exportRow{r.ID, r.Name, []interface{}{
 			r.Source, r.Interface, r.Name, r.Description,
 			nullableIntCell(r.Convention), r.Category, r.ExecutionRole, r.ExecutionPhase,
-		})
+		}})
 	}
 	return out
 }
 
-func parameterDefinitionCells(rows []store.ParameterDefinition) [][]interface{} {
-	out := make([][]interface{}, 0, len(rows))
+func parameterDefinitionCells(rows []store.ParameterDefinition) []exportRow {
+	out := make([]exportRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, definitionRow(r.Name, r.DeviceName, r.Description, r.Type, r.Unit,
-			r.DefaultValue, r.AllowedValues, r.Cardinality, r.ValuePattern, r.Required))
+		out = append(out, exportRow{r.ID, r.Name, definitionRow(r.Name, r.DeviceName, r.Description, r.Type, r.Unit,
+			r.DefaultValue, r.AllowedValues, r.Cardinality, r.ValuePattern, r.Required)})
 	}
 	return out
 }
 
-func criteriaDefinitionCells(rows []store.CriteriaDefinition) [][]interface{} {
-	out := make([][]interface{}, 0, len(rows))
+func criteriaDefinitionCells(rows []store.CriteriaDefinition) []exportRow {
+	out := make([]exportRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, definitionRow(r.Name, r.DeviceName, r.Description, r.Type, r.Unit,
-			r.DefaultValue, r.AllowedValues, r.Cardinality, r.ValuePattern, r.Required))
+		out = append(out, exportRow{r.ID, r.Name, definitionRow(r.Name, r.DeviceName, r.Description, r.Type, r.Unit,
+			r.DefaultValue, r.AllowedValues, r.Cardinality, r.ValuePattern, r.Required)})
 	}
 	return out
 }
@@ -176,20 +200,20 @@ func definitionRow(name, deviceName, description, typ, unit string, defaultValue
 	}
 }
 
-func parameterLinkCells(rows []store.ParameterLink) [][]interface{} {
-	out := make([][]interface{}, 0, len(rows))
+func parameterLinkCells(rows []store.ParameterLink) []exportRow {
+	out := make([]exportRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, linkRow(r.Name, r.FunctionSource, r.DeviceName, r.FunctionName,
-			r.SourceFile, r.Position, r.Required))
+		out = append(out, exportRow{r.ID, r.Name, linkRow(r.Name, r.FunctionSource, r.DeviceName, r.FunctionName,
+			r.SourceFile, r.Position, r.Required)})
 	}
 	return out
 }
 
-func criteriaLinkCells(rows []store.CriteriaLink) [][]interface{} {
-	out := make([][]interface{}, 0, len(rows))
+func criteriaLinkCells(rows []store.CriteriaLink) []exportRow {
+	out := make([]exportRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, linkRow(r.Name, r.FunctionSource, r.DeviceName, r.FunctionName,
-			r.SourceFile, r.Position, r.Required))
+		out = append(out, exportRow{r.ID, r.Name, linkRow(r.Name, r.FunctionSource, r.DeviceName, r.FunctionName,
+			r.SourceFile, r.Position, r.Required)})
 	}
 	return out
 }
@@ -205,12 +229,12 @@ func linkRow(name, functionSource, deviceName, functionName, sourceFile string,
 	}
 }
 
-func exampleCells(rows []store.Example) [][]interface{} {
-	out := make([][]interface{}, 0, len(rows))
+func exampleCells(rows []store.Example) []exportRow {
+	out := make([]exportRow, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, []interface{}{
+		out = append(out, exportRow{r.ID, r.FunctionName, []interface{}{
 			r.FunctionSource, r.DeviceName, r.FunctionName, r.Script, r.Meaning,
-		})
+		}})
 	}
 	return out
 }

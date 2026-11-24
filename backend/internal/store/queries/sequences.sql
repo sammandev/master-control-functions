@@ -8,8 +8,11 @@ INSERT INTO sequences (name, description, created_at, updated_at)
 VALUES ($1, $2, $3, $4)
 RETURNING id, name, description, created_at, updated_at;
 
--- name: UpdateSequenceMeta :exec
+-- name: UpdateSequenceMeta :execrows
 UPDATE sequences SET name = $1, description = $2, updated_at = $3 WHERE id = $4;
+
+-- name: TouchSequence :execrows
+UPDATE sequences SET updated_at = $1 WHERE id = $2;
 
 -- name: DeleteSequence :execrows
 DELETE FROM sequences WHERE id = $1;
@@ -27,10 +30,15 @@ WHERE (sqlc.narg('search')::text IS NULL
 -- name: ListSequences :many
 SELECT s.id, s.name, s.description, s.created_at, s.updated_at,
        (SELECT COUNT(*) FROM sequence_steps st WHERE st.sequence_id = s.id) AS step_count
-FROM sequences s
-WHERE (sqlc.narg('search')::text IS NULL
-       OR lower(s.name) LIKE lower(sqlc.narg('search')::text)
-       OR lower(s.description) LIKE lower(sqlc.narg('search')::text))
+FROM (
+    SELECT id, name, description, created_at, updated_at
+    FROM sequences
+    WHERE (sqlc.narg('search')::text IS NULL
+           OR lower(name) LIKE lower(sqlc.narg('search')::text)
+           OR lower(description) LIKE lower(sqlc.narg('search')::text))
+    ORDER BY name, id
+    LIMIT sqlc.narg('page_limit')::bigint OFFSET sqlc.arg('page_offset')::bigint
+) s
 ORDER BY s.name, s.id;
 
 -- name: InsertSequenceStep :one

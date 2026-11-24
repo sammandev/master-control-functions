@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"webprogfndb/internal/api"
@@ -253,6 +254,107 @@ func TestDictionaryListPaginationAndSearch(t *testing.T) {
 	}
 }
 
+func TestDictionaryListDeviceScope(t *testing.T) {
+	type definition struct {
+		ID         int64  `json:"id"`
+		Name       string `json:"name"`
+		DeviceName string `json:"device_name"`
+	}
+	for _, endpoint := range []string{"/api/parameter-definitions", "/api/criteria-definitions"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app, _ := newDictionaryTestApp(t)
+			rows := []definition{
+				{Name: "B_ANT", DeviceName: "WIFI_TEST"},
+				{Name: "A_ANT"},
+				{Name: "A_ANT", DeviceName: "WIFI_TEST"},
+				{Name: "A_ANT", DeviceName: "GOLDENKV"},
+				{Name: "C_BW", DeviceName: "WIFI_TEST"},
+			}
+			for i, row := range rows {
+				payload := fmt.Sprintf(`{"name":%q,"device_name":%q,"type":"int","cardinality":"SINGLE"}`, row.Name, row.DeviceName)
+				resp, body := postJSON(t, app, endpoint, payload)
+				if resp.StatusCode != 201 {
+					t.Fatalf("seed %s (%s): %d %s", row.Name, row.DeviceName, resp.StatusCode, body)
+				}
+				if err := json.Unmarshal([]byte(body), &rows[i]); err != nil {
+					t.Fatalf("decode seeded definition: %v", err)
+				}
+			}
+			base := endpoint + "?sort=name&page_size=2"
+			for _, tc := range []struct {
+				name, query string
+				page, total int
+				items       []definition
+			}{
+				{"all devices", "", 1, 5, []definition{rows[1], rows[2]}},
+				{"scoped first page", "&device=WIFI_TEST", 1, 3, []definition{rows[2], rows[0]}},
+				{"scoped last page", "&device=WIFI_TEST&page=2", 2, 3, []definition{rows[4]}},
+				{"search within scope", "&device=WIFI_TEST&search=ant", 1, 2, []definition{rows[2], rows[0]}},
+				{"global only", "&device=", 1, 1, []definition{rows[1]}},
+				{"no matches", "&device=UNUSED", 1, 0, []definition{}},
+				{"locate in scope", fmt.Sprintf("&device=WIFI_TEST&definition_id=%d", rows[4].ID), 2, 3, []definition{rows[4]}},
+				{"cannot locate outside scope", fmt.Sprintf("&device=WIFI_TEST&page=2&definition_id=%d", rows[1].ID), 2, 3, []definition{rows[4]}},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					resp, body := doRequest(t, app, "GET", base+tc.query)
+					if resp.StatusCode != 200 {
+						t.Fatalf("list: %d %s", resp.StatusCode, body)
+					}
+					var got struct {
+						Items    []definition `json:"items"`
+						Page     int          `json:"page"`
+						PageSize int          `json:"page_size"`
+						Total    int          `json:"total"`
+					}
+					if err := json.Unmarshal([]byte(body), &got); err != nil {
+						t.Fatalf("decode list: %v", err)
+					}
+					if got.Page != tc.page || got.PageSize != 2 || got.Total != tc.total ||
+						got.Items == nil || !slices.Equal(got.Items, tc.items) {
+						t.Fatalf("want page=%d page_size=2 total=%d items=%+v, got %s", tc.page, tc.total, tc.items, body)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestDictionaryListLocatesRowByID(t *testing.T) {
+	for _, endpoint := range []string{"/api/parameter-definitions", "/api/criteria-definitions"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app, _ := newDictionaryTestApp(t)
+			var lastID int64
+			for _, n := range []string{"ALWAYS_AGC", "APT", "AUTO_CHANGE_CAL_FREQ", "AVERAGES", "BW"} {
+				resp, body := postJSON(t, app, endpoint, `{"name": "`+n+`", "type": "int", "cardinality": "SINGLE"}`)
+				if resp.StatusCode != 201 {
+					t.Fatalf("seed %s failed: %s", n, body)
+				}
+				var row struct {
+					ID int64 `json:"id"`
+				}
+				if err := json.Unmarshal([]byte(body), &row); err != nil {
+					t.Fatalf("decode %s: %v", n, err)
+				}
+				lastID = row.ID
+			}
+
+			// Name-asc puts BW fifth: page 3 at page_size 2.
+			resp, body := doRequest(t, app, "GET", fmt.Sprintf("%s?page=1&page_size=2&sort=name&order=asc&definition_id=%d", endpoint, lastID))
+			if resp.StatusCode != 200 {
+				t.Fatalf("list status = %d (body: %s)", resp.StatusCode, body)
+			}
+			if !strings.Contains(body, `"page":3`) || !strings.Contains(body, `"name":"BW"`) {
+				t.Fatalf("definition_id should open the page holding the row: %s", body)
+			}
+
+			_, body = doRequest(t, app, "GET", endpoint+"?page=2&page_size=2&sort=name&order=asc&definition_id=999999")
+			if !strings.Contains(body, `"page":2`) || !strings.Contains(body, `"name":"AUTO_CHANGE_CAL_FREQ"`) {
+				t.Fatalf("an unknown definition_id should keep the requested page: %s", body)
+			}
+		})
+	}
+}
+
 func TestDictionaryUsageCountAndDeleteGuard(t *testing.T) {
 	app, d := newDictionaryTestApp(t)
 
@@ -344,6 +446,49 @@ func TestDictionarySortUnknownColumnDoesNotPanic(t *testing.T) {
 		resp, body := doRequest(t, app, "GET", "/api/parameter-definitions?"+q)
 		if resp.StatusCode != 200 {
 			t.Fatalf("GET %s: status = %d, want 200 (body: %s)", q, resp.StatusCode, body)
+		}
+	}
+}
+
+func TestDictionarySortByType(t *testing.T) {
+	// Regression: parseListQuery whitelisted sort against functions.go's
+	// sortColumns, which has no "type", so sort=type silently fell back
+	// to name order and both directions returned the same rows.
+	app, _ := newDictionaryTestApp(t)
+
+	for _, base := range []string{"/api/parameter-definitions", "/api/criteria-definitions"} {
+		for _, def := range []string{
+			`{"name": "ALPHA", "type": "string", "cardinality": "SINGLE"}`,
+			`{"name": "BRAVO", "type": "double", "cardinality": "SINGLE"}`,
+			`{"name": "CHARLIE", "type": "int", "cardinality": "SINGLE"}`,
+		} {
+			if resp, body := postJSON(t, app, base, def); resp.StatusCode != 201 {
+				t.Fatalf("seed %s: %d %s", base, resp.StatusCode, body)
+			}
+		}
+		for order, want := range map[string][]string{
+			"asc":  {"BRAVO", "CHARLIE", "ALPHA"},
+			"desc": {"ALPHA", "CHARLIE", "BRAVO"},
+		} {
+			resp, body := doRequest(t, app, "GET", base+"?sort=type&order="+order)
+			if resp.StatusCode != 200 {
+				t.Fatalf("GET %s order=%s: status = %d (body: %s)", base, order, resp.StatusCode, body)
+			}
+			var list struct {
+				Items []struct {
+					Name string `json:"name"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal([]byte(body), &list); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			got := make([]string, 0, len(list.Items))
+			for _, item := range list.Items {
+				got = append(got, item.Name)
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("GET %s?sort=type&order=%s names = %v, want %v", base, order, got, want)
+			}
 		}
 	}
 }

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import type { FunctionRow, ListResult } from '../../src/lib/api';
 
 // Function detail page chrome (ticket 05): tab semantics with arrow-key
 // switching, keyboard-reachable tooltips on orphan hints, and breadcrumb
@@ -41,6 +42,87 @@ async function firstFunctionId(request: APIRequestContext): Promise<number> {
 
 test.beforeAll(async ({ request }) => {
 	await seed(request);
+});
+
+test('opening Function details fetches each link list once', async ({ page }) => {
+	const fnId = await firstFunctionId(page.request);
+	const paths = [`/api/functions/${fnId}/parameter-links`, `/api/functions/${fnId}/criteria-links`];
+	const requests: string[] = [];
+	page.on('request', (request) => {
+		const { pathname } = new URL(request.url());
+		if (request.method() === 'GET' && paths.includes(pathname)) requests.push(pathname);
+	});
+
+	await page.goto(`/functions/${fnId}`);
+	const tabs = page.getByRole('tablist', { name: 'Function sections' });
+	await expect(tabs.getByRole('tab', { name: 'Parameters' }).locator('.tab-count')).toHaveText(
+		/^\d+$/
+	);
+	await expect(tabs.getByRole('tab', { name: 'Criteria' }).locator('.tab-count')).toHaveText(/^\d+$/);
+	await expect(page.getByRole('tabpanel').getByText(/^\d+ linked definitions$/)).toBeVisible();
+	expect(requests.sort()).toEqual(paths.sort());
+});
+
+test('Function switcher fetches compact options on first open and preserves catalog order', async ({
+	page,
+	request
+}) => {
+	const query = '/api/functions?sort=name&order=asc&page_size=100&page=';
+	const catalog: FunctionRow[] = [];
+	for (let pageNumber = 1; ; pageNumber++) {
+		const response = await request.get(query + pageNumber);
+		expect(response.ok()).toBe(true);
+		const { items, total }: ListResult = await response.json();
+		expect(items.length).toBeGreaterThan(0);
+		catalog.push(...items);
+		if (catalog.length >= total) break;
+	}
+	expect(catalog.length).toBeGreaterThan(100);
+	const options = catalog.map(({ id, name, source, interface: scope }) => ({
+		id,
+		name,
+		source,
+		interface: scope
+	}));
+
+	const catalogRequests: string[] = [];
+	page.on('request', (request) => {
+		const path = new URL(request.url()).pathname;
+		if (path === '/api/functions' || path === '/api/functions/options') {
+			catalogRequests.push(path);
+		}
+	});
+	await page.goto(`/functions/${options[1].id}`);
+	const trigger = page.getByRole('button', { name: 'Switch function' });
+	await expect(trigger).toHaveText(options[1].name);
+	await page.waitForLoadState('networkidle');
+	expect(catalogRequests).toEqual([]);
+
+	const responsePromise = page.waitForResponse(
+		(response) => new URL(response.url()).pathname === '/api/functions/options'
+	);
+	await trigger.focus();
+	await trigger.press('Enter');
+	const response = await responsePromise;
+	expect(response.ok()).toBe(true);
+	expect(await response.json()).toEqual({ items: options });
+
+	const popup = page.getByRole('dialog', { name: 'Choose Switch function' });
+	const labels = options.map((row) => `${row.name} (${row.source} / ${row.interface || 'Global'})`);
+	await expect(popup.getByRole('option')).toHaveText(labels);
+	const search = popup.getByRole('combobox', { name: 'Search options' });
+	await expect(search).toBeFocused();
+	await search.press('Escape');
+	await expect(popup).toBeHidden();
+	await trigger.click();
+	await expect(popup.getByRole('option')).toHaveText(labels);
+
+	const target = options.at(-1)!;
+	await search.fill(target.name);
+	await popup.getByRole('option', { name: labels.at(-1), exact: true }).click();
+	await expect(page).toHaveURL(new RegExp(`/functions/${target.id}$`));
+	await expect(trigger).toHaveText(target.name);
+	expect(catalogRequests).toEqual(['/api/functions/options']);
 });
 
 test('tabs switch with arrow keys and announce the active panel', async ({ page }) => {

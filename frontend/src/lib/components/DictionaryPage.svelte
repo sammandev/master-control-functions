@@ -16,6 +16,7 @@
 	import { Plus, RefreshCw, ChevronRight } from '@lucide/svelte';
 	import Input from '#lib/components/ui/input.svelte';
 	import Pagination from '#lib/components/ui/pagination.svelte';
+	import { toast } from 'svelte-sonner';
 
 	// Shared CRUD page for the Parameter definition and Criteria definition
 	// dictionaries. kind picks the endpoint; everything else is identical.
@@ -29,8 +30,10 @@
 	let search = $derived(routePage.url.searchParams.get('search') ?? '');
 	const params = $derived.by(() => {
 		const query = routePage.url.searchParams;
+		const device = query.get('device');
 		return {
 			search: query.get('search') || undefined,
+			device: device === '_global' ? '' : (device ?? undefined),
 			sort: ['name', 'type', 'updated_at'].includes(query.get('sort') ?? '')
 				? query.get('sort')!
 				: 'name',
@@ -56,12 +59,11 @@
 	onMount(() => {
 		void loadDevices();
 	});
-	const requestKey = $derived(JSON.stringify({ kind, params, deviceFilter, retry }));
+	const requestKey = $derived(JSON.stringify({ kind, params, retry }));
 	let revision = 0;
 	const content = $derived.by(() => {
-		const request: { kind: DefinitionKind; params: typeof params; deviceFilter: string | null } =
-			JSON.parse(requestKey);
-		return load(request.kind, request.params, request.deviceFilter);
+		const request: { kind: DefinitionKind; params: typeof params } = JSON.parse(requestKey);
+		return load(request.kind, request.params);
 	});
 	function setQuery(key: string, value: string, reset = true, replaceState = false) {
 		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
@@ -92,25 +94,41 @@
 	});
 
 	onDestroy(() => clearTimeout(searchTimer));
-	async function load(endpoint: DefinitionKind, query: typeof params, device: string | null) {
-		const attempt = ++revision;
-		let result;
-		if (device === null) result = await listDefinitions(endpoint, query);
-		else {
-			const first = await listDefinitions(endpoint, { ...query, page: 1, page_size: 100 });
-			const rows = [...first.items];
-			for (let next = 2; rows.length < first.total; next++) {
-				if (attempt !== revision) return { items: [], total: 0 };
-				const more = await listDefinitions(endpoint, { ...query, page: next, page_size: 100 });
-				if (!more.items.length) throw new Error('The definition list changed. Please retry.');
-				rows.push(...more.items);
-			}
-			const matches = rows.filter(
-				(row) => row.device_name === (device === '_global' ? '' : device)
+	// The page holding the definition under query and device, or null when they hide it.
+	async function definitionPage(query: typeof params, id: number) {
+		const result = await listDefinitions(kind, { ...query, definition_id: id });
+		return result.items.some((item) => item.id === id) ? result.page : null;
+	}
+	async function selectCreatedDefinition(row: DefinitionRow) {
+		clearTimeout(searchTimer);
+		const from = routePage.url.href;
+		const location = new SvelteURLSearchParams(routePage.url.searchParams.toString());
+		const query = params;
+		let found = await definitionPage(query, row.id);
+		if (found === null) {
+			location.delete('search');
+			if (query.device !== undefined) location.set('device', row.device_name || '_global');
+			found = await definitionPage(
+				{
+					...query,
+					search: undefined,
+					device: query.device === undefined ? undefined : row.device_name
+				},
+				row.id
 			);
-			const start = (query.page - 1) * query.page_size;
-			result = { items: matches.slice(start, start + query.page_size), total: matches.length };
 		}
+		if (routePage.url.href !== from) return;
+		if (found === null) throw new Error('The saved definition is no longer available.');
+
+		if (found > 1) location.set('page', String(found));
+		else location.delete('page');
+		location.set('definition', String(row.id));
+		pendingHeight = workspace?.getBoundingClientRect().height ?? pendingHeight;
+		await goto(resolve(`${kind}?${location.toString()}`), { reset: false });
+	}
+	async function load(endpoint: DefinitionKind, query: typeof params) {
+		const attempt = ++revision;
+		const result = await listDefinitions(endpoint, query);
 		if (attempt !== revision) return result;
 		const last = Math.max(1, Math.ceil(result.total / query.page_size));
 		if (query.page > last) {
@@ -290,7 +308,16 @@
 	editRow={editTarget}
 	prefillDevice={deviceFilter === '_global' ? '' : (deviceFilter ?? '')}
 	onsaved={async (row) => {
-		await setQuery('definition', String(row.id), false);
+		if (editTarget) await setQuery('definition', String(row.id), false);
+		else {
+			try {
+				await selectCreatedDefinition(row);
+			} catch (error) {
+				toast.error('Definition saved, but could not open it', {
+					description: error instanceof Error ? error.message : String(error)
+				});
+			}
+		}
 		retry++;
 	}}
 />

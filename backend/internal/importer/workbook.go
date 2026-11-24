@@ -76,6 +76,15 @@ var sheetOrder = []string{
 	"function_parameter", "function_criteria", "example",
 }
 
+var requiredHeaders = map[string][]string{
+	"function_main":      {"source", "interface", "name"},
+	"parameter_main":     {"name"},
+	"criteria_main":      {"name"},
+	"function_parameter": {"name", "function_source", "function_name"},
+	"function_criteria":  {"name", "function_source", "function_name"},
+	"example":            {"function_name", "script"},
+}
+
 // record accumulates the audit trail while mapping sheet rows.
 type record struct {
 	norms   []Normalization
@@ -105,15 +114,22 @@ func ParseWorkbook(r io.Reader) (*Workbook, error) {
 	wb := &Workbook{}
 	rc := &record{}
 	for _, sheet := range sheetOrder {
+		if err := validateCellLengths(f, sheet); err != nil {
+			return nil, err
+		}
 		rows, err := f.GetRows(sheet)
 		if err != nil {
 			return nil, fmt.Errorf("sheet %s: %w", sheet, err)
 		}
-		if len(rows) == 0 {
-			continue
+		var header []string
+		var data [][]string
+		if len(rows) > 0 {
+			header, data = rows[0], rows[1:]
 		}
-		m := indexHeader(rows[0])
-		data := rows[1:]
+		m := indexHeader(header)
+		if err := validateHeaders(sheet, m); err != nil {
+			return nil, err
+		}
 		switch sheet {
 		case "function_main":
 			wb.Functions = parseFunctions(data, m, rc)
@@ -132,6 +148,42 @@ func ParseWorkbook(r io.Reader) (*Workbook, error) {
 	wb.Normalizations = rc.norms
 	wb.Skipped = rc.skipped
 	return wb, nil
+}
+
+func validateCellLengths(f *excelize.File, sheet string) error {
+	rows, err := f.GetRows(sheet, excelize.Options{RawCellValue: true})
+	if err != nil {
+		return fmt.Errorf("sheet %s: %w", sheet, err)
+	}
+	for i, row := range rows {
+		for j, text := range row {
+			if n := cellTextLength(text); n > excelize.TotalCellChars {
+				cellName, _ := excelize.CoordinatesToCellName(j+1, i+1)
+				return fmt.Errorf("sheet %s cell %s contains %d UTF-16 code units; Excel allows at most %d. No data was imported", sheet, cellName, n, excelize.TotalCellChars)
+			}
+		}
+	}
+	return nil
+}
+
+func validateHeaders(sheet string, header map[string]int) error {
+	var missing []string
+	for _, col := range requiredHeaders[sheet] {
+		if _, ok := header[col]; ok {
+			continue
+		}
+		if sheet == "function_main" && col == "interface" {
+			if _, ok := header["device_name"]; ok {
+				continue
+			}
+			col = "interface (or device_name)"
+		}
+		missing = append(missing, col)
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("sheet %s: missing required columns: %s", sheet, strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 // indexHeader maps lowercased column names to their column index.

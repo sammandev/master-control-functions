@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -28,8 +29,8 @@ func registerDevices(app *fiber.App, q *store.Queries, db *sql.DB) {
 	app.Get("/api/devices", listDevices(q))
 	app.Post("/api/devices", createDevice(q))
 	app.Get("/api/devices/:device/functions", deviceFunctions(q))
-	app.Get("/api/devices/:device/parameters", deviceParameters(q))
-	app.Get("/api/devices/:device/criteria", deviceCriteria(q))
+	app.Get("/api/devices/:device/parameters", deviceDefinitions(q.ListScopedParameterDefinitions, q.ListGlobalParameterDefinitionsForScope, parameterItem))
+	app.Get("/api/devices/:device/criteria", deviceDefinitions(q.ListScopedCriteriaDefinitions, q.ListGlobalCriteriaDefinitionsForScope, criteriaItem))
 	app.Put("/api/devices/:device", renameDevice(db))
 	app.Delete("/api/devices/:device", deleteDevice(db))
 }
@@ -204,9 +205,13 @@ func deleteDevice(db *sql.DB) fiber.Handler {
 		if body.Confirmation != "DELETE "+name {
 			return validationError(c, map[string]string{"confirmation": "must exactly match DELETE " + name})
 		}
-		err := store.DeleteDevice(c.Context(), db, name, time.Now().UTC().Format(time.RFC3339))
+		err := store.DeleteDevice(c.Context(), db, name)
 		if errors.Is(err, store.ErrDeviceNotFound) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "device not found"})
+		}
+		var inUse *store.DeviceInUseError
+		if errors.As(err, &inUse) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": inUse.Error(), "sequences": inUse.Sequences})
 		}
 		if err != nil {
 			return serverError(c, "delete device", err)
@@ -346,98 +351,48 @@ func deviceFunctions(q *store.Queries) fiber.Handler {
 // deviceDefinitions serves both definition tabs: the device's own rows
 // (paginated) plus the global rows its links resolve to (returned in
 // full — bounded by the distinct definition names in the device).
-func deviceParameters(q *store.Queries) fiber.Handler {
+func deviceDefinitions[T any](
+	listScoped, listGlobal func(context.Context, string) ([]T, error),
+	toItem func(T) definitionItem,
+) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		device := deviceFromSegment(c)
-		total, err := q.CountScopedParameterDefinitions(c.Context(), device)
+		rows, err := listScoped(c.Context(), device)
 		if err != nil {
-			return serverError(c, "count scoped parameters", err)
+			return serverError(c, "list scoped device definitions", err)
 		}
-		rows, err := q.ListScopedParameterDefinitions(c.Context(), device)
+		globalRows, err := listGlobal(c.Context(), device)
 		if err != nil {
-			return serverError(c, "list scoped parameters", err)
-		}
-		globalTotal, err := q.CountGlobalParameterDefinitionsForScope(c.Context(), device)
-		if err != nil {
-			return serverError(c, "count global parameters", err)
-		}
-		globalRows, err := q.ListGlobalParameterDefinitionsForScope(c.Context(), device)
-		if err != nil {
-			return serverError(c, "list global parameters", err)
+			return serverError(c, "list global device definitions", err)
 		}
 
 		lq := parseListQuery(c)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(rows)) {
-			start = int64(len(rows))
-		}
-		end := start + lq.pageSize
-		if end > int64(len(rows)) {
-			end = int64(len(rows))
-		}
-		items := make([]definitionItem, 0, end-start)
-		for _, d := range rows[start:end] {
-			items = append(items, parameterItem(d))
-		}
-		globalItems := make([]definitionItem, 0, len(globalRows))
-		for _, d := range globalRows {
-			globalItems = append(globalItems, parameterItem(d))
+		term := strings.ToLower(strings.TrimSpace(lq.search))
+		scoped := matchingDeviceDefinitions(rows, toItem, term)
+		global := matchingDeviceDefinitions(globalRows, toItem, term)
+		items := scoped[:0]
+		if lq.page-1 <= int64(len(scoped))/lq.pageSize {
+			start := (lq.page - 1) * lq.pageSize
+			items = scoped[start:min(start+lq.pageSize, int64(len(scoped)))]
 		}
 		return c.JSON(fiber.Map{
 			"items":        items,
-			"total":        total,
+			"total":        len(scoped),
 			"page":         lq.page,
 			"page_size":    lq.pageSize,
-			"global_items": globalItems,
-			"global_total": globalTotal,
+			"global_items": global,
+			"global_total": len(global),
 		})
 	}
 }
 
-func deviceCriteria(q *store.Queries) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		device := deviceFromSegment(c)
-		total, err := q.CountScopedCriteriaDefinitions(c.Context(), device)
-		if err != nil {
-			return serverError(c, "count scoped criteria", err)
+func matchingDeviceDefinitions[T any](rows []T, toItem func(T) definitionItem, term string) []definitionItem {
+	items := make([]definitionItem, 0, len(rows))
+	for _, row := range rows {
+		item := toItem(row)
+		if term == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Type+" "+item.AllowedValues+" "+item.DefaultValue+" "+item.Description), term) {
+			items = append(items, item)
 		}
-		rows, err := q.ListScopedCriteriaDefinitions(c.Context(), device)
-		if err != nil {
-			return serverError(c, "list scoped criteria", err)
-		}
-		globalTotal, err := q.CountGlobalCriteriaDefinitionsForScope(c.Context(), device)
-		if err != nil {
-			return serverError(c, "count global criteria", err)
-		}
-		globalRows, err := q.ListGlobalCriteriaDefinitionsForScope(c.Context(), device)
-		if err != nil {
-			return serverError(c, "list global criteria", err)
-		}
-
-		lq := parseListQuery(c)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(rows)) {
-			start = int64(len(rows))
-		}
-		end := start + lq.pageSize
-		if end > int64(len(rows)) {
-			end = int64(len(rows))
-		}
-		items := make([]definitionItem, 0, end-start)
-		for _, d := range rows[start:end] {
-			items = append(items, criteriaItem(d))
-		}
-		globalItems := make([]definitionItem, 0, len(globalRows))
-		for _, d := range globalRows {
-			globalItems = append(globalItems, criteriaItem(d))
-		}
-		return c.JSON(fiber.Map{
-			"items":        items,
-			"total":        total,
-			"page":         lq.page,
-			"page_size":    lq.pageSize,
-			"global_items": globalItems,
-			"global_total": globalTotal,
-		})
 	}
+	return items
 }

@@ -31,7 +31,12 @@ export default defineConfig({
 	server: {
 		// In dev, hand API calls to the Go server started with:
 		//   go -C backend run ./cmd/server -addr 127.0.0.1:8088
-		proxy: { '/api': process.env.BACKEND_URL || 'http://127.0.0.1:8088' }
+		proxy: {
+			'/api': {
+				target: process.env.BACKEND_URL || 'http://127.0.0.1:8088',
+				changeOrigin: false
+			}
+		}
 	},
 	test: {
 		expect: { requireAssertions: true },

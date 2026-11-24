@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"database/sql"
+	"errors"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -21,6 +22,10 @@ func exportWorkbook(d *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		var buf bytes.Buffer
 		if err := importer.Export(c.Context(), d, &buf); err != nil {
+			var limit *importer.ExportCellLimitError
+			if errors.As(err, &limit) {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": limit.Error()})
+			}
 			return serverError(c, "export workbook", err)
 		}
 		c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

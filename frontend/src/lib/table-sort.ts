@@ -1,10 +1,10 @@
 // Shared list-table sorting (ticket 09): one mechanism for every table
-// instead of per-page reimplementations. Functions and the dictionaries
-// sort server-side through their list APIs; every other list table sorts
-// the loaded rows client-side through sortRows(). The header presentation
-// lives in SortHead.svelte; this module holds the state transitions and
-// the aria-sort/arrow derivations the existing functions/dictionary
-// headers also use.
+// instead of per-page reimplementations. Functions, Sequences and the
+// dictionaries sort server-side through their list APIs; every other list
+// table sorts the loaded rows client-side through sortRows(). The header
+// presentation lives in SortHead.svelte; this module holds the state
+// transitions and the aria-sort/arrow derivations the existing
+// functions/dictionary headers also use.
 
 export type SortDir = 'asc' | 'desc';
 

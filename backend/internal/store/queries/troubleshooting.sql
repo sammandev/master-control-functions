@@ -72,6 +72,17 @@ ORDER BY taxonomy_severity.sort_order,
          g.id
 LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
 
+-- name: ListTroubleshootingExportGuides :many
+SELECT g.id, g.title, g.category, g.severity, g.device_name, g.function_name,
+       g.error_code, g.symptom, g.root_cause
+FROM troubleshooting_guides g
+JOIN troubleshooting_severities taxonomy_severity ON taxonomy_severity.key = g.severity
+JOIN troubleshooting_categories taxonomy_category ON taxonomy_category.key = g.category
+ORDER BY taxonomy_severity.sort_order,
+         taxonomy_category.sort_order,
+         lower(g.title),
+         g.id;
+
 -- name: GetTroubleshootingRelatedGuides :many
 SELECT related.id, related.title, related.category, related.severity,
        related.device_name, related.function_name, related.error_code,
@@ -106,3 +117,8 @@ SELECT id, guide_id, position, title, instruction, script_snippet, verification
 FROM troubleshooting_steps
 WHERE guide_id = $1
 ORDER BY position, id;
+
+-- name: ListTroubleshootingExportSteps :many
+SELECT guide_id, title, instruction, script_snippet, verification
+FROM troubleshooting_steps
+ORDER BY guide_id, position, id;

@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -206,6 +208,46 @@ func TestSequenceStepOrphanAfterFunctionDelete(t *testing.T) {
 	}
 }
 
+// TestSequenceEmitRejectsSegmentDelimiters: a stored step whose Flow or
+// On-fail holds '|' is flagged instead of emitting an extra segment; clean
+// steps still emit.
+func TestSequenceEmitRejectsSegmentDelimiters(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedSequenceFunctions(t, app)
+
+	body := `{"name":"pipes","steps":[` +
+		seqStepA + `,` +
+		strings.Replace(seqStepA, `"flow":"NEXT"`, `"flow":"NEXT|EXTRA"`, 1) + `,` +
+		strings.Replace(seqStepB, `"on_fail":"FAIL"`, `"on_fail":"FAIL|EXTRA"`, 1) + `]}`
+	if resp, body := postJSON(t, app, "/api/sequences", body); resp.StatusCode != 201 {
+		t.Fatalf("create: %d (body: %s)", resp.StatusCode, body)
+	}
+
+	resp, body := doRequest(t, app, "POST", "/api/sequences/1/emit")
+	if resp.StatusCode != 200 {
+		t.Fatalf("emit: %d (body: %s)", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `"text":"DLLTELNET|FN_A|FREQ=10|NULL|1000|NEXT|FAIL"`) {
+		t.Fatalf("joined emission wrong: %s", body)
+	}
+	var out struct {
+		Steps []struct {
+			Script string            `json:"script"`
+			Errors map[string]string `json:"errors"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal([]byte(body), &out); err != nil || len(out.Steps) != 3 {
+		t.Fatalf("decode steps (%v): %s", err, body)
+	}
+	const msg = "must not contain '|' or a line break"
+	for i, field := range map[int]string{1: "flow", 2: "on_fail"} {
+		step := out.Steps[i]
+		if step.Script != "" || len(step.Errors) != 1 || step.Errors[field] != msg {
+			t.Fatalf("step %d: want only %s=%q, got script=%q errors=%v", i+1, field, msg, step.Script, step.Errors)
+		}
+	}
+}
+
 // TestResetLeavesSequencesUntouched: the workbook reset truncates the six
 // entity tables only (ADR-0005); stored sequences survive.
 func TestResetLeavesSequencesUntouched(t *testing.T) {
@@ -230,5 +272,94 @@ func TestResetLeavesSequencesUntouched(t *testing.T) {
 	}
 	if !strings.Contains(body, `"timeout_ms":"1000"`) {
 		t.Fatalf("step lost after reset: %s", body)
+	}
+}
+
+func TestSequenceListDefaultPaging(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	check := func(query string, page, total int64, want ...[2]int64) {
+		t.Helper()
+		resp, body := doRequest(t, app, "GET", "/api/sequences?"+query)
+		var got struct {
+			Items []struct {
+				ID        int64 `json:"id"`
+				StepCount int64 `json:"step_count"`
+			} `json:"items"`
+			Total    int64 `json:"total"`
+			Page     int64 `json:"page"`
+			PageSize int64 `json:"page_size"`
+		}
+		err := json.Unmarshal([]byte(body), &got)
+		if resp.StatusCode != 200 || err != nil || got.Items == nil ||
+			got.Total != total || got.Page != page || got.PageSize != 1 {
+			t.Fatalf("%s: unexpected response: %d %s (decode: %v)", query, resp.StatusCode, body, err)
+		}
+		var items [][2]int64
+		for _, r := range got.Items {
+			items = append(items, [2]int64{r.ID, r.StepCount})
+		}
+		if !slices.Equal(items, want) {
+			t.Errorf("%s: (id, step_count) = %v, want %v", query, items, want)
+		}
+	}
+	check("page_size=1", 1, 0)
+	seedSequenceFunctions(t, app)
+	for _, body := range []string{
+		`{"name":"Bravo","description":"needle","steps":[` + seqStepB + `]}`,
+		`{"name":"Alpha","description":"elsewhere","steps":[` + seqStepB + `]}`,
+		`{"name":"Zulu","description":"NEEDLE","steps":[` + seqStepB + `,` + seqStepB + `]}`,
+	} {
+		if resp, response := postJSON(t, app, "/api/sequences", body); resp.StatusCode != 201 {
+			t.Fatalf("create: %d (body: %s)", resp.StatusCode, response)
+		}
+	}
+	check("page_size=1", 1, 3, [2]int64{2, 1})
+	check("page_size=1&page=2", 2, 3, [2]int64{1, 1})
+	check("page_size=1&page=3", 3, 3, [2]int64{3, 2})
+	check("page_size=1&page=2&search=Needle", 2, 2, [2]int64{3, 2})
+	check("page_size=1&page=3&search=Needle", 3, 2)
+
+	for _, sort := range []string{"", "&sort=name"} {
+		resp, body := doRequest(t, app, "GET", "/api/sequences?page=9223372036854775807"+sort)
+		if resp.StatusCode != 200 || !strings.Contains(body, `"items":[]`) {
+			t.Errorf("large page%s: want an empty page, got %d %s", sort, resp.StatusCode, body)
+		}
+	}
+}
+
+// TestSequenceListSortsBeforePaging: sort/order apply to the whole
+// filtered list before the page is cut, so page 1 of a Steps-descending
+// sort holds the longest sequence even when its name sorts last.
+func TestSequenceListSortsBeforePaging(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	seedSequenceFunctions(t, app)
+
+	for _, seq := range []struct {
+		name  string
+		steps int
+	}{{"alpha", 1}, {"Bravo", 2}, {"charlie", 3}} {
+		steps := strings.TrimSuffix(strings.Repeat(seqStepB+",", seq.steps), ",")
+		if resp, body := postJSON(t, app, "/api/sequences",
+			`{"name":"`+seq.name+`","steps":[`+steps+`]}`); resp.StatusCode != 201 {
+			t.Fatalf("create %s: %d (body: %s)", seq.name, resp.StatusCode, body)
+		}
+	}
+
+	for _, tc := range []struct {
+		query string
+		want  string
+	}{
+		{"sort=steps&order=desc&page_size=1", "charlie"},
+		{"sort=steps&order=desc&page_size=1&page=2", "Bravo"},
+		{"sort=steps&order=asc&page_size=1", "alpha"},
+		{"sort=name&order=desc&page_size=1", "charlie"},
+		{"sort=name&order=desc&page_size=1&page=2", "Bravo"},
+		{"sort=bogus&order=desc&page_size=1", "alpha"},
+	} {
+		resp, body := doRequest(t, app, "GET", "/api/sequences?"+tc.query)
+		if resp.StatusCode != 200 || !strings.Contains(body, `"total":3`) ||
+			!strings.Contains(body, `"name":"`+tc.want+`"`) {
+			t.Errorf("%s: want %s on the page: %d (body: %s)", tc.query, tc.want, resp.StatusCode, body)
+		}
 	}
 }

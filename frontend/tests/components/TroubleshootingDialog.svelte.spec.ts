@@ -62,7 +62,7 @@ describe('TroubleshootingDialog accessibility', () => {
 		]);
 	});
 
-	it('does not save empty list items left at the end of a field', async () => {
+	it('drops empty list items in prose but preserves the script snippet exactly', async () => {
 		const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () =>
 			Response.json({ id: 1 })
 		);
@@ -81,13 +81,38 @@ describe('TroubleshootingDialog accessibility', () => {
 		await page
 			.getByRole('textbox', { name: /Expected Verification Result/ })
 			.fill('Confirm the result\n-');
-		await page.getByRole('textbox', { name: /Script Line/ }).fill('RUN\n- ');
+		const snippet = '    RUN\n- ';
+		await page.getByRole('textbox', { name: /Script Line/ }).fill(snippet);
 		await page.getByRole('button', { name: 'Create Guide' }).click();
 		await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
 		expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
 			symptom: '1. Inspect logs',
 			root_cause: '- Check configuration',
-			steps: [{ instruction: 'Retry', verification: 'Confirm the result', script_snippet: 'RUN' }]
+			steps: [{ instruction: 'Retry', verification: 'Confirm the result', script_snippet: snippet }]
+		});
+	});
+
+	it('inserts only newlines after list-like script lines and saves the snippet as typed', async () => {
+		const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () =>
+			Response.json({ id: 1 })
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		await renderDialog();
+		await page.getByRole('textbox', { name: /Solution \/ Manifestation Title/ }).fill('Title');
+		await page.getByRole('textbox', { name: /Observed Symptom/ }).fill('Symptom');
+		await page.getByRole('textbox', { name: /Action Headline/ }).fill('Action');
+		await page.getByRole('textbox', { name: /Detailed Instruction/ }).fill('Instruction');
+
+		const script = page.getByRole('textbox', { name: /Script Line/ });
+		await script.fill('    - foo');
+		await userEvent.keyboard('{End}{Enter}1. x{Enter}');
+		const snippet = '    - foo\n1. x\n';
+		await expect.element(script).toHaveValue(snippet);
+
+		await page.getByRole('button', { name: 'Create Guide' }).click();
+		await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
+		expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+			steps: [{ script_snippet: snippet }]
 		});
 	});
 

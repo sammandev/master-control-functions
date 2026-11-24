@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { FunctionRow } from '#lib/api.ts';
-	import { listLinks, type LinkKind } from '#lib/links.ts';
 	import { resolve } from '$app/paths';
 	import { Pencil, Trash2, Code, ExternalLink } from '@lucide/svelte';
 	import LinksPanel from '#lib/components/LinksPanel.svelte';
@@ -27,25 +26,8 @@
 	} = $props();
 	let tab = $state('parameters');
 	let composeOpen = $state(false);
-	const countSource = $derived.by(() => {
-		const id = fn.id;
-		const loadCount = (kind: LinkKind) =>
-			listLinks(id, kind)
-				.then((rows) => rows.length)
-				.catch(() => null);
-		return { id, parameter: loadCount('parameter-links'), criteria: loadCount('criteria-links') };
-	});
-	let parameterOverride = $state.raw<{ source: typeof countSource; count: number } | null>(null);
-	let criteriaOverride = $state.raw<{ source: typeof countSource; count: number } | null>(null);
-
-	function updateCount(kind: LinkKind, id: number, count: number) {
-		if (id !== countSource.id) return;
-		if (kind === 'parameter-links') {
-			parameterOverride = { source: countSource, count };
-		} else {
-			criteriaOverride = { source: countSource, count };
-		}
-	}
+	let parameterCount = $state<number | null>(null);
+	let criteriaCount = $state<number | null>(null);
 </script>
 
 <section class="function-detail" class:standalone aria-label="Function details">
@@ -107,20 +89,14 @@
 	<Tabs.Root bind:value={tab}>
 		<Tabs.List class="function-sections" aria-label="Function sections">
 			<Tabs.Trigger class="function-section" value="parameters" aria-label="Parameters"
-				>Parameters{#await countSource.parameter then count}{@const displayed =
-						parameterOverride?.source === countSource
-							? parameterOverride.count
-							: count}{#if displayed !== null}<span class="tab-count" aria-hidden="true"
-							>{displayed}</span
-						>{/if}{/await}</Tabs.Trigger
+				>Parameters{#if parameterCount !== null}<span class="tab-count" aria-hidden="true"
+						>{parameterCount}</span
+					>{/if}</Tabs.Trigger
 			>
 			<Tabs.Trigger class="function-section" value="criteria" aria-label="Criteria"
-				>Criteria{#await countSource.criteria then count}{@const displayed =
-						criteriaOverride?.source === countSource
-							? criteriaOverride.count
-							: count}{#if displayed !== null}<span class="tab-count" aria-hidden="true"
-							>{displayed}</span
-						>{/if}{/await}</Tabs.Trigger
+				>Criteria{#if criteriaCount !== null}<span class="tab-count" aria-hidden="true"
+						>{criteriaCount}</span
+					>{/if}</Tabs.Trigger
 			>
 			<Tabs.Trigger class="function-section" value="examples">Examples</Tabs.Trigger>
 			<Tabs.Trigger class="function-section" value="mcp">MCP readiness</Tabs.Trigger>
@@ -132,7 +108,7 @@
 				kind="parameter-links"
 				defKind="parameter-definitions"
 				noun="parameter"
-				onCountChange={(id, count) => updateCount('parameter-links', id, count)}
+				onCountChange={(count) => (parameterCount = count)}
 			/></Tabs.Content
 		>
 		<Tabs.Content value="criteria" class="panel-scroll"
@@ -142,7 +118,7 @@
 				kind="criteria-links"
 				defKind="criteria-definitions"
 				noun="criteria"
-				onCountChange={(id, count) => updateCount('criteria-links', id, count)}
+				onCountChange={(count) => (criteriaCount = count)}
 			/></Tabs.Content
 		>
 		<Tabs.Content value="examples" class="panel-scroll"

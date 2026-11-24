@@ -1,12 +1,16 @@
 package api
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -36,20 +40,30 @@ type sequenceStepBody struct {
 	Note              string            `json:"note"`
 }
 
-// sequenceBody is the JSON shape of a Sequence on create/PUT. PUT is a
-// full replace: the submitted step array becomes the whole sequence.
+// sequenceBody is the write payload. The metadata and step routes each
+// use only their own fields.
 type sequenceBody struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
 	Steps       []sequenceStepBody `json:"steps"`
 }
 
-func (b *sequenceBody) validate() map[string]string {
+func (b *sequenceBody) validateMeta() map[string]string {
 	fields := map[string]string{}
 	b.Name = strings.TrimSpace(b.Name)
 	if b.Name == "" {
 		fields["name"] = "is required"
 	}
+	return fields
+}
+
+func (b *sequenceBody) validate() map[string]string {
+	fields := b.validateMeta()
+	b.validateSteps(fields)
+	return fields
+}
+
+func (b *sequenceBody) validateSteps(fields map[string]string) {
 	if len(b.Steps) == 0 {
 		fields["steps"] = "at least one step is required"
 	}
@@ -72,7 +86,6 @@ func (b *sequenceBody) validate() map[string]string {
 			fields["steps.function_name"] = "step " + strconv.Itoa(i+1) + ": name is required"
 		}
 	}
-	return fields
 }
 
 // ---- responses -----------------------------------------------------------
@@ -144,7 +157,7 @@ func sequenceStepResponseFromRow(r store.ListSequenceStepsRow) (sequenceStepResp
 }
 
 // sequenceDetail loads the sequence and its ordered steps and builds the
-// shared response shape for GET, POST and PUT.
+// shared response shape for GET, POST, PUT and PATCH.
 func sequenceDetail(c fiber.Ctx, q *store.Queries, id int64) (sequenceResponse, error) {
 	row, err := q.GetSequence(c.Context(), id)
 	if err != nil {
@@ -220,9 +233,53 @@ func registerSequenceRoutes(app *fiber.App, q *store.Queries, d *sql.DB) {
 	app.Get("/api/sequences", listSequences(q))
 	app.Post("/api/sequences", createSequence(q, d))
 	app.Get("/api/sequences/:id", getSequence(q))
-	app.Put("/api/sequences/:id", updateSequence(q, d))
+	app.Put("/api/sequences/:id", updateSequence(q, d, sequenceUpdateAll))
+	app.Patch("/api/sequences/:id", updateSequence(q, d, sequenceUpdateMeta))
+	app.Put("/api/sequences/:id/steps", updateSequence(q, d, sequenceUpdateSteps))
 	app.Delete("/api/sequences/:id", deleteSequence(q))
 	app.Post("/api/sequences/:id/emit", emitSequence(q))
+}
+
+// sequenceSortColumns whitelists the list's sortable columns; any other
+// sort value keeps the default (name, id) order. Text columns use
+// naturalCompare, matching the page's former client-side sort.
+var sequenceSortColumns = map[string]func(a, b store.ListSequencesRow) int{
+	"name":        func(a, b store.ListSequencesRow) int { return naturalCompare(a.Name, b.Name) },
+	"description": func(a, b store.ListSequencesRow) int { return naturalCompare(a.Description, b.Description) },
+	"steps":       func(a, b store.ListSequencesRow) int { return cmp.Compare(a.StepCount, b.StepCount) },
+	"updated_at":  func(a, b store.ListSequencesRow) int { return strings.Compare(a.UpdatedAt, b.UpdatedAt) },
+}
+
+// naturalCompare orders text case-insensitively with digit runs compared
+// by value, so "Run 2" sorts before "Run 10".
+func naturalCompare(a, b string) int {
+	a, b = strings.ToLower(a), strings.ToLower(b)
+	for a != "" && b != "" {
+		da, db := digitPrefix(a), digitPrefix(b)
+		if da != "" && db != "" {
+			na, nb := strings.TrimLeft(da, "0"), strings.TrimLeft(db, "0")
+			if c := cmp.Or(cmp.Compare(len(na), len(nb)), strings.Compare(na, nb)); c != 0 {
+				return c
+			}
+			a, b = a[len(da):], b[len(db):]
+			continue
+		}
+		ra, sa := utf8.DecodeRuneInString(a)
+		rb, sb := utf8.DecodeRuneInString(b)
+		if c := cmp.Compare(ra, rb); c != 0 {
+			return c
+		}
+		a, b = a[sa:], b[sb:]
+	}
+	return cmp.Compare(len(a), len(b))
+}
+
+func digitPrefix(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return s[:i]
 }
 
 func listSequences(q *store.Queries) fiber.Handler {
@@ -237,23 +294,37 @@ func listSequences(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "count sequences", err)
 		}
-		rows, err := q.ListSequences(c.Context(), search)
+		lq := parseListQuery(c)
+		start := int64(math.MaxInt64)
+		if lq.page-1 <= math.MaxInt64/lq.pageSize {
+			start = (lq.page - 1) * lq.pageSize
+		}
+		compare := sequenceSortColumns[c.Query("sort")]
+		params := store.ListSequencesParams{Search: search}
+		if compare == nil {
+			params.PageLimit = sql.NullInt64{Int64: lq.pageSize, Valid: true}
+			params.PageOffset = start
+		}
+		rows, err := q.ListSequences(c.Context(), params)
 		if err != nil {
 			return serverError(c, "list sequences", err)
 		}
-		// Go-side pagination over the SQL-sorted rows (name, id), same
-		// pattern as the examples list.
-		lq := parseListQuery(c)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(rows)) {
-			start = int64(len(rows))
+		// Custom sorts operate on all matches, keeping the SQL order
+		// (name, id) as the tiebreak.
+		if compare != nil {
+			desc := strings.EqualFold(c.Query("order"), "desc")
+			slices.SortStableFunc(rows, func(a, b store.ListSequencesRow) int {
+				if desc {
+					return compare(b, a)
+				}
+				return compare(a, b)
+			})
+			start = min(start, int64(len(rows)))
+			end := min(start+lq.pageSize, int64(len(rows)))
+			rows = rows[start:end]
 		}
-		end := start + lq.pageSize
-		if end > int64(len(rows)) {
-			end = int64(len(rows))
-		}
-		items := make([]fiber.Map, 0, end-start)
-		for _, r := range rows[start:end] {
+		items := make([]fiber.Map, 0, len(rows))
+		for _, r := range rows {
 			items = append(items, fiber.Map{
 				"id":          r.ID,
 				"name":        r.Name,
@@ -341,9 +412,17 @@ func getSequence(q *store.Queries) fiber.Handler {
 	}
 }
 
-// updateSequence is a full replace: meta + the whole step array in one
-// transaction (last-write-wins concurrency per spec).
-func updateSequence(q *store.Queries, d *sql.DB) fiber.Handler {
+type sequenceUpdateMode int
+
+const (
+	sequenceUpdateAll sequenceUpdateMode = iota
+	sequenceUpdateMeta
+	sequenceUpdateSteps
+)
+
+func updateSequence(q *store.Queries, d *sql.DB, mode sequenceUpdateMode) fiber.Handler {
+	writeMeta := mode != sequenceUpdateSteps
+	replaceSteps := mode != sequenceUpdateMeta
 	return func(c fiber.Ctx) error {
 		id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 		if err != nil {
@@ -353,14 +432,15 @@ func updateSequence(q *store.Queries, d *sql.DB) fiber.Handler {
 		if err := c.Bind().Body(&b); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
 		}
-		if fields := b.validate(); len(fields) > 0 {
-			return validationError(c, fields)
+		fields := map[string]string{}
+		if writeMeta {
+			fields = b.validateMeta()
 		}
-		if _, err := q.GetSequence(c.Context(), id); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "sequence not found"})
-			}
-			return serverError(c, "read sequence", err)
+		if replaceSteps {
+			b.validateSteps(fields)
+		}
+		if len(fields) > 0 {
+			return validationError(c, fields)
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 
@@ -371,21 +451,39 @@ func updateSequence(q *store.Queries, d *sql.DB) fiber.Handler {
 			}
 			defer tx.Rollback()
 			tq := q.WithTx(tx)
-			if err := tq.UpdateSequenceMeta(c.Context(), store.UpdateSequenceMetaParams{
-				Name:        b.Name,
-				Description: b.Description,
-				UpdatedAt:   now,
-				ID:          id,
-			}); err != nil {
+			var affected int64
+			if writeMeta {
+				affected, err = tq.UpdateSequenceMeta(c.Context(), store.UpdateSequenceMetaParams{
+					Name:        b.Name,
+					Description: b.Description,
+					UpdatedAt:   now,
+					ID:          id,
+				})
+			} else {
+				// Lock the parent before replacing steps, without rewriting its metadata.
+				affected, err = tq.TouchSequence(c.Context(), store.TouchSequenceParams{
+					UpdatedAt: now,
+					ID:        id,
+				})
+			}
+			if err != nil {
 				return err
 			}
-			if err := writeSteps(c, tq, id, b.Steps); err != nil {
-				return err
+			if affected == 0 {
+				return sql.ErrNoRows
+			}
+			if replaceSteps {
+				if err := writeSteps(c, tq, id, b.Steps); err != nil {
+					return err
+				}
 			}
 			return tx.Commit()
 		}()
 		if err != nil {
-			if store.IsUniqueViolation(err) {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "sequence not found"})
+			}
+			if writeMeta && store.IsUniqueViolation(err) {
 				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 					"error": "a sequence named '" + b.Name + "' already exists",
 				})

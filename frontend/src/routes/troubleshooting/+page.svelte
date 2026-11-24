@@ -1,11 +1,20 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { ChevronRight, Layers, Plus, RefreshCw, Search, X } from '@lucide/svelte';
+	import {
+		ChevronRight,
+		Download,
+		Layers,
+		Plus,
+		RefreshCw,
+		Search,
+		Upload,
+		X
+	} from '@lucide/svelte';
 	import { listDevices, type DeviceSummary } from '#lib/devices.ts';
+	import { createLatestRequestGuard } from '#lib/request-guard.ts';
 	import {
 		categoryLabel,
-		createLatestRequestGuard,
 		deleteTroubleshootingGuide,
 		getTroubleshootingGuide,
 		listRelatedTroubleshootingGuides,
@@ -25,6 +34,8 @@
 		type TroubleshootingDialogMode
 	} from '#lib/components/TroubleshootingDialog.svelte';
 	import TroubleshootingRegistryDialog from '#lib/components/TroubleshootingRegistryDialog.svelte';
+	import TroubleshootingBulkImportDialog from '#lib/components/TroubleshootingBulkImportDialog.svelte';
+	import TroubleshootingExportDialog from '#lib/components/TroubleshootingExportDialog.svelte';
 	import AlertDialog from '#lib/components/ui/alert-dialog.svelte';
 	import Badge from '#lib/components/ui/badge.svelte';
 	import Button from '#lib/components/ui/button.svelte';
@@ -44,6 +55,8 @@
 	let total = $state(0);
 	let loadingList = $state(true);
 	let listError = $state('');
+	let bulkImportOpen = $state(false);
+	let exportSelection = $state<{ guideId?: number }>();
 
 	let selectedId = $state<number | null>(null);
 	let selectedDetail = $state<TroubleshootingGuideDetail | null>(null);
@@ -56,6 +69,7 @@
 	let categoryError = $state('');
 	let severityError = $state('');
 	let relatedGuides = $state<TroubleshootingGuideListItem[]>([]);
+	let loadingRelated = $state(false);
 	let relatedError = $state('');
 	const listRequestGuard = createLatestRequestGuard();
 	const detailRequestGuard = createLatestRequestGuard();
@@ -137,9 +151,12 @@
 
 	async function refreshList(preferId?: number, preservePreferred = false) {
 		const request = listRequestGuard.begin();
+		const requestedPage = page;
+		const requestedPageSize = pageSize;
 		detailRequestGuard.begin();
 		loadingList = true;
 		loadingDetail = false;
+		loadingRelated = false;
 		listError = '';
 		try {
 			const res = await listTroubleshootingGuides({
@@ -147,10 +164,16 @@
 				category: category !== '_all' ? category : undefined,
 				device: device !== '_all' ? device : undefined,
 				error_code: errorCodeFilter || undefined,
-				page,
-				page_size: pageSize
+				page: requestedPage,
+				page_size: requestedPageSize
 			});
 			if (!listRequestGuard.isCurrent(request)) return;
+			const lastPage = Math.ceil(res.total / requestedPageSize);
+			if (lastPage > 0 && requestedPage > lastPage) {
+				page = lastPage;
+				await refreshList(preferId, preservePreferred);
+				return;
+			}
 			items = res.items;
 			total = res.total;
 
@@ -179,29 +202,37 @@
 	async function selectGuide(id: number) {
 		const request = detailRequestGuard.begin();
 		selectedId = id;
+		selectedDetail = null;
 		loadingDetail = true;
+		loadingRelated = false;
 		detailError = '';
 		try {
 			const detail = await getTroubleshootingGuide(id);
 			if (!detailRequestGuard.isCurrent(request)) return;
 			selectedDetail = detail;
-			relatedError = '';
-			try {
-				const related = await listRelatedTroubleshootingGuides(id);
-				if (!detailRequestGuard.isCurrent(request)) return;
-				relatedGuides = related.items;
-			} catch (err) {
-				if (detailRequestGuard.isCurrent(request)) {
-					relatedGuides = [];
-					relatedError = err instanceof Error ? err.message : String(err);
-				}
-			}
+			void loadRelatedGuides(id, request);
 		} catch (err) {
 			if (detailRequestGuard.isCurrent(request)) {
 				detailError = err instanceof Error ? err.message : String(err);
 			}
 		} finally {
 			if (detailRequestGuard.isCurrent(request)) loadingDetail = false;
+		}
+	}
+
+	async function loadRelatedGuides(id: number, request: number) {
+		relatedGuides = [];
+		relatedError = '';
+		loadingRelated = true;
+		try {
+			const related = await listRelatedTroubleshootingGuides(id);
+			if (detailRequestGuard.isCurrent(request)) relatedGuides = related.items;
+		} catch (err) {
+			if (detailRequestGuard.isCurrent(request)) {
+				relatedError = err instanceof Error ? err.message : String(err);
+			}
+		} finally {
+			if (detailRequestGuard.isCurrent(request)) loadingRelated = false;
 		}
 	}
 
@@ -273,10 +304,16 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap items-center gap-2">
-		<Button variant="secondary" onclick={() => (manageOpen = true)}>Manage Lists</Button>
+		<Button variant="secondary" onclick={() => (manageOpen = true)}>Manage Labels</Button>
+		<Button variant="outline" onclick={() => (bulkImportOpen = true)}>
+			<Upload size={16} /> Import
+		</Button>
+		<Button variant="outline" onclick={() => (exportSelection = {})}>
+			<Download size={16} /> Export Guides
+		</Button>
 		<Button onclick={openCreate}>
 			<Plus size={16} />
-			<span>New Troubleshooting Guide</span>
+			<span>New Guide</span>
 		</Button>
 	</div>
 </div>
@@ -307,7 +344,7 @@
 			label="Device / Interface"
 			compact
 			comfortable
-			blankLabel="Global (All Devices)"
+			blankLabel="Global only (no Device assigned)"
 			allowAll
 			{device}
 			summaries={deviceSummaries}
@@ -350,17 +387,17 @@
 
 {#if categoryError || severityError}
 	<div class="metadata-error banner-error" role="alert">
-		<span
-			>{[
+		<span>
+			{[
 				categoryError && `Categories: ${categoryError}`,
 				severityError && `Severities: ${severityError}`
 			]
 				.filter(Boolean)
-				.join(' · ')}</span
-		>
-		<Button variant="outline" size="sm" onclick={retryMetadata}
-			><RefreshCw size={14} />Retry metadata</Button
-		>
+				.join(' · ')}
+		</span>
+		<Button variant="outline" size="sm" onclick={retryMetadata}>
+			<RefreshCw size={14} />Retry metadata
+		</Button>
 	</div>
 {/if}
 
@@ -410,44 +447,48 @@
 			</div>
 		{:else}
 			{#each items as row (row.id)}
-				<button
-					type="button"
-					class={[
-						'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
-						{ chosen: selectedId === row.id }
-					]}
-					aria-pressed={selectedId === row.id}
-					onclick={() => selectGuide(row.id)}
-				>
-					<div class="flex flex-wrap items-center gap-1.5">
-						<div class="guide-labels flex flex-wrap items-center gap-1.5">
-							{#if row.error_code}
-								<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
-							{/if}
-							<Badge variant="outline">{row.device_name || 'Global'}</Badge>
-							{#if row.function_name}
-								<Badge variant="outline"><code class="font-mono">{row.function_name}</code></Badge>
+				<div class="catalog-row">
+					<button
+						type="button"
+						class={[
+							'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+							{ chosen: selectedId === row.id }
+						]}
+						aria-pressed={selectedId === row.id}
+						onclick={() => selectGuide(row.id)}
+					>
+						<div class="flex flex-wrap items-center gap-1.5">
+							<div class="guide-labels flex flex-wrap items-center gap-1.5">
+								{#if row.error_code}
+									<Badge variant="default"><span class="font-mono">{row.error_code}</span></Badge>
+								{/if}
+								<Badge variant="outline">{row.device_name || 'Global'}</Badge>
+								{#if row.function_name}
+									<Badge variant="outline">
+										<code class="font-mono">{row.function_name}</code>
+									</Badge>
+								{/if}
+							</div>
+							{#if row.related_count > 0}
+								<span
+									class="text-primary inline-flex items-center gap-1 text-[11px] font-semibold"
+									title="{row.related_count + 1} solutions available for this problem / error code"
+								>
+									<Layers size={11} />
+									+{row.related_count} alt
+								</span>
 							{/if}
 						</div>
-						{#if row.related_count > 0}
-							<span
-								class="text-primary inline-flex items-center gap-1 text-[11px] font-semibold"
-								title="{row.related_count + 1} solutions available for this problem / error code"
-							>
-								<Layers size={11} />
-								+{row.related_count} alt
-							</span>
-						{/if}
-					</div>
-					<span class="sr-only">Select guide </span>
-					<strong>{row.title}</strong>
-					<span class="meta-line">
-						{categoryLabel(row.category, categories)}
-						· {row.step_count}
-						{row.step_count === 1 ? 'step' : 'steps'}
-					</span>
-					<ChevronRight size={16} class="chevron-icon" />
-				</button>
+						<span class="sr-only">Select guide </span>
+						<strong>{row.title}</strong>
+						<span class="meta-line">
+							{categoryLabel(row.category, categories)}
+							· {row.step_count}
+							{row.step_count === 1 ? 'step' : 'steps'}
+						</span>
+						<ChevronRight size={16} class="chevron-icon" />
+					</button>
+				</div>
 			{/each}
 
 			<Pagination
@@ -486,7 +527,11 @@
 			{#if relatedError}
 				<div class="banner-error" role="alert">
 					<span>{relatedError}</span>
-					<Button variant="outline" size="sm" onclick={() => selectGuide(selectedDetail!.id)}>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => loadRelatedGuides(selectedDetail!.id, detailRequestGuard.begin())}
+					>
 						Retry related guides
 					</Button>
 				</div>
@@ -494,6 +539,7 @@
 			<TroubleshootingDetail
 				guide={selectedDetail}
 				{relatedGuides}
+				{loadingRelated}
 				{categories}
 				{severities}
 				onSelectGuide={(id) => selectGuide(id)}
@@ -504,6 +550,7 @@
 				}}
 				onAddAlternate={openAddAlternate}
 				onEdit={openEdit}
+				onExport={(guide) => (exportSelection = { guideId: guide.id })}
 				onDelete={(guide) => {
 					deleteTarget = guide;
 				}}
@@ -515,6 +562,25 @@
 		{/if}
 	</div>
 </div>
+
+{#if bulkImportOpen}
+	<TroubleshootingBulkImportDialog
+		onClose={() => (bulkImportOpen = false)}
+		onImported={({ created, updated }) => {
+			toast.success(`Import complete: ${created} created, ${updated} updated`);
+			void refreshList();
+		}}
+	/>
+{/if}
+
+{#if exportSelection}
+	<TroubleshootingExportDialog
+		initialGuideId={exportSelection.guideId}
+		{severities}
+		filters={{ search: search.trim(), category, device, error_code: errorCodeFilter }}
+		onClose={() => (exportSelection = undefined)}
+	/>
+{/if}
 
 {#if dialogOpen}
 	<TroubleshootingDialog
@@ -682,7 +748,11 @@
 		font-size: 12px;
 		color: var(--muted-foreground);
 	}
-	.guide-list > button {
+	.catalog-row {
+		position: relative;
+		flex-shrink: 0;
+	}
+	.catalog-row > button {
 		flex-shrink: 0;
 		display: grid;
 		position: relative;
@@ -690,7 +760,7 @@
 		width: 100%;
 		min-width: 0;
 		text-align: left;
-		padding: 14px 28px 14px 16px;
+		padding: 14px 28px 14px 14px;
 		border-left: 3px solid transparent;
 		border-top: 1px solid var(--border);
 		cursor: pointer;
@@ -706,18 +776,18 @@
 		font-size: 11px;
 		color: var(--muted-foreground);
 	}
-	.guide-list > button :global(.chevron-icon) {
+	.catalog-row > button :global(.chevron-icon) {
 		position: absolute;
 		top: 50%;
 		right: 6px;
 		transform: translateY(-50%);
 		color: var(--muted-foreground);
 	}
-	.guide-list button:hover,
-	.guide-list button.chosen {
+	.catalog-row button:hover,
+	.catalog-row button.chosen {
 		background: var(--device-soft);
 	}
-	.guide-list button.chosen {
+	.catalog-row button.chosen {
 		border-left-color: var(--device-accent);
 	}
 	.detail-pane {
