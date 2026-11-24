@@ -27,6 +27,12 @@ func main() {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
+	log.Printf("Parsing workbook: %s", path)
+	wb, err := importer.ParseWorkbook(f)
+	if err != nil {
+		log.Fatalf("parse workbook: %v", err)
+	}
+
 	d, err := db.OpenPostgres(dsn)
 	if err != nil {
 		log.Fatalf("open database: %v", err)
@@ -41,12 +47,6 @@ func main() {
 		log.Fatalf("read schema version: %v", err)
 	}
 	log.Printf("PostgreSQL database migrated to schema version %d", version)
-
-	log.Printf("Parsing workbook: %s", path)
-	wb, err := importer.ParseWorkbook(f)
-	if err != nil {
-		log.Fatalf("parse workbook: %v", err)
-	}
 
 	log.Printf("Importing workbook into database...")
 	res, err := importer.Import(context.Background(), d, wb, filepath.Base(path), true)

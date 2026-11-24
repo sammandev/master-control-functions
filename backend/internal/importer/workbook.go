@@ -114,17 +114,12 @@ func ParseWorkbook(r io.Reader) (*Workbook, error) {
 	wb := &Workbook{}
 	rc := &record{}
 	for _, sheet := range sheetOrder {
+		if err := validateCellLengths(f, sheet); err != nil {
+			return nil, err
+		}
 		rows, err := f.GetRows(sheet)
 		if err != nil {
 			return nil, fmt.Errorf("sheet %s: %w", sheet, err)
-		}
-		for i, row := range rows {
-			for j, text := range row {
-				if n := cellTextLength(text); n > excelize.TotalCellChars {
-					cellName, _ := excelize.CoordinatesToCellName(j+1, i+1)
-					return nil, fmt.Errorf("sheet %s cell %s contains %d UTF-16 code units; Excel allows at most %d. No data was imported", sheet, cellName, n, excelize.TotalCellChars)
-				}
-			}
 		}
 		var header []string
 		var data [][]string
@@ -153,6 +148,22 @@ func ParseWorkbook(r io.Reader) (*Workbook, error) {
 	wb.Normalizations = rc.norms
 	wb.Skipped = rc.skipped
 	return wb, nil
+}
+
+func validateCellLengths(f *excelize.File, sheet string) error {
+	rows, err := f.GetRows(sheet, excelize.Options{RawCellValue: true})
+	if err != nil {
+		return fmt.Errorf("sheet %s: %w", sheet, err)
+	}
+	for i, row := range rows {
+		for j, text := range row {
+			if n := cellTextLength(text); n > excelize.TotalCellChars {
+				cellName, _ := excelize.CoordinatesToCellName(j+1, i+1)
+				return fmt.Errorf("sheet %s cell %s contains %d UTF-16 code units; Excel allows at most %d. No data was imported", sheet, cellName, n, excelize.TotalCellChars)
+			}
+		}
+	}
+	return nil
 }
 
 func validateHeaders(sheet string, header map[string]int) error {
