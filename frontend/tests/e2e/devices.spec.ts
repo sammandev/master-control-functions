@@ -519,6 +519,7 @@ test('devices: renaming a resolved Global definition keeps scoped details usable
 
 test('devices: examples sort before paginating', async ({ page, request }) => {
 	const device = 'E2E_EXAMPLES_SORT';
+	let editedExampleId: number | undefined;
 	for (const [name, count] of [
 		['READ_SENSOR10', 20],
 		['READ_SENSOR20', 80],
@@ -539,6 +540,7 @@ test('devices: examples sort before paginating', async ({ page, request }) => {
 				}
 			});
 			expect(example.status()).toBe(201);
+			if (name === 'READ_SENSOR20' && i === 0) editedExampleId = (await example.json()).id;
 		}
 	}
 
@@ -560,6 +562,21 @@ test('devices: examples sort before paginating', async ({ page, request }) => {
 		'DLL READ_SENSOR10',
 		...Array<string>(19).fill('DLL READ_SENSOR20')
 	]);
+
+	const editedScript = `DLL${device}|READ_SENSOR20||9000|NEXT|FAIL`;
+	await page.getByRole('tab', { name: 'Functions', exact: true }).click();
+	await page.getByRole('button', { name: 'Select READ_SENSOR20', exact: true }).click();
+	await page
+		.getByRole('region', { name: 'Function examples', exact: true })
+		.getByRole('button', { name: `Edit example ${editedExampleId}`, exact: true })
+		.click();
+	const dialog = page.getByRole('dialog', { name: /^edit example$/i });
+	await dialog.getByRole('textbox', { name: 'Script', exact: true }).fill(editedScript);
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(dialog).toBeHidden();
+	await page.getByRole('tab', { name: 'Examples', exact: true }).click();
+	await expect(panel.getByText('Page 2 of 6')).toBeVisible();
+	await expect(panel.getByText(editedScript, { exact: true })).toBeVisible();
 
 	await functionHeader.click();
 	await expect(panel.getByText('Page 1 of 6')).toBeVisible();

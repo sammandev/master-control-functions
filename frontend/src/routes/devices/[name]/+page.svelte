@@ -539,6 +539,9 @@
 
 	async function refreshFunctions(deletedId?: number) {
 		const scope = device;
+		exampleRevision++;
+		exampleItems = [];
+		exampleLoaded = false;
 		if (deletedId !== undefined) {
 			fnItems = fnItems.filter((row) => row.id !== deletedId);
 			if (Number(page.url.searchParams.get('function')) === deletedId) {
