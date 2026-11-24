@@ -24,6 +24,57 @@ const severities = [
 
 const refreshes = { list: 0, detail: 0 };
 
+test('defers the export catalog until browsing', async ({ page }) => {
+	await mockTroubleshooting(page);
+	const catalogPages: string[] = [];
+	await page.route(/\/api\/troubleshooting\?.*page_size=100/, (route) => {
+		const pageNumber = Number(new URL(route.request().url()).searchParams.get('page'));
+		catalogPages.push(String(pageNumber));
+		if (catalogPages.length === 1) {
+			return route.fulfill({ status: 503, json: { error: 'Catalog unavailable' } });
+		}
+		return route.fulfill({
+			json: { items: [seedGuides[pageNumber - 1]], total: 101, page: pageNumber, page_size: 100 }
+		});
+	});
+	await page.route('**/api/troubleshooting/export', (route) =>
+		route.fulfill({ body: 'export file' })
+	);
+	await page.goto('/troubleshooting');
+
+	const dialog = page.getByRole('dialog', { name: 'Export Guides' });
+	const detailExport = page.getByRole('button', { name: 'Export', exact: true });
+	const toolbarExport = page.getByRole('button', { name: 'Export Guides', exact: true });
+	const download = dialog.getByRole('button', { name: 'Download export' });
+	for (const mode of ['selected', 'All matching current filters', 'All guides']) {
+		await (mode === 'selected' ? detailExport : toolbarExport).click();
+		if (mode !== 'selected') await dialog.getByRole('radio', { name: mode }).check();
+		const downloaded = page.waitForEvent('download');
+		await download.click();
+		await downloaded;
+		await expect(dialog).toBeHidden();
+		expect(catalogPages).toEqual([]);
+	}
+
+	await detailExport.click();
+	await expect(dialog.getByText('1 selected guide')).toBeVisible();
+	await expect(dialog.getByText('First guide', { exact: true })).toBeVisible();
+	const browse = dialog.getByRole('button', { name: 'Browse guides' });
+	await browse.click();
+	await expect(dialog.getByRole('alert')).toHaveText('Catalog unavailable');
+	await dialog.getByRole('button', { name: 'Retry' }).click();
+	const first = dialog.getByRole('checkbox', { name: /First guide/ });
+	await expect(first).toBeChecked();
+	await expect(dialog.getByRole('checkbox', { name: /Second guide/ })).toBeVisible();
+	await browse.click();
+	await expect(first).toBeHidden();
+	await browse.click();
+	await dialog.getByRole('radio', { name: 'All guides', exact: true }).check();
+	await dialog.getByRole('radio', { name: 'Choose guides' }).check();
+	await expect(first).toBeChecked();
+	expect(catalogPages).toEqual(['1', '1', '2']);
+});
+
 test('downloads templates, previews bulk imports, and exports selected or matching guides', async ({
 	page
 }) => {
@@ -125,6 +176,7 @@ test('downloads templates, previews bulk imports, and exports selected or matchi
 	await page.getByRole('button', { name: 'Export', exact: true }).click();
 	const exportDialog = page.getByRole('dialog', { name: 'Export Guides' });
 	await expect(exportDialog.getByText('1 selected guide')).toBeVisible();
+	await exportDialog.getByRole('button', { name: 'Browse guides' }).click();
 	await expect(exportDialog.getByRole('checkbox', { name: /First guide/ })).toBeChecked();
 	await exportDialog.getByRole('radio', { name: /Both/ }).check();
 	const selected = page.waitForEvent('download');
@@ -133,6 +185,7 @@ test('downloads templates, previews bulk imports, and exports selected or matchi
 	expect(exports[0]).toEqual({ scope: 'selected', format: 'both', ids: [1], search: null });
 	await page.getByRole('button', { name: 'Export Guides', exact: true }).click();
 	await expect(exportDialog.getByRole('button', { name: 'Download export' })).toBeDisabled();
+	await exportDialog.getByRole('button', { name: 'Browse guides' }).click();
 	const searchExport = exportDialog.getByRole('searchbox', { name: 'Search guides to export' });
 	await searchExport.fill('second');
 	await expect(exportDialog.getByRole('checkbox')).toHaveCount(1);
