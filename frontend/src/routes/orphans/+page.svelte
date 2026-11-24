@@ -512,7 +512,7 @@
 			</div>
 			<div class="field">
 				<Label for="orphan-def-name">Name</Label>
-				<Input id="orphan-def-name" type="text" bind:value={definitionForm.name} />
+				<Input id="orphan-def-name" type="text" value={definitionForm.name} readonly />
 				{#if fieldErrors.name}<span class="field-error">{fieldErrors.name}</span>{/if}
 			</div>
 			<div class="field">
@@ -611,5 +611,18 @@
 	.repair-context dd {
 		margin: 0;
 		overflow-wrap: anywhere;
+	}
+	.crud-form :global(#orphan-def-device:disabled) {
+		cursor: default;
+	}
+	.crud-form :global(#orphan-def-device:disabled),
+	.crud-form :global(#orphan-def-name:read-only) {
+		opacity: 0.5;
+	}
+	.crud-form :global(#orphan-def-name:read-only:focus-visible) {
+		border-color: var(--border);
+		box-shadow: none;
+		outline: 1px dashed var(--foreground);
+		outline-offset: -3px;
 	}
 </style>
