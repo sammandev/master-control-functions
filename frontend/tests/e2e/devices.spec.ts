@@ -519,13 +519,16 @@ test('devices: renaming a resolved Global definition keeps scoped details usable
 
 test('devices: examples sort before paginating', async ({ page, request }) => {
 	const device = 'E2E_EXAMPLES_SORT';
-	const names = ['READ_SENSOR10', 'READ_SENSOR20', 'READ_SENSOR2'];
-	for (const name of names) {
+	for (const [name, count] of [
+		['READ_SENSOR10', 20],
+		['READ_SENSOR20', 80],
+		['READ_SENSOR2', 1]
+	] as const) {
 		const fn = await request.post('/api/functions', {
 			data: { source: 'DLL', interface: device, name }
 		});
 		expect(fn.status()).toBe(201);
-		for (let i = 0; i < (name === names[0] ? 19 : 1); i++) {
+		for (let i = 0; i < count; i++) {
 			const example = await request.post('/api/examples', {
 				data: {
 					function_source: 'DLL',
@@ -544,10 +547,7 @@ test('devices: examples sort before paginating', async ({ page, request }) => {
 	const functionHeader = panel.getByRole('button', { name: /^Function/ });
 	const rows = panel.locator('tbody tr');
 	const functions = rows.locator('td:first-child');
-	await expect(functions).toHaveText([
-		...Array<string>(19).fill('DLL READ_SENSOR10'),
-		'DLL READ_SENSOR20'
-	]);
+	await expect(functions).toHaveText(Array<string>(20).fill('DLL READ_SENSOR10'));
 
 	await functionHeader.click();
 	await expect(functions).toHaveText([
@@ -555,11 +555,14 @@ test('devices: examples sort before paginating', async ({ page, request }) => {
 		...Array<string>(19).fill('DLL READ_SENSOR10')
 	]);
 	await panel.getByRole('button', { name: 'Next page' }).click();
-	await expect(panel.getByText('Page 2 of 2')).toBeVisible();
-	await expect(functions).toHaveText(['DLL READ_SENSOR20']);
+	await expect(panel.getByText('Page 2 of 6')).toBeVisible();
+	await expect(functions).toHaveText([
+		'DLL READ_SENSOR10',
+		...Array<string>(19).fill('DLL READ_SENSOR20')
+	]);
 
 	await functionHeader.click();
-	await expect(panel.getByText('Page 1 of 2')).toBeVisible();
+	await expect(panel.getByText('Page 1 of 6')).toBeVisible();
 	await expect(functions.first()).toHaveText('DLL READ_SENSOR20');
 	await functionHeader.click();
 	await expect(functions.first()).toHaveText('DLL READ_SENSOR10');

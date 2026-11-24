@@ -184,12 +184,6 @@ func TestExamplesPagination(t *testing.T) {
 		{"overflowing offset", "page=4611686018427387905&page_size=4", 4611686018427387905, 4, nil},
 		{"locate overrides deep page", "page=9223372036854775807&page_size=2&example_id=1", 1, 2, []int64{2, 1}},
 		{"missing ID preserves page", "page=2&page_size=1&example_id=999", 2, 1, []int64{1}},
-		{"ascending function", "sort=function&page_size=1", 1, 1, []int64{1}},
-		{"ascending script", "sort=script&page_size=1", 1, 1, []int64{1}},
-		{"descending meaning", "sort=meaning&order=desc&page_size=1", 1, 1, []int64{1}},
-		{"locate in ascending sort", "sort=function&page_size=1&example_id=2", 2, 1, []int64{2}},
-		{"locate in descending sort", "sort=meaning&order=desc&page_size=1&example_id=2", 2, 1, []int64{2}},
-		{"unknown sort preserves default", "sort=unknown&order=desc&page_size=1", 1, 1, []int64{2}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resp, body := doRequest(t, app, "GET", "/api/examples?"+tc.query)

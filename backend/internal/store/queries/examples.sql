@@ -6,19 +6,8 @@
 
 -- name: ListExamples :many
 WITH matching_examples AS MATERIALIZED (
-    SELECT e.id, e.device_name,
-           (CASE WHEN NOT sqlc.arg('descending')::boolean THEN sort_value END)
-               COLLATE example_sort_natural AS asc_key,
-           (CASE WHEN sqlc.arg('descending')::boolean THEN sort_value END)
-               COLLATE example_sort_natural AS desc_key
+    SELECT e.id, e.device_name
     FROM examples e
-    CROSS JOIN LATERAL (
-        SELECT CASE sqlc.arg('sort_column')::text
-            WHEN 'function' THEN e.function_source || '/' || e.function_name
-            WHEN 'script' THEN e.script
-            WHEN 'meaning' THEN e.meaning
-        END AS sort_value
-    ) sort
     WHERE (sqlc.narg('function_source')::text IS NULL OR e.function_source = sqlc.narg('function_source')::text)
       AND (sqlc.narg('function_name')::text IS NULL OR e.function_name = sqlc.narg('function_name')::text)
       AND (sqlc.narg('device')::text IS NULL OR e.device_name = sqlc.narg('device')::text)
@@ -33,20 +22,16 @@ WITH matching_examples AS MATERIALIZED (
     SELECT COALESCE(
         -- Round the matched example's zero-based position down to its page start.
         (SELECT (SELECT COUNT(*) FROM matching_examples preceding
-                 WHERE preceding.asc_key < target.asc_key
-                    OR preceding.desc_key > target.desc_key
-                    OR (preceding.asc_key IS NOT DISTINCT FROM target.asc_key
-                        AND preceding.desc_key IS NOT DISTINCT FROM target.desc_key
-                        AND (preceding.device_name, preceding.id) < (target.device_name, target.id)))
+                 WHERE (preceding.device_name, preceding.id) < (target.device_name, target.id))
                 / sqlc.arg('page_size')::bigint * sqlc.arg('page_size')::bigint
          FROM matching_examples target
          WHERE target.id = sqlc.narg('example_id')::bigint),
         sqlc.arg('requested_offset')::bigint
     )::bigint AS page_offset
 ), page AS (
-    SELECT id, device_name, asc_key, desc_key
+    SELECT id, device_name
     FROM matching_examples
-    ORDER BY asc_key, desc_key DESC, device_name, id
+    ORDER BY device_name, id
     LIMIT sqlc.arg('page_size')::bigint
     OFFSET (SELECT page_offset FROM page_start)
 )
@@ -56,7 +41,7 @@ SELECT e.*,
        (SELECT page_offset FROM page_start) AS page_offset
 FROM page
 JOIN examples e ON e.id = page.id
-ORDER BY page.asc_key, page.desc_key DESC, page.device_name, page.id;
+ORDER BY page.device_name, page.id;
 
 -- name: ListExampleFunctionNames :many
 SELECT function_name

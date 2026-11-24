@@ -1,7 +1,6 @@
 // Typed client for the Examples CRUD API (ticket 06). HTTP plumbing from
 // the shared client, mirroring links.ts/definitions.ts.
 import { ApiError, request } from './client';
-import type { SortDir } from './table-sort';
 
 export { ApiError };
 
@@ -23,8 +22,6 @@ export interface ExampleListParams {
 	function_name?: string;
 	device?: string;
 	search?: string;
-	sort?: string;
-	order?: SortDir;
 	page?: number;
 	page_size?: number;
 	example_id?: number;
@@ -61,13 +58,25 @@ export async function listExamples(params: ExampleListParams = {}): Promise<Exam
 	// filters blank-scope (global) examples instead of meaning "no filter".
 	if (params.device !== undefined) qs.set('device', params.device);
 	if (params.search) qs.set('search', params.search);
-	if (params.sort) qs.set('sort', params.sort);
-	if (params.order) qs.set('order', params.order);
 	if (params.page) qs.set('page', String(params.page));
 	if (params.page_size) qs.set('page_size', String(params.page_size));
 	if (params.example_id) qs.set('example_id', String(params.example_id));
 	const suffix = qs.size > 0 ? `?${qs.toString()}` : '';
 	return request<ExampleListResult>(`/api/examples${suffix}`);
+}
+
+export async function listExampleMatches(
+	filters: Pick<ExampleListParams, 'device' | 'search'>,
+	current: () => boolean
+): Promise<Pick<ExampleListResult, 'items' | 'total'>> {
+	const matches = new Map<number, ExampleRow>();
+	for (let page = 1; current(); page++) {
+		const res = await listExamples({ ...filters, page, page_size: 100 });
+		for (const item of res.items) matches.set(item.id, item);
+		if (res.items.length === 0 || page * res.page_size >= res.total) break;
+	}
+	const items = [...matches.values()];
+	return { items, total: items.length };
 }
 
 export async function listExampleFunctionNames(): Promise<{ items: string[] }> {
