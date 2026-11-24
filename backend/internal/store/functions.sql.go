@@ -315,7 +315,9 @@ func (q *Queries) ListFunctionsByNamePage(ctx context.Context, arg ListFunctions
 const lockFunctionRenameGroup = `-- name: LockFunctionRenameGroup :one
 WITH locked AS MATERIALIZED (
     SELECT id, source, interface, name FROM functions
-    WHERE id = $1 OR (source = $2 AND name = $3)
+    WHERE id = $1
+       OR (source = $2 AND name = $3)
+       OR (source = $4 AND name = $5)
     ORDER BY id
     FOR UPDATE
 )
@@ -326,6 +328,8 @@ type LockFunctionRenameGroupParams struct {
 	ID        int64
 	OldSource string
 	OldName   string
+	NewSource string
+	NewName   string
 }
 
 type LockFunctionRenameGroupRow struct {
@@ -336,7 +340,13 @@ type LockFunctionRenameGroupRow struct {
 }
 
 func (q *Queries) LockFunctionRenameGroup(ctx context.Context, arg LockFunctionRenameGroupParams) (LockFunctionRenameGroupRow, error) {
-	row := q.db.QueryRowContext(ctx, lockFunctionRenameGroup, arg.ID, arg.OldSource, arg.OldName)
+	row := q.db.QueryRowContext(ctx, lockFunctionRenameGroup,
+		arg.ID,
+		arg.OldSource,
+		arg.OldName,
+		arg.NewSource,
+		arg.NewName,
+	)
 	var i LockFunctionRenameGroupRow
 	err := row.Scan(
 		&i.ID,

@@ -432,10 +432,10 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 			defer tx.Rollback()
 			tq := q.WithTx(tx)
 			if keyChanged {
-				// Lock existing holders of the old key in ID order so two sibling
-				// renames cannot both copy and leave the original associations behind.
+				// Lock holders of both keys in ID order to serialize overlapping renames.
 				locked, err := tq.LockFunctionRenameGroup(c.Context(), store.LockFunctionRenameGroupParams{
 					ID: id, OldSource: current.Source, OldName: current.Name,
+					NewSource: b.Source, NewName: b.Name,
 				})
 				if err != nil {
 					return err
