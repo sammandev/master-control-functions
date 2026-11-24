@@ -2,6 +2,8 @@ package api_test
 
 import (
 	"database/sql"
+	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 	"webprogfndb/internal/api"
@@ -160,6 +162,43 @@ func TestUpdateParameterLink(t *testing.T) {
 		`{"device_name":"X"}`)
 	if resp.StatusCode != 404 {
 		t.Fatalf("wrong-function update status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestUpdateLinkDeviceConflict(t *testing.T) {
+	for _, noun := range []string{"parameter", "criteria"} {
+		t.Run(noun, func(t *testing.T) {
+			app, _ := newLinksTestApp(t)
+			if resp, body := postJSON(t, app, "/api/functions", validFunctionJSON()); resp.StatusCode != http.StatusCreated {
+				t.Fatalf("seed function: status = %d (body: %s)", resp.StatusCode, body)
+			}
+
+			path := "/api/functions/1/" + noun + "-links"
+			for _, payload := range []string{
+				`{"definition":{"name":"POWER","type":"double"},"position":1,"required":true}`,
+				`{"name":"POWER","device_name":"PHONE-A","position":2}`,
+			} {
+				if resp, body := postJSON(t, app, path, payload); resp.StatusCode != http.StatusCreated {
+					t.Fatalf("attach %s: status = %d (body: %s)", payload, resp.StatusCode, body)
+				}
+			}
+			_, before := doRequest(t, app, "GET", path)
+
+			resp, body := doJSON(t, app, "PUT", path+"/1", `{"device_name":" phone-a ","position":3}`)
+			if resp.StatusCode != http.StatusConflict {
+				t.Fatalf("duplicate device update: status = %d, want 409 (body: %s)", resp.StatusCode, body)
+			}
+			var conflict struct{ Error string }
+			want := noun + " link 'POWER' already exists for device scope 'PHONE-A'"
+			if err := json.Unmarshal([]byte(body), &conflict); err != nil || conflict.Error != want {
+				t.Fatalf("duplicate device update: body = %s, want error %q", body, want)
+			}
+
+			resp, after := doRequest(t, app, "GET", path)
+			if resp.StatusCode != http.StatusOK || after != before {
+				t.Fatalf("link list changed after conflict: status = %d, before = %s, after = %s", resp.StatusCode, before, after)
+			}
+		})
 	}
 }
 

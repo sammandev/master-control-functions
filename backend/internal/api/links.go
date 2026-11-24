@@ -335,14 +335,18 @@ func attachLink(q *store.Queries, d *sql.DB, s linkStore, noun string) fiber.Han
 				return c.Status(he.status).JSON(he.body)
 			}
 			if store.IsUniqueViolation(err) {
-				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-					"error": noun + " link '" + p.Name + "' already exists for device scope '" + p.DeviceName + "'",
-				})
+				return linkConflict(c, noun, p.Name, p.DeviceName)
 			}
 			return serverError(c, "attach "+noun+" link", err)
 		}
 		return c.Status(fiber.StatusCreated).JSON(linkResponse(v))
 	}
+}
+
+func linkConflict(c fiber.Ctx, noun, name, deviceName string) error {
+	return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+		"error": noun + " link '" + name + "' already exists for device scope '" + deviceName + "'",
+	})
 }
 
 func updateLink(q *store.Queries, s linkStore, noun string) fiber.Handler {
@@ -381,13 +385,17 @@ func updateLink(q *store.Queries, s linkStore, noun string) fiber.Handler {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": noun + " link not found"})
 		}
 
-		now := time.Now().UTC().Format(time.RFC3339)
-		if err := s.update(c.Context(), q, id, updateLinkAttrs{
+		attrs := updateLinkAttrs{
 			// ADR-0002: match the registry's normalization (see linkBody.validate).
 			DeviceName: normalizeDeviceName(b.DeviceName),
 			Position:   b.nullPosition(),
 			Required:   b.Required,
-		}, now); err != nil {
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		if err := s.update(c.Context(), q, id, attrs, now); err != nil {
+			if store.IsUniqueViolation(err) {
+				return linkConflict(c, noun, v.Name, attrs.DeviceName)
+			}
 			return serverError(c, "update "+noun+" link", err)
 		}
 		// Re-read so resolved/definition_id reflect the dictionary as of now.

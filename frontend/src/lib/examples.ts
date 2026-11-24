@@ -65,6 +65,20 @@ export async function listExamples(params: ExampleListParams = {}): Promise<Exam
 	return request<ExampleListResult>(`/api/examples${suffix}`);
 }
 
+export async function listExampleMatches(
+	filters: Pick<ExampleListParams, 'device' | 'search'>,
+	current: () => boolean
+): Promise<Pick<ExampleListResult, 'items' | 'total'>> {
+	const matches = new Map<number, ExampleRow>();
+	for (let page = 1; current(); page++) {
+		const res = await listExamples({ ...filters, page, page_size: 100 });
+		for (const item of res.items) matches.set(item.id, item);
+		if (res.items.length === 0 || page * res.page_size >= res.total) break;
+	}
+	const items = [...matches.values()];
+	return { items, total: items.length };
+}
+
 export async function listExampleFunctionNames(): Promise<{ items: string[] }> {
 	return request<{ items: string[] }>('/api/examples/function-names');
 }
