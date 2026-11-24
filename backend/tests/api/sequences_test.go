@@ -230,12 +230,20 @@ func TestSequenceEmitRejectsSegmentDelimiters(t *testing.T) {
 	if !strings.Contains(body, `"text":"DLLTELNET|FN_A|FREQ=10|NULL|1000|NEXT|FAIL"`) {
 		t.Fatalf("joined emission wrong: %s", body)
 	}
-	for _, want := range []string{
-		`"flow":"must not contain '|' or a line break"`,
-		`"on_fail":"must not contain '|' or a line break"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("step not flagged with %s: %s", want, body)
+	var out struct {
+		Steps []struct {
+			Script string            `json:"script"`
+			Errors map[string]string `json:"errors"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal([]byte(body), &out); err != nil || len(out.Steps) != 3 {
+		t.Fatalf("decode steps (%v): %s", err, body)
+	}
+	const msg = "must not contain '|' or a line break"
+	for i, field := range map[int]string{1: "flow", 2: "on_fail"} {
+		step := out.Steps[i]
+		if step.Script != "" || len(step.Errors) != 1 || step.Errors[field] != msg {
+			t.Fatalf("step %d: want only %s=%q, got script=%q errors=%v", i+1, field, msg, step.Script, step.Errors)
 		}
 	}
 }
