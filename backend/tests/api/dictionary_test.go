@@ -585,6 +585,60 @@ func TestScopeAwareUsageCount(t *testing.T) {
 	}
 }
 
+func TestDictionaryPageUsageCounts(t *testing.T) {
+	for _, kind := range []string{"parameter", "criteria"} {
+		t.Run(kind, func(t *testing.T) {
+			app, d := newDictionaryTestApp(t)
+			if _, err := d.Exec(`
+				INSERT INTO functions (source, interface, name, created_at, updated_at)
+				VALUES ('DLL', 'WIFI_TEST', 'PRESENT', '', ''),
+				       ('DLL', 'IOT', 'PRESENT', '', ''),
+				       ('EXT', 'IOT', 'MISSING', '', '')`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := d.Exec(fmt.Sprintf(`
+				INSERT INTO %s_definitions (name, device_name, created_at, updated_at)
+				VALUES ('SHARED', '', '', ''), ('SHARED', 'WIFI_TEST', '', ''), ('UNUSED', '', '', '')`, kind)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := d.Exec(fmt.Sprintf(`
+				INSERT INTO %s_links (function_source, function_name, device_name, name, created_at, updated_at)
+				VALUES ('DLL', 'PRESENT', '', 'SHARED', '', ''),
+				       ('DLL', 'PRESENT', 'IOT', 'SHARED', '', ''),
+				       ('DLL', 'MISSING', 'WIFI_TEST', 'SHARED', '', '')`, kind)); err != nil {
+				t.Fatal(err)
+			}
+
+			type item struct {
+				Name   string `json:"name"`
+				Device string `json:"device_name"`
+				Usage  int64  `json:"usage_count"`
+				Orphan int64  `json:"orphan_usage_count"`
+			}
+			for _, tc := range []struct {
+				query string
+				want  []item
+			}{
+				{"?device=&page_size=2", []item{{"SHARED", "", 2, 1}, {"UNUSED", "", 0, 0}}},
+				{"?search=SHARED&page=2&page_size=1", []item{{"SHARED", "WIFI_TEST", 1, 1}}},
+				{"?search=SHARED&page=3&page_size=1", []item{}},
+			} {
+				resp, body := doRequest(t, app, "GET", "/api/"+kind+"-definitions"+tc.query)
+				if resp.StatusCode != 200 {
+					t.Fatalf("%s: status = %d: %s", tc.query, resp.StatusCode, body)
+				}
+				var got []item
+				if err := json.Unmarshal(extractItems(t, body), &got); err != nil {
+					t.Fatal(err)
+				}
+				if !slices.Equal(got, tc.want) {
+					t.Errorf("%s: got %+v, want %+v", tc.query, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 // extractItems pulls the "items" array out of a list response so the
 // caller can JSON-decode a typed slice.
 func extractItems(t *testing.T, body string) []byte {

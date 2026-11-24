@@ -180,15 +180,20 @@ type dictionaryRoutes[T any] struct {
 	// Function (ADR-0003). ADR-0009 makes the count scope-aware: a scoped
 	// definition counts links of its own scope; a global definition counts
 	// links whose device has no scoped sibling.
-	usage    func(c context.Context, name, deviceName string) (int64, int64, error)
-	insert   func(c fiber.Ctx, b definitionBody, now string) (T, error)
-	update   func(c fiber.Ctx, id int64, b definitionBody, now string) (T, error)
-	remove   func(c fiber.Ctx, id int64) (int64, error)
-	toResp   func(T, int64, int64) fiber.Map
-	idOf     func(T) int64
-	nameOf   func(T) string
-	scopeOf  func(T) string
-	sortKeys map[string]func(T) string
+	usage     func(c context.Context, name, deviceName string) (int64, int64, error)
+	pageUsage func(c context.Context, ids string) (map[int64]dictionaryUsage, error)
+	insert    func(c fiber.Ctx, b definitionBody, now string) (T, error)
+	update    func(c fiber.Ctx, id int64, b definitionBody, now string) (T, error)
+	remove    func(c fiber.Ctx, id int64) (int64, error)
+	toResp    func(T, int64, int64) fiber.Map
+	idOf      func(T) int64
+	nameOf    func(T) string
+	scopeOf   func(T) string
+	sortKeys  map[string]func(T) string
+}
+
+type dictionaryUsage struct {
+	total, orphaned int64
 }
 
 func registerDictionary[T any](app *fiber.App, base string, r dictionaryRoutes[T]) {
@@ -299,13 +304,24 @@ func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 		}
 		page := items[start:end]
 
-		out := make([]fiber.Map, 0, len(page))
-		for _, item := range page {
-			usage, orphanUsage, err := r.usage(c.Context(), r.nameOf(item), r.scopeOf(item))
+		var usageByID map[int64]dictionaryUsage
+		if len(page) > 0 {
+			var ids []byte
+			for i, item := range page {
+				if i > 0 {
+					ids = append(ids, ',')
+				}
+				ids = strconv.AppendInt(ids, r.idOf(item), 10)
+			}
+			usageByID, err = r.pageUsage(c.Context(), string(ids))
 			if err != nil {
 				return serverError(c, "count usage", err)
 			}
-			out = append(out, r.toResp(item, usage, orphanUsage))
+		}
+		out := make([]fiber.Map, 0, len(page))
+		for _, item := range page {
+			usage := usageByID[r.idOf(item)]
+			out = append(out, r.toResp(item, usage.total, usage.orphaned))
 		}
 		return c.JSON(fiber.Map{
 			"items":     out,
@@ -431,6 +447,17 @@ func registerParameterDictionary(app *fiber.App, q *store.Queries) {
 			orphaned, err := q.CountParameterOrphanUsage(c, name)
 			return total, orphaned, err
 		},
+		pageUsage: func(c context.Context, ids string) (map[int64]dictionaryUsage, error) {
+			rows, err := q.CountParameterPageUsage(c, ids)
+			if err != nil {
+				return nil, err
+			}
+			usageByID := make(map[int64]dictionaryUsage, len(rows))
+			for _, row := range rows {
+				usageByID[row.ID] = dictionaryUsage{total: row.UsageCount, orphaned: row.OrphanUsageCount}
+			}
+			return usageByID, nil
+		},
 		insert: func(c fiber.Ctx, b definitionBody, now string) (store.ParameterDefinition, error) {
 			return q.InsertParameterDefinition(c.Context(), store.InsertParameterDefinitionParams{
 				Name:          b.Name,
@@ -513,6 +540,17 @@ func registerCriteriaDictionary(app *fiber.App, q *store.Queries) {
 			}
 			orphaned, err := q.CountCriteriaOrphanUsage(c, name)
 			return total, orphaned, err
+		},
+		pageUsage: func(c context.Context, ids string) (map[int64]dictionaryUsage, error) {
+			rows, err := q.CountCriteriaPageUsage(c, ids)
+			if err != nil {
+				return nil, err
+			}
+			usageByID := make(map[int64]dictionaryUsage, len(rows))
+			for _, row := range rows {
+				usageByID[row.ID] = dictionaryUsage{total: row.UsageCount, orphaned: row.OrphanUsageCount}
+			}
+			return usageByID, nil
 		},
 		insert: func(c fiber.Ctx, b definitionBody, now string) (store.CriteriaDefinition, error) {
 			return q.InsertCriteriaDefinition(c.Context(), store.InsertCriteriaDefinitionParams{

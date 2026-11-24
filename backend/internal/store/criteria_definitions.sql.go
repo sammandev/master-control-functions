@@ -30,6 +30,57 @@ func (q *Queries) CountCriteriaDefinitions(ctx context.Context, arg CountCriteri
 	return count, err
 }
 
+const countCriteriaPageUsage = `-- name: CountCriteriaPageUsage :many
+SELECT d.id,
+       COUNT(l.id) FILTER (
+           WHERE l.device_name = d.device_name
+              OR (d.device_name = '' AND scoped.id IS NULL)
+       ) AS usage_count,
+       COUNT(l.id) FILTER (
+           WHERE NOT EXISTS (
+               SELECT 1 FROM functions f
+               WHERE f.source = l.function_source AND f.name = l.function_name
+           )
+       ) AS orphan_usage_count
+FROM criteria_definitions d
+LEFT JOIN criteria_links l ON l.name = d.name
+LEFT JOIN criteria_definitions scoped ON scoped.name = l.name
+    AND scoped.device_name = l.device_name AND scoped.device_name <> ''
+WHERE d.id = ANY(string_to_array($1::text, ',')::bigint[])
+GROUP BY d.id
+`
+
+type CountCriteriaPageUsageRow struct {
+	ID               int64
+	UsageCount       int64
+	OrphanUsageCount int64
+}
+
+// Usage follows exact-scope-then-global resolution; orphan usage is
+// name-wide, regardless of device scope.
+func (q *Queries) CountCriteriaPageUsage(ctx context.Context, ids string) ([]CountCriteriaPageUsageRow, error) {
+	rows, err := q.db.QueryContext(ctx, countCriteriaPageUsage, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountCriteriaPageUsageRow
+	for rows.Next() {
+		var i CountCriteriaPageUsageRow
+		if err := rows.Scan(&i.ID, &i.UsageCount, &i.OrphanUsageCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countCriteriaUsageGlobal = `-- name: CountCriteriaUsageGlobal :one
 SELECT COUNT(*) FROM criteria_links l
 WHERE l.name = $1
