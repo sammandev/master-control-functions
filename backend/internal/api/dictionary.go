@@ -287,14 +287,7 @@ func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 			})
 		}
 		locateRow(c, &lq, "definition_id", items, r.idOf)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(items)) {
-			start = int64(len(items))
-		}
-		end := start + lq.pageSize
-		if end > int64(len(items)) {
-			end = int64(len(items))
-		}
+		start, end := lq.sliceBounds(len(items))
 		page := items[start:end]
 
 		out := make([]fiber.Map, 0, len(page))
