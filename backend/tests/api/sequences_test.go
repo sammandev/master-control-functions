@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -230,6 +232,58 @@ func TestResetLeavesSequencesUntouched(t *testing.T) {
 	}
 	if !strings.Contains(body, `"timeout_ms":"1000"`) {
 		t.Fatalf("step lost after reset: %s", body)
+	}
+}
+
+func TestSequenceListDefaultPaging(t *testing.T) {
+	app, _ := newLinksTestApp(t)
+	check := func(query string, page, total int64, want ...[2]int64) {
+		t.Helper()
+		resp, body := doRequest(t, app, "GET", "/api/sequences?"+query)
+		var got struct {
+			Items []struct {
+				ID        int64 `json:"id"`
+				StepCount int64 `json:"step_count"`
+			} `json:"items"`
+			Total    int64 `json:"total"`
+			Page     int64 `json:"page"`
+			PageSize int64 `json:"page_size"`
+		}
+		err := json.Unmarshal([]byte(body), &got)
+		if resp.StatusCode != 200 || err != nil || got.Items == nil ||
+			got.Total != total || got.Page != page || got.PageSize != 1 {
+			t.Fatalf("%s: unexpected response: %d %s (decode: %v)", query, resp.StatusCode, body, err)
+		}
+		var items [][2]int64
+		for _, r := range got.Items {
+			items = append(items, [2]int64{r.ID, r.StepCount})
+		}
+		if !slices.Equal(items, want) {
+			t.Errorf("%s: (id, step_count) = %v, want %v", query, items, want)
+		}
+	}
+	check("page_size=1", 1, 0)
+	seedSequenceFunctions(t, app)
+	for _, body := range []string{
+		`{"name":"Bravo","description":"needle","steps":[` + seqStepB + `]}`,
+		`{"name":"Alpha","description":"elsewhere","steps":[` + seqStepB + `]}`,
+		`{"name":"Zulu","description":"NEEDLE","steps":[` + seqStepB + `,` + seqStepB + `]}`,
+	} {
+		if resp, response := postJSON(t, app, "/api/sequences", body); resp.StatusCode != 201 {
+			t.Fatalf("create: %d (body: %s)", resp.StatusCode, response)
+		}
+	}
+	check("page_size=1", 1, 3, [2]int64{2, 1})
+	check("page_size=1&page=2", 2, 3, [2]int64{1, 1})
+	check("page_size=1&page=3", 3, 3, [2]int64{3, 2})
+	check("page_size=1&page=2&search=Needle", 2, 2, [2]int64{3, 2})
+	check("page_size=1&page=3&search=Needle", 3, 2)
+
+	for _, sort := range []string{"", "&sort=name"} {
+		resp, body := doRequest(t, app, "GET", "/api/sequences?page=9223372036854775807"+sort)
+		if resp.StatusCode != 200 || !strings.Contains(body, `"items":[]`) {
+			t.Errorf("large page%s: want an empty page, got %d %s", sort, resp.StatusCode, body)
+		}
 	}
 }
 

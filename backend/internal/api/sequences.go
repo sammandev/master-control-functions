@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -293,13 +294,24 @@ func listSequences(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "count sequences", err)
 		}
-		rows, err := q.ListSequences(c.Context(), search)
+		lq := parseListQuery(c)
+		start := int64(math.MaxInt64)
+		if lq.page-1 <= math.MaxInt64/lq.pageSize {
+			start = (lq.page - 1) * lq.pageSize
+		}
+		compare := sequenceSortColumns[c.Query("sort")]
+		params := store.ListSequencesParams{Search: search}
+		if compare == nil {
+			params.PageLimit = sql.NullInt64{Int64: lq.pageSize, Valid: true}
+			params.PageOffset = start
+		}
+		rows, err := q.ListSequences(c.Context(), params)
 		if err != nil {
 			return serverError(c, "list sequences", err)
 		}
-		// Sort then paginate in Go, the functions list's pattern: the
-		// stable sort keeps the SQL order (name, id) as the tiebreak.
-		if compare := sequenceSortColumns[c.Query("sort")]; compare != nil {
+		// Custom sorts operate on all matches, keeping the SQL order
+		// (name, id) as the tiebreak.
+		if compare != nil {
 			desc := strings.EqualFold(c.Query("order"), "desc")
 			slices.SortStableFunc(rows, func(a, b store.ListSequencesRow) int {
 				if desc {
@@ -307,18 +319,12 @@ func listSequences(q *store.Queries) fiber.Handler {
 				}
 				return compare(a, b)
 			})
+			start = min(start, int64(len(rows)))
+			end := min(start+lq.pageSize, int64(len(rows)))
+			rows = rows[start:end]
 		}
-		lq := parseListQuery(c)
-		start := (lq.page - 1) * lq.pageSize
-		if start > int64(len(rows)) {
-			start = int64(len(rows))
-		}
-		end := start + lq.pageSize
-		if end > int64(len(rows)) {
-			end = int64(len(rows))
-		}
-		items := make([]fiber.Map, 0, end-start)
-		for _, r := range rows[start:end] {
+		items := make([]fiber.Map, 0, len(rows))
+		for _, r := range rows {
 			items = append(items, fiber.Map{
 				"id":          r.ID,
 				"name":        r.Name,
