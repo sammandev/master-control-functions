@@ -326,6 +326,10 @@ func troubleshootingExport(q *store.Queries, d *sql.DB) fiber.Handler {
 			raw, err = writeTroubleshootingTransfer(doc, format, nil)
 		}
 		if err != nil {
+			var limit *troubleshootingXLSXCellLimitError
+			if errors.As(err, &limit) {
+				return troubleshootingTransferError(c, fiber.StatusUnprocessableEntity, limit.Error())
+			}
 			return serverError(c, "generate troubleshooting export", err)
 		}
 		return sendTroubleshootingDownload(c, troubleshootingExportName, format, raw)

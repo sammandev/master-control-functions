@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -198,6 +199,71 @@ func TestTroubleshootingGuideTransferDownloads(t *testing.T) {
 	if status, body := uploadGuideTransferBytes(t, app, "preview", "matching.json", matching); status != 200 || strings.Count(body, `"action":"update"`) != 2 {
 		t.Fatalf("filtered export: %d %s", status, body)
 	}
+}
+
+func TestTroubleshootingGuideExportCellLimit(t *testing.T) {
+	app, db := newLinksTestApp(t)
+	const title = "Bench Recovery Guide"
+	const endpoint = "/api/troubleshooting/export"
+	atLimit := strings.Repeat("🙂", 16383) + "x"
+	oversized := atLimit + "x"
+	var id int64
+	if err := db.QueryRow(`INSERT INTO troubleshooting_guides (title, category, severity, created_at, updated_at)
+		VALUES ($1, 'execution', 'high', '', '') RETURNING id`, title).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO troubleshooting_steps (guide_id, position, title, instruction, script_snippet)
+		VALUES ($1, 1, 'Restart the controller', 'Run the recovery script.', $2)`, id, atLimit); err != nil {
+		t.Fatal(err)
+	}
+	request := func(format string) (*http.Response, string) {
+		t.Helper()
+		return postJSON(t, app, endpoint, fmt.Sprintf(`{"format":%q,"ids":[%d]}`, format, id))
+	}
+	res, body := request("xlsx")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("XLSX at the cell limit: %d %s", res.StatusCode, body)
+	}
+	book, err := excelize.OpenReader(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer book.Close()
+	if got, err := book.GetCellValue("Steps", "E2"); err != nil || got != atLimit {
+		t.Fatalf("snippet at the cell limit did not round-trip: %v", err)
+	}
+	if _, err := db.Exec("UPDATE troubleshooting_steps SET script_snippet = $1 WHERE guide_id = $2", oversized, id); err != nil {
+		t.Fatal(err)
+	}
+	assertLimit := func(format, field string) {
+		t.Helper()
+		res, body := request(format)
+		var problem struct{ Error string }
+		if err := json.Unmarshal([]byte(body), &problem); err != nil ||
+			res.StatusCode != http.StatusUnprocessableEntity || res.Header.Get("Content-Disposition") != "" ||
+			!strings.Contains(problem.Error, title) || !strings.Contains(problem.Error, field) ||
+			!strings.Contains(problem.Error, "Export as JSON instead.") {
+			t.Errorf("%s limit response for %s: %d %s", format, field, res.StatusCode, body)
+		}
+	}
+	assertLimit("xlsx", "Step 1 / Snippet")
+	assertLimit("both", "Step 1 / Snippet")
+	res, body = request("json")
+	var doc struct {
+		Guides []struct {
+			Steps []struct {
+				Snippet string `json:"script_snippet"`
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(body), &doc); err != nil || res.StatusCode != http.StatusOK ||
+		len(doc.Guides) != 1 || len(doc.Guides[0].Steps) != 1 || doc.Guides[0].Steps[0].Snippet != oversized {
+		t.Fatalf("JSON did not preserve the oversized snippet: status %d, decode error %v", res.StatusCode, err)
+	}
+	if _, err := db.Exec("UPDATE troubleshooting_guides SET root_cause = $1 WHERE id = $2", oversized, id); err != nil {
+		t.Fatal(err)
+	}
+	assertLimit("xlsx", "Root Cause")
 }
 
 func TestTroubleshootingGuideAllExportOrder(t *testing.T) {
