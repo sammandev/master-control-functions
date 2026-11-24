@@ -1,6 +1,17 @@
 -- name: GetFunction :one
 SELECT * FROM functions WHERE id = $1;
 
+-- name: LockFunctionRenameGroup :one
+WITH locked AS MATERIALIZED (
+    SELECT id, source, interface, name FROM functions
+    WHERE id = sqlc.arg(id)
+       OR (source = @old_source AND name = @old_name)
+       OR (source = @new_source AND name = @new_name)
+    ORDER BY id
+    FOR UPDATE
+)
+SELECT id, source, interface, name FROM locked WHERE id = sqlc.arg(id);
+
 -- name: ListFunctions :many
 SELECT * FROM functions
 WHERE (sqlc.narg('search')::text IS NULL

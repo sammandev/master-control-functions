@@ -399,6 +399,7 @@ func getFunction(q *store.Queries) fiber.Handler {
 }
 
 func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
+	errKeyChanged := errors.New("function key changed during save; reload and try again")
 	return func(c fiber.Ctx) error {
 		id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 		if err != nil {
@@ -418,10 +419,8 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
-		keyChanged := b.Source != current.Source ||
-			b.Interface != current.Interface ||
-			b.Name != current.Name
-
+		associationKeyChanged := b.Source != current.Source || b.Name != current.Name
+		keyChanged := associationKeyChanged || b.Interface != current.Interface
 		// Key change + field update are two writes: run them in one
 		// transaction so a mid-way failure can't leave a half-updated row.
 		var f store.Function
@@ -433,6 +432,17 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 			defer tx.Rollback()
 			tq := q.WithTx(tx)
 			if keyChanged {
+				// Lock holders of both keys in ID order to serialize overlapping renames.
+				locked, err := tq.LockFunctionRenameGroup(c.Context(), store.LockFunctionRenameGroupParams{
+					ID: id, OldSource: current.Source, OldName: current.Name,
+					NewSource: b.Source, NewName: b.Name,
+				})
+				if err != nil {
+					return err
+				}
+				if locked.Source != current.Source || locked.Interface != current.Interface || locked.Name != current.Name {
+					return errKeyChanged
+				}
 				if _, err := tq.UpdateFunctionKey(c.Context(), store.UpdateFunctionKeyParams{
 					ID:        id,
 					Source:    b.Source,
@@ -453,6 +463,27 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 				if err := tq.RenameScriptKeyAudits(c.Context(), store.RenameScriptKeyAuditsParams(rename)); err != nil {
 					return err
 				}
+				if associationKeyChanged {
+					shared, err := tq.FunctionNaturalKeyExists(c.Context(), store.FunctionNaturalKeyExistsParams{
+						Source: current.Source, Name: current.Name,
+					})
+					if err != nil {
+						return err
+					}
+					associations := store.RekeyFunctionParameterLinksParams{
+						OldSource: current.Source, OldName: current.Name,
+						NewSource: b.Source, NewName: b.Name, UpdatedAt: now, KeepOld: shared,
+					}
+					if err := tq.RekeyFunctionParameterLinks(c.Context(), associations); err != nil {
+						return err
+					}
+					if err := tq.RekeyFunctionCriteriaLinks(c.Context(), store.RekeyFunctionCriteriaLinksParams(associations)); err != nil {
+						return err
+					}
+					if err := tq.RekeyFunctionExamples(c.Context(), store.RekeyFunctionExamplesParams(associations)); err != nil {
+						return err
+					}
+				}
 			}
 			f, err = tq.UpdateFunction(c.Context(), store.UpdateFunctionParams{
 				ID:             id,
@@ -469,6 +500,12 @@ func updateFunction(q *store.Queries, d *sql.DB) fiber.Handler {
 			return tx.Commit()
 		}()
 		if err != nil {
+			if errors.Is(err, errKeyChanged) {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": errKeyChanged.Error()})
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "function not found"})
+			}
 			if store.IsUniqueViolation(err) {
 				return conflict(c, b)
 			}
