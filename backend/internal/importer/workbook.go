@@ -118,6 +118,14 @@ func ParseWorkbook(r io.Reader) (*Workbook, error) {
 		if err != nil {
 			return nil, fmt.Errorf("sheet %s: %w", sheet, err)
 		}
+		for i, row := range rows {
+			for j, text := range row {
+				if n := cellTextLength(text); n > excelize.TotalCellChars {
+					cellName, _ := excelize.CoordinatesToCellName(j+1, i+1)
+					return nil, fmt.Errorf("sheet %s cell %s contains %d UTF-16 code units; Excel allows at most %d. No data was imported", sheet, cellName, n, excelize.TotalCellChars)
+				}
+			}
+		}
 		var header []string
 		var data [][]string
 		if len(rows) > 0 {
