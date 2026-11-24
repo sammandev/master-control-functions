@@ -763,6 +763,111 @@ test('shows resolution steps before alternative solutions finish loading', async
 	}
 });
 
+test('requires a problem tag before adding an alternate to an untagged guide', async ({
+	page,
+	request
+}) => {
+	const guides = '/api/troubleshooting';
+	const title = 'Inspect the status light';
+	const created = await request.post(guides, {
+		data: {
+			title,
+			category: 'connection',
+			severity: 'warning',
+			symptom: 'The status light stays off.',
+			steps: [{ title: 'Check the indicator', instruction: 'Inspect the front panel.' }]
+		}
+	});
+	expect(created.status()).toBe(201);
+	const { id } = await created.json();
+
+	try {
+		await page.goto('/troubleshooting');
+		await page.getByRole('button', { name: `Select guide ${title}` }).click();
+		await expect(page.getByRole('button', { name: 'Add Alternate Solution' })).toBeDisabled();
+		await expect(
+			page.getByText(
+				'Edit this guide to add an Error Code or Related Function Name before adding an alternate solution.'
+			)
+		).toBeVisible();
+	} finally {
+		await request.delete(`${guides}/${id}`);
+	}
+});
+
+test('keeps a new alternate linked when its problem tags are edited', async ({ page, request }) => {
+	const guides = '/api/troubleshooting';
+	const sourceTitle = 'Reconnect the signal cable';
+	const alternateTitle = 'Restart the signal receiver';
+	const created = await request.post(guides, {
+		data: {
+			title: sourceTitle,
+			category: 'connection',
+			severity: 'warning',
+			error_code: 'E2E-SIGNAL-LOSS',
+			function_name: 'E2E_READ_SIGNAL',
+			symptom: 'The receiver reports signal loss.',
+			steps: [{ title: 'Reseat the cable', instruction: 'Reconnect both ends of the cable.' }]
+		}
+	});
+	expect(created.status()).toBe(201);
+	const { id } = await created.json();
+	let alternateId: number | undefined;
+
+	try {
+		await page.goto('/troubleshooting');
+		await page.getByRole('button', { name: `Select guide ${sourceTitle}` }).click();
+		await page.getByRole('button', { name: 'Add Alternate Solution' }).click();
+		const alternate = page.getByRole('dialog', {
+			name: 'Add Alternate Solution for Existing Problem / Error Code'
+		});
+		await alternate
+			.getByRole('textbox', { name: /Solution \/ Manifestation Title/ })
+			.fill(alternateTitle);
+		await alternate
+			.getByRole('textbox', { name: /Observed Symptom/ })
+			.fill('The receiver stops reading the signal.');
+		await alternate.getByRole('textbox', { name: /Action Headline/ }).fill('Restart the receiver');
+		await alternate
+			.getByRole('textbox', { name: /Detailed Instruction/ })
+			.fill('Power cycle the receiver.');
+
+		const errorCode = alternate.getByRole('textbox', { name: 'Error Code / Problem Tag' });
+		const functionName = alternate.getByRole('textbox', { name: 'Related Function Name' });
+		await expect(errorCode).toHaveValue('E2E-SIGNAL-LOSS');
+		await expect(functionName).toHaveValue('E2E_READ_SIGNAL');
+		await errorCode.fill('E2E-OTHER-ERROR');
+		await functionName.fill('E2E_OTHER_FUNCTION');
+		const submit = alternate.getByRole('button', { name: 'Create Alternate Solution' });
+		await expect(submit).toBeDisabled();
+		await expect(
+			alternate.getByText('Keep at least one Error Code or Related Function Name from the original guide.')
+		).toBeVisible();
+
+		await errorCode.fill(' e2e-signal-loss ');
+		await expect(submit).toBeEnabled();
+		await errorCode.fill('E2E-OTHER-ERROR');
+		await expect(submit).toBeDisabled();
+		await functionName.fill(' e2e_read_signal ');
+		await expect(submit).toBeEnabled();
+		const saveResponse = page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname === guides && response.request().method() === 'POST'
+		);
+		await submit.click();
+		const saved = await saveResponse;
+		expect(saved.status()).toBe(201);
+		alternateId = (await saved.json()).id;
+		await expect(page.getByRole('heading', { name: alternateTitle })).toBeVisible();
+		const related = page.getByRole('region', { name: 'Alternative Solutions' });
+		await related.getByRole('button', { name: sourceTitle }).click();
+		await expect(related.getByRole('button', { name: alternateTitle })).toBeVisible();
+	} finally {
+		if (alternateId) await request.delete(`${guides}/${alternateId}`);
+		await request.delete(`${guides}/${id}`);
+	}
+});
+
 test('returns to the last matching page after deleting its only guide', async ({
 	page,
 	request
