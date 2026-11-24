@@ -612,4 +612,8 @@
 		margin: 0;
 		overflow-wrap: anywhere;
 	}
+	.crud-form :global(#orphan-def-device:disabled) {
+		cursor: default;
+		opacity: 0.5;
+	}
 </style>
