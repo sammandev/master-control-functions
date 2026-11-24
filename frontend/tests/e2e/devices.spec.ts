@@ -121,6 +121,34 @@ test('devices detail: ?tab= deep-link lands on the requested tab', async ({ page
 	).toBeVisible();
 });
 
+test('devices: default Function selection follows the visible page', async ({ page }) => {
+	await page.goto('/devices/WIFI_TEST');
+	const rail = page.getByRole('complementary', { name: 'Device functions' });
+	const first = rail.getByRole('button', { name: /^Select / }).first();
+	const detailHeading = page
+		.getByRole('region', { name: 'Function details' })
+		.getByRole('heading', { level: 2 });
+
+	await expect(rail.getByText(/^Page 1 of /)).toBeVisible();
+	const firstPageHeading = (await first.getAttribute('aria-label'))!.slice('Select '.length);
+	await expect(first).toHaveAttribute('aria-pressed', 'true');
+	await expect(detailHeading).toHaveText(firstPageHeading);
+
+	await rail.getByRole('button', { name: 'Next page' }).click();
+	await expect(rail.getByText(/^Page 2 of /)).toBeVisible();
+	await expect(page).toHaveURL(/\/devices\/WIFI_TEST$/);
+	const secondPageHeading = (await first.getAttribute('aria-label'))!.slice('Select '.length);
+	expect(secondPageHeading).not.toBe(firstPageHeading);
+	await expect(first).toHaveAttribute('aria-pressed', 'true');
+	await expect(detailHeading).toHaveText(secondPageHeading);
+
+	await rail.getByRole('button', { name: 'Previous page' }).click();
+	await expect(rail.getByText(/^Page 1 of /)).toBeVisible();
+	await expect(page).toHaveURL(/\/devices\/WIFI_TEST$/);
+	await expect(first).toHaveAttribute('aria-pressed', 'true');
+	await expect(detailHeading).toHaveText(firstPageHeading);
+});
+
 test('devices: function search previews a match without replacing the bookmark', async ({ page }) => {
 	const evidence = process.env.DEVICE_SEARCH_SCREENSHOT_DIR;
 	if (evidence) await page.setViewportSize({ width: 1280, height: 900 });
