@@ -165,6 +165,8 @@ func listExamples(q *store.Queries) fiber.Handler {
 
 		lq := parseListQuery(c)
 		params.PageSize = lq.pageSize
+		params.SortColumn = c.Query("sort")
+		params.Descending = strings.EqualFold(c.Query("order"), "desc")
 		// An overflowing offset is past the end, not a wrapped page near the start.
 		params.RequestedOffset = math.MaxInt64
 		if pageIndex := lq.page - 1; pageIndex <= math.MaxInt64/lq.pageSize {

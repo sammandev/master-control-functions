@@ -191,33 +191,48 @@ func (q *Queries) ListExampleFunctionNames(ctx context.Context) ([]string, error
 const listExamples = `-- name: ListExamples :many
 
 WITH matching_examples AS MATERIALIZED (
-    SELECT e.id, e.device_name
+    SELECT e.id, e.device_name,
+           (CASE WHEN NOT $1::boolean THEN sort_value END)
+               COLLATE example_sort_natural AS asc_key,
+           (CASE WHEN $1::boolean THEN sort_value END)
+               COLLATE example_sort_natural AS desc_key
     FROM examples e
-    WHERE ($1::text IS NULL OR e.function_source = $1::text)
-      AND ($2::text IS NULL OR e.function_name = $2::text)
-      AND ($3::text IS NULL OR e.device_name = $3::text)
-      AND ($4::text IS NULL
-         OR lower(e.function_source) LIKE lower($4::text)
-         OR lower(e.function_name) LIKE lower($4::text)
-         OR lower(e.function_source || ' ' || e.function_name) LIKE lower($4::text)
-         OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower($4::text)
-         OR lower(e.script) LIKE lower($4::text)
-         OR lower(e.meaning) LIKE lower($4::text))
+    CROSS JOIN LATERAL (
+        SELECT CASE $2::text
+            WHEN 'function' THEN e.function_source || '/' || e.function_name
+            WHEN 'script' THEN e.script
+            WHEN 'meaning' THEN e.meaning
+        END AS sort_value
+    ) sort
+    WHERE ($3::text IS NULL OR e.function_source = $3::text)
+      AND ($4::text IS NULL OR e.function_name = $4::text)
+      AND ($5::text IS NULL OR e.device_name = $5::text)
+      AND ($6::text IS NULL
+         OR lower(e.function_source) LIKE lower($6::text)
+         OR lower(e.function_name) LIKE lower($6::text)
+         OR lower(e.function_source || ' ' || e.function_name) LIKE lower($6::text)
+         OR lower(COALESCE(NULLIF(e.device_name, ''), 'Global')) LIKE lower($6::text)
+         OR lower(e.script) LIKE lower($6::text)
+         OR lower(e.meaning) LIKE lower($6::text))
 ), page_start AS (
     SELECT COALESCE(
         -- Round the matched example's zero-based position down to its page start.
         (SELECT (SELECT COUNT(*) FROM matching_examples preceding
-                 WHERE (preceding.device_name, preceding.id) < (target.device_name, target.id))
-                / $5::bigint * $5::bigint
+                 WHERE preceding.asc_key < target.asc_key
+                    OR preceding.desc_key > target.desc_key
+                    OR (preceding.asc_key IS NOT DISTINCT FROM target.asc_key
+                        AND preceding.desc_key IS NOT DISTINCT FROM target.desc_key
+                        AND (preceding.device_name, preceding.id) < (target.device_name, target.id)))
+                / $7::bigint * $7::bigint
          FROM matching_examples target
-         WHERE target.id = $6::bigint),
-        $7::bigint
+         WHERE target.id = $8::bigint),
+        $9::bigint
     )::bigint AS page_offset
 ), page AS (
-    SELECT id, device_name
+    SELECT id, device_name, asc_key, desc_key
     FROM matching_examples
-    ORDER BY device_name, id
-    LIMIT $5::bigint
+    ORDER BY asc_key, desc_key DESC, device_name, id
+    LIMIT $7::bigint
     OFFSET (SELECT page_offset FROM page_start)
 )
 SELECT e.id, e.function_source, e.function_name, e.device_name, e.script, e.meaning, e.created_at, e.updated_at,
@@ -226,10 +241,12 @@ SELECT e.id, e.function_source, e.function_name, e.device_name, e.script, e.mean
        (SELECT page_offset FROM page_start) AS page_offset
 FROM page
 JOIN examples e ON e.id = page.id
-ORDER BY page.device_name, page.id
+ORDER BY page.asc_key, page.desc_key DESC, page.device_name, page.id
 `
 
 type ListExamplesParams struct {
+	Descending      bool
+	SortColumn      string
 	FunctionSource  sql.NullString
 	FunctionName    sql.NullString
 	Device          sql.NullString
@@ -259,6 +276,8 @@ type ListExamplesRow struct {
 // (ADR-0003).
 func (q *Queries) ListExamples(ctx context.Context, arg ListExamplesParams) ([]ListExamplesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listExamples,
+		arg.Descending,
+		arg.SortColumn,
 		arg.FunctionSource,
 		arg.FunctionName,
 		arg.Device,

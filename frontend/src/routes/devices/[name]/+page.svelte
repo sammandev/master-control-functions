@@ -157,12 +157,9 @@
 	let deletingExample = $state(false);
 
 	// ---- sorting (ticket 09) ------------------------------------------------
-	// The device list APIs paginate server-side without sort params, so
-	// sorting applies to the loaded page through the shared sortRows
-	// helper. Each tab has one sort state; the Scoped and Resolved-from-
-	// Global tables of a definition tab share it so both groups follow the
-	// same header clicks. '' keeps the API's default order until a header
-	// is clicked.
+	// Examples sort through the API; Functions and definitions use sortRows.
+	// The Scoped and Resolved-from-Global tables of a definition tab share
+	// sort state. '' keeps the API's default order.
 	const FN_SORT_KEYS: Record<string, (row: DeviceFunctionRow) => SortValue> = {
 		name: (r) => r.name,
 		source: (r) => r.source,
@@ -178,12 +175,6 @@
 		allowed_values: (r) => r.allowed_values || '',
 		default_value: (r) => r.default_value || '',
 		value_pattern: (r) => r.value_pattern || ''
-	};
-
-	const EX_SORT_KEYS: Record<string, (row: ExampleRow) => SortValue> = {
-		function: (r) => `${r.function_source}/${r.function_name}`,
-		script: (r) => r.script,
-		meaning: (r) => r.meaning || ''
 	};
 
 	let fnSortKey = $state('name');
@@ -205,6 +196,7 @@
 
 	function applyExSort(col: string) {
 		({ key: exSortKey, dir: exSortDir } = nextSort(exSortKey, exSortDir, col));
+		examplePage = 1;
 	}
 
 	const fnFiltered = $derived(
@@ -289,12 +281,6 @@
 	}
 	const selectedParameter = $derived(selectedDefinition(paramScoped, paramGlobal, paramTerm));
 	const selectedCriterion = $derived(selectedDefinition(critScoped, critGlobal, critTerm));
-
-	const exampleView = $derived(
-		exSortKey === ''
-			? exampleItems
-			: sortRows(exampleItems, EX_SORT_KEYS[exSortKey]!, exSortDir)
-	);
 
 	// ---- definition shortcuts (ticket 05) -----------------------------------
 	// The Parameters and Criteria tabs can open the shared dictionary form
@@ -468,7 +454,7 @@
 		critPage = 1;
 		examplePage = 1;
 	});
-	// Pagination and search invalidate the lazy tab caches.
+	// List controls invalidate the lazy tab caches.
 	$effect(() => {
 		void paramPage;
 		void paramPageSize;
@@ -485,6 +471,8 @@
 		void examplePage;
 		void examplePageSize;
 		void exTerm;
+		void exSortKey;
+		void exSortDir;
 		exampleLoaded = false;
 	});
 	$effect(() => {
@@ -648,12 +636,16 @@
 		const requestedPage = examplePage;
 		const requestedSize = examplePageSize;
 		const search = exTerm;
+		const sort = exSortKey;
+		const order = exSortDir;
 		const current = () =>
 			revision === deviceRevision &&
 			attempt === exampleRevision &&
 			requestedPage === examplePage &&
 			requestedSize === examplePageSize &&
-			search === exTerm;
+			search === exTerm &&
+			sort === exSortKey &&
+			order === exSortDir;
 		exampleLoading = true;
 		exampleError = '';
 		try {
@@ -661,7 +653,9 @@
 				device: scope,
 				page: requestedPage,
 				page_size: requestedSize,
-				search
+				search,
+				sort,
+				order: sort ? order : undefined
 			});
 			if (!current()) return;
 			const last = Math.max(1, Math.ceil(res.total / requestedSize));
@@ -1391,7 +1385,7 @@
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{#each exampleView as ex (ex.id)}
+							{#each exampleItems as ex (ex.id)}
 								<TableRow>
 									<TableCell class="whitespace-nowrap">
 										<Badge>{ex.function_source}</Badge>

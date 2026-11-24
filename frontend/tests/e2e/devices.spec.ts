@@ -517,6 +517,54 @@ test('devices: renaming a resolved Global definition keeps scoped details usable
 	await expect(page.getByRole('heading', { name: scoped, exact: true })).toBeVisible();
 });
 
+test('devices: examples sort before paginating', async ({ page, request }) => {
+	const device = 'E2E_EXAMPLES_SORT';
+	const names = ['READ_SENSOR10', 'READ_SENSOR20', 'READ_SENSOR2'];
+	for (const name of names) {
+		const fn = await request.post('/api/functions', {
+			data: { source: 'DLL', interface: device, name }
+		});
+		expect(fn.status()).toBe(201);
+		for (let i = 0; i < (name === names[0] ? 19 : 1); i++) {
+			const example = await request.post('/api/examples', {
+				data: {
+					function_source: 'DLL',
+					function_name: name,
+					device_name: device,
+					script: `DLL${device}|${name}||${5000 + i}|NEXT|FAIL`,
+					meaning: `Sample ${name}`
+				}
+			});
+			expect(example.status()).toBe(201);
+		}
+	}
+
+	await page.goto(`/devices/${device}?tab=examples`);
+	const panel = page.getByRole('tabpanel', { name: /^examples/i });
+	const functionHeader = panel.getByRole('button', { name: /^Function/ });
+	const rows = panel.locator('tbody tr');
+	const functions = rows.locator('td:first-child');
+	await expect(functions).toHaveText([
+		...Array<string>(19).fill('DLL READ_SENSOR10'),
+		'DLL READ_SENSOR20'
+	]);
+
+	await functionHeader.click();
+	await expect(functions).toHaveText([
+		'DLL READ_SENSOR2',
+		...Array<string>(19).fill('DLL READ_SENSOR10')
+	]);
+	await panel.getByRole('button', { name: 'Next page' }).click();
+	await expect(panel.getByText('Page 2 of 2')).toBeVisible();
+	await expect(functions).toHaveText(['DLL READ_SENSOR20']);
+
+	await functionHeader.click();
+	await expect(panel.getByText('Page 1 of 2')).toBeVisible();
+	await expect(functions.first()).toHaveText('DLL READ_SENSOR20');
+	await functionHeader.click();
+	await expect(functions.first()).toHaveText('DLL READ_SENSOR10');
+});
+
 test('devices: examples search finds a match on page five', async ({ page, request }) => {
 	const device = 'E2E_EXAMPLES_SEARCH';
 	const functionName = 'READ_SENSOR';
