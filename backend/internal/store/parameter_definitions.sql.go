@@ -15,10 +15,16 @@ SELECT COUNT(*) FROM parameter_definitions
 WHERE ($1::text IS NULL
        OR lower(name) LIKE lower($1::text)
        OR lower(description) LIKE lower($1::text))
+  AND ($2::text IS NULL OR device_name = $2::text)
 `
 
-func (q *Queries) CountParameterDefinitions(ctx context.Context, search sql.NullString) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countParameterDefinitions, search)
+type CountParameterDefinitionsParams struct {
+	Search     sql.NullString
+	DeviceName sql.NullString
+}
+
+func (q *Queries) CountParameterDefinitions(ctx context.Context, arg CountParameterDefinitionsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countParameterDefinitions, arg.Search, arg.DeviceName)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -165,11 +171,17 @@ SELECT id, name, description, type, unit, default_value, allowed_values, cardina
 WHERE ($1::text IS NULL
        OR lower(name) LIKE lower($1::text)
        OR lower(description) LIKE lower($1::text))
+  AND ($2::text IS NULL OR device_name = $2::text)
 ORDER BY id
 `
 
-func (q *Queries) ListParameterDefinitions(ctx context.Context, search sql.NullString) ([]ParameterDefinition, error) {
-	rows, err := q.db.QueryContext(ctx, listParameterDefinitions, search)
+type ListParameterDefinitionsParams struct {
+	Search     sql.NullString
+	DeviceName sql.NullString
+}
+
+func (q *Queries) ListParameterDefinitions(ctx context.Context, arg ListParameterDefinitionsParams) ([]ParameterDefinition, error) {
+	rows, err := q.db.QueryContext(ctx, listParameterDefinitions, arg.Search, arg.DeviceName)
 	if err != nil {
 		return nil, err
 	}

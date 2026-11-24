@@ -70,11 +70,11 @@ func Export(ctx context.Context, db *sql.DB, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("list functions: %w", err)
 	}
-	params, err := q.ListParameterDefinitions(ctx, sql.NullString{})
+	params, err := q.ListParameterDefinitions(ctx, store.ListParameterDefinitionsParams{})
 	if err != nil {
 		return fmt.Errorf("list parameter definitions: %w", err)
 	}
-	criteria, err := q.ListCriteriaDefinitions(ctx, sql.NullString{})
+	criteria, err := q.ListCriteriaDefinitions(ctx, store.ListCriteriaDefinitionsParams{})
 	if err != nil {
 		return fmt.Errorf("list criteria definitions: %w", err)
 	}

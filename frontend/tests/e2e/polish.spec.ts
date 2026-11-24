@@ -1265,10 +1265,13 @@ async function mockDictionary(page: Page, kind: DefinitionKind) {
 			return route.fulfill({ status: 500, json: { error: 'Unexpected dictionary mutation' } });
 		const query = new URL(route.request().url()).searchParams;
 		requests.push(query);
-		const matches = rows.filter((row) =>
-			`${row.name} ${row.description}`
-				.toLowerCase()
-				.includes((query.get('search') ?? '').toLowerCase())
+		const device = query.get('device');
+		const matches = rows.filter(
+			(row) =>
+				(device === null || row.device_name === device) &&
+				`${row.name} ${row.description}`
+					.toLowerCase()
+					.includes((query.get('search') ?? '').toLowerCase())
 		);
 		const sort =
 			query.get('sort') === 'type'
@@ -1280,8 +1283,9 @@ async function mockDictionary(page: Page, kind: DefinitionKind) {
 			(left, right) =>
 				left[sort].localeCompare(right[sort]) * (query.get('order') === 'desc' ? -1 : 1)
 		);
-		const number = Number(query.get('page') ?? 1);
+		const index = matches.findIndex((row) => row.id === Number(query.get('definition_id')));
 		const size = Number(query.get('page_size') ?? 20);
+		const number = index < 0 ? Number(query.get('page') ?? 1) : Math.floor(index / size) + 1;
 		return route.fulfill({
 			json: {
 				items: matches.slice((number - 1) * size, number * size),
@@ -1447,7 +1451,7 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 		await page.goBack();
 		await expect(detail.getByText('WIFI_TEST', { exact: true })).toBeVisible();
 	});
-	test(`${kind} dictionary filters complete Device results and keeps Global distinct`, async ({
+	test(`${kind} dictionary requests only the current Device page and keeps Global distinct`, async ({
 		page
 	}) => {
 		const { rows, requests } = await mockDictionary(page, kind);
@@ -1461,6 +1465,9 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 		rows.push({ ...rows[1], id: 200, name: 'LATE_DEVICE_DEFINITION' });
 		await page.goto(`/${kind}?device=WIFI_TEST`);
 		await expect(page.getByText('2 entries', { exact: true })).toBeVisible();
+		expect(
+			requests.map((query) => [query.get('device'), query.get('page'), query.get('page_size')])
+		).toEqual([['WIFI_TEST', '1', '20']]);
 		const list = page.getByRole('complementary', { name: 'Definitions list', exact: true });
 		await list
 			.getByRole('button', { name: 'Select LATE_DEVICE_DEFINITION (WIFI_TEST)', exact: true })
@@ -1470,13 +1477,15 @@ for (const kind of ['parameter-definitions', 'criteria-definitions'] as const) {
 				.getByRole('region', { name: 'Definition details', exact: true })
 				.getByRole('heading', { name: 'LATE_DEVICE_DEFINITION', exact: true })
 		).toBeVisible();
-		expect(
-			requests.some((query) => query.get('page') === '2' && query.get('page_size') === '100')
-		).toBe(true);
 		await page.getByRole('button', { name: /^Filter definitions by Device:/ }).click();
 		await page.getByRole('option', { name: 'Global definitions', exact: true }).click();
 		await expect(page).toHaveURL(/device=_global/);
 		await expect(page.getByText('101 entries', { exact: true })).toBeVisible();
+		expect(requests.at(-1)?.get('device')).toBe('');
+		await page.getByRole('button', { name: 'Next page', exact: true }).click();
+		await expect(page.getByText('Page 2 of 6', { exact: true })).toBeVisible();
+		await expect.poll(() => requests.at(-1)?.get('page')).toBe('2');
+		expect(requests.at(-1)?.get('device')).toBe('');
 		await expect(
 			list.getByRole('button', { name: 'Select ANT (WIFI_TEST)', exact: true })
 		).toHaveCount(0);

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"webprogfndb/internal/api"
@@ -250,6 +251,71 @@ func TestDictionaryListPaginationAndSearch(t *testing.T) {
 	_, body = doRequest(t, app, "GET", "/api/parameter-definitions?search=averages")
 	if !strings.Contains(body, `"total":1`) || !strings.Contains(body, "AVERAGES") {
 		t.Fatalf("search wrong: %s", body)
+	}
+}
+
+func TestDictionaryListDeviceScope(t *testing.T) {
+	type definition struct {
+		ID         int64  `json:"id"`
+		Name       string `json:"name"`
+		DeviceName string `json:"device_name"`
+	}
+	for _, endpoint := range []string{"/api/parameter-definitions", "/api/criteria-definitions"} {
+		t.Run(endpoint, func(t *testing.T) {
+			app, _ := newDictionaryTestApp(t)
+			rows := []definition{
+				{Name: "B_ANT", DeviceName: "WIFI_TEST"},
+				{Name: "A_ANT"},
+				{Name: "A_ANT", DeviceName: "WIFI_TEST"},
+				{Name: "A_ANT", DeviceName: "GOLDENKV"},
+				{Name: "C_BW", DeviceName: "WIFI_TEST"},
+			}
+			for i, row := range rows {
+				payload := fmt.Sprintf(`{"name":%q,"device_name":%q,"type":"int","cardinality":"SINGLE"}`, row.Name, row.DeviceName)
+				resp, body := postJSON(t, app, endpoint, payload)
+				if resp.StatusCode != 201 {
+					t.Fatalf("seed %s (%s): %d %s", row.Name, row.DeviceName, resp.StatusCode, body)
+				}
+				if err := json.Unmarshal([]byte(body), &rows[i]); err != nil {
+					t.Fatalf("decode seeded definition: %v", err)
+				}
+			}
+			base := endpoint + "?sort=name&page_size=2"
+			for _, tc := range []struct {
+				name, query string
+				page, total int
+				items       []definition
+			}{
+				{"all devices", "", 1, 5, []definition{rows[1], rows[2]}},
+				{"scoped first page", "&device=WIFI_TEST", 1, 3, []definition{rows[2], rows[0]}},
+				{"scoped last page", "&device=WIFI_TEST&page=2", 2, 3, []definition{rows[4]}},
+				{"search within scope", "&device=WIFI_TEST&search=ant", 1, 2, []definition{rows[2], rows[0]}},
+				{"global only", "&device=", 1, 1, []definition{rows[1]}},
+				{"no matches", "&device=UNUSED", 1, 0, []definition{}},
+				{"locate in scope", fmt.Sprintf("&device=WIFI_TEST&definition_id=%d", rows[4].ID), 2, 3, []definition{rows[4]}},
+				{"cannot locate outside scope", fmt.Sprintf("&device=WIFI_TEST&page=2&definition_id=%d", rows[1].ID), 2, 3, []definition{rows[4]}},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					resp, body := doRequest(t, app, "GET", base+tc.query)
+					if resp.StatusCode != 200 {
+						t.Fatalf("list: %d %s", resp.StatusCode, body)
+					}
+					var got struct {
+						Items    []definition `json:"items"`
+						Page     int          `json:"page"`
+						PageSize int          `json:"page_size"`
+						Total    int          `json:"total"`
+					}
+					if err := json.Unmarshal([]byte(body), &got); err != nil {
+						t.Fatalf("decode list: %v", err)
+					}
+					if got.Page != tc.page || got.PageSize != 2 || got.Total != tc.total ||
+						got.Items == nil || !slices.Equal(got.Items, tc.items) {
+						t.Fatalf("want page=%d page_size=2 total=%d items=%+v, got %s", tc.page, tc.total, tc.items, body)
+					}
+				})
+			}
+		})
 	}
 }
 
