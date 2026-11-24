@@ -125,6 +125,9 @@ func validateDeviceName(name string) string {
 	if name == "_GLOBAL" || name == "GLOBAL" {
 		return "is reserved for the Global device"
 	}
+	if name == "." || name == ".." {
+		return `cannot be "." or ".." because browsers treat them as navigation`
+	}
 	for _, r := range name {
 		if r < 0x20 || r == 0x7f {
 			return "must not contain control characters"

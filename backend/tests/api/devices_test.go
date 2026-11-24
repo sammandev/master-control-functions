@@ -513,6 +513,39 @@ func TestDeviceRegistryCreateRejectsInvalidNames(t *testing.T) {
 	}
 }
 
+func TestDeviceRegistryRejectsDotSegments(t *testing.T) {
+	for _, route := range []struct{ method, path string }{
+		{http.MethodPost, "/api/devices"},
+		{http.MethodPut, "/api/devices/SCOUT.CONTROL"},
+	} {
+		t.Run(route.method, func(t *testing.T) {
+			for _, name := range []string{".", ".."} {
+				t.Run(name, func(t *testing.T) {
+					app, _ := newDictionaryTestApp(t)
+					if route.method == http.MethodPut {
+						if resp, body := registerDevice(t, app, "SCOUT.CONTROL"); resp.StatusCode != http.StatusCreated {
+							t.Fatalf("create original device: %d %s", resp.StatusCode, body)
+						}
+					}
+					resp, body := doJSON(t, app, route.method, route.path, `{"device_name":" `+name+` "}`)
+					if resp.StatusCode != http.StatusUnprocessableEntity {
+						t.Fatalf("status = %d, want 422 (body: %s)", resp.StatusCode, body)
+					}
+					var result struct {
+						Fields map[string]string `json:"fields"`
+					}
+					if err := json.Unmarshal([]byte(body), &result); err != nil {
+						t.Fatalf("decode response: %v (body: %s)", err, body)
+					}
+					if message := result.Fields["device_name"]; !strings.Contains(message, strconv.Quote(name)) {
+						t.Fatalf("device_name error %q does not identify rejected name %q", message, name)
+					}
+				})
+			}
+		})
+	}
+}
+
 // Device names must mean the same thing on every path that creates them:
 // the content paths (dictionary, examples) apply the same ADR-0002
 // normalization as the registry, so a casing twin can never sneak in.
