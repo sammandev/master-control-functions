@@ -325,8 +325,8 @@ test('devices: deleting a device used by a Sequence is refused and keeps it', as
 		await confirm.getByLabel('Type DELETE WIFI_TEST to confirm').fill('DELETE WIFI_TEST');
 		await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
 
-		await expect(confirm.getByRole('alert')).toHaveText(
-			`WIFI_TEST is used by Sequences: ${sequenceName}. Remove those steps first.`
+		await expect(confirm.getByRole('alert')).toContainText(
+			`WIFI_TEST is used by Sequences: ${sequenceName}; Troubleshooting guides: `
 		);
 		await page.screenshot({ path: testInfo.outputPath('device-delete-refused.png') });
 		await confirm.getByRole('button', { name: 'Cancel' }).click();
@@ -338,6 +338,49 @@ test('devices: deleting a device used by a Sequence is refused and keeps it', as
 		expect(sequence.steps).toHaveLength(1);
 	} finally {
 		await request.delete(`/api/sequences/${id}`);
+	}
+});
+
+test('devices: deleting a device used by a Troubleshooting guide is refused and keeps it', async ({
+	page,
+	request
+}, testInfo) => {
+	const name = `E2E_GUIDE_${Date.now()}`;
+	const title = `${name} loses connection`;
+	expect((await request.post('/api/devices', { data: { device_name: name } })).status()).toBe(201);
+	const created = await request.post('/api/troubleshooting', {
+		data: {
+			title,
+			category: 'connection',
+			severity: 'warning',
+			device_name: name,
+			symptom: `${name} disconnects during startup.`,
+			steps: [{ title: 'Check cabling', instruction: `Reseat the cable at ${name}.` }]
+		}
+	});
+	expect(created.status(), 'seed a guide on the device').toBe(201);
+	const { id } = (await created.json()) as { id: number };
+	try {
+		await page.goto('/devices');
+		const row = page.getByRole('article', { name: new RegExp(name) });
+		await row.getByRole('button', { name: 'Delete' }).click();
+		const confirm = page.getByRole('dialog', { name: `Delete ${name}?` });
+		await confirm.getByLabel(`Type DELETE ${name} to confirm`).fill(`DELETE ${name}`);
+		await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		await expect(confirm.getByRole('alert')).toHaveText(
+			`${name} is used by Troubleshooting guides: ${title}. Change or delete those guides first.`
+		);
+		await page.screenshot({ path: testInfo.outputPath('device-delete-guide-refused.png') });
+		await confirm.getByRole('button', { name: 'Cancel' }).click();
+		await expect(row).toBeVisible();
+
+		const guide = await request.get(`/api/troubleshooting/${id}`);
+		expect(guide.status()).toBe(200);
+		expect((await guide.json()).device_name).toBe(name);
+	} finally {
+		await request.delete(`/api/troubleshooting/${id}`);
+		await request.delete(`/api/devices/${name}`, { data: { confirmation: `DELETE ${name}` } });
 	}
 });
 

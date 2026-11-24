@@ -8,14 +8,30 @@ import (
 )
 
 // DeviceInUseError refuses a device delete while Sequence steps still use
-// the device, either as a Function interface or as a step's device scope.
+// the device (as a Function interface or a step's device scope) or
+// Troubleshooting guides are still scoped to it.
 type DeviceInUseError struct {
 	Device    string
 	Sequences []string
+	Guides    []string
 }
 
 func (e *DeviceInUseError) Error() string {
-	return e.Device + " is used by Sequences: " + strings.Join(e.Sequences, ", ") + ". Remove those steps first."
+	var uses []string
+	if len(e.Sequences) > 0 {
+		uses = append(uses, "Sequences: "+strings.Join(e.Sequences, ", "))
+	}
+	if len(e.Guides) > 0 {
+		uses = append(uses, "Troubleshooting guides: "+strings.Join(e.Guides, ", "))
+	}
+	remedy := "Remove those steps first."
+	switch {
+	case len(e.Sequences) > 0 && len(e.Guides) > 0:
+		remedy = "Remove those steps and change or delete those guides first."
+	case len(e.Guides) > 0:
+		remedy = "Change or delete those guides first."
+	}
+	return e.Device + " is used by " + strings.Join(uses, "; ") + ". " + remedy
 }
 
 // DeleteDevice removes a device's structured content in one transaction.
@@ -44,12 +60,20 @@ func DeleteDevice(ctx context.Context, db *sql.DB, name string) error {
 		}
 	}
 
-	sequences, err := sequencesUsingDevice(ctx, tx, name)
+	sequences, err := namesUsingDevice(ctx, tx, `SELECT DISTINCT s.name FROM sequences s
+		JOIN sequence_steps step ON step.sequence_id = s.id
+		WHERE step.function_interface = $1 OR step.device_name = $1
+		ORDER BY s.name`, name)
 	if err != nil {
 		return err
 	}
-	if len(sequences) > 0 {
-		return &DeviceInUseError{Device: name, Sequences: sequences}
+	guides, err := namesUsingDevice(ctx, tx, `SELECT DISTINCT title FROM troubleshooting_guides
+		WHERE device_name = $1 ORDER BY title`, name)
+	if err != nil {
+		return err
+	}
+	if len(sequences) > 0 || len(guides) > 0 {
+		return &DeviceInUseError{Device: name, Sequences: sequences, Guides: guides}
 	}
 
 	for _, table := range []string{"parameter_links", "criteria_links", "examples"} {
@@ -85,22 +109,19 @@ func DeleteDevice(ctx context.Context, db *sql.DB, name string) error {
 	return tx.Commit()
 }
 
-func sequencesUsingDevice(ctx context.Context, tx *sql.Tx, name string) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT s.name FROM sequences s
-		JOIN sequence_steps step ON step.sequence_id = s.id
-		WHERE step.function_interface = $1 OR step.device_name = $1
-		ORDER BY s.name`, name)
+func namesUsingDevice(ctx context.Context, tx *sql.Tx, query, name string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, query, name)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var names []string
 	for rows.Next() {
-		var sequence string
-		if err := rows.Scan(&sequence); err != nil {
+		var match string
+		if err := rows.Scan(&match); err != nil {
 			return nil, err
 		}
-		names = append(names, sequence)
+		names = append(names, match)
 	}
 	return names, rows.Err()
 }
