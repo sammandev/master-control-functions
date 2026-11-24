@@ -121,6 +121,54 @@ test('devices detail: ?tab= deep-link lands on the requested tab', async ({ page
 	).toBeVisible();
 });
 
+test('devices: function search previews a match without replacing the bookmark', async ({ page }) => {
+	const evidence = process.env.DEVICE_SEARCH_SCREENSHOT_DIR;
+	if (evidence) await page.setViewportSize({ width: 1280, height: 900 });
+	await page.goto('/devices/WIFI_TEST');
+	const rail = page.getByRole('complementary', { name: 'Device functions' });
+	const search = rail.getByRole('textbox', { name: 'Search device functions' });
+	const details = page.getByRole('region', { name: 'Function details' });
+	const remove = rail.getByRole('button', { name: 'Select DUT_REMOVE', exact: true });
+	const initialize = rail.getByRole('button', { name: 'Select DUT_INITIALIZE', exact: true });
+	const removeDetail = details.getByRole('heading', { name: 'DUT_REMOVE', exact: true });
+	const initializeDetail = details.getByRole('heading', { name: 'DUT_INITIALIZE', exact: true });
+
+	await remove.click();
+	await expect(page).toHaveURL(/[?&]function=\d+$/);
+	await expect(removeDetail).toBeVisible();
+	const bookmark = page.url();
+
+	await search.fill('DUT_REMOVE');
+	await expect(remove).toHaveAttribute('aria-pressed', 'true');
+	await expect(removeDetail).toBeVisible();
+
+	await search.fill('DUT_INITIALIZE');
+	await expect(rail.getByRole('button', { name: /^Select / })).toHaveCount(1);
+	await expect(initialize).toBeVisible();
+	await expect.soft(initializeDetail).toBeVisible();
+	if (evidence) {
+		await expect(page.getByRole('img', { name: 'DLL type' })).toBeVisible();
+		await expect(details.getByText('Loading function details...')).toBeHidden();
+		await page.evaluate(() => window.scrollTo(0, 0));
+		await page.screenshot({ path: join(evidence, 'functions.png') });
+	}
+	await expect.soft(initialize).toHaveAttribute('aria-pressed', 'true');
+
+	await search.fill('no-such-device-function');
+	await expect(rail.getByText('No matching functions.')).toBeVisible();
+	await expect.soft(details).toBeHidden();
+	await expect.soft(
+		page.getByRole('button', { name: /^(Edit function|Delete function|Compose script)$/ })
+	).toHaveCount(0);
+	await expect.soft(page.getByText('This function is not linked to this device.')).toBeHidden();
+
+	await search.clear();
+	await expect(page).toHaveURL(bookmark);
+	await expect(removeDetail).toBeVisible();
+	await page.reload();
+	await expect(removeDetail).toBeVisible();
+});
+
 test('devices detail: tab switches land in history', async ({ page }) => {
 	await page.goto('/devices/WIFI_TEST?tab=parameters');
 
