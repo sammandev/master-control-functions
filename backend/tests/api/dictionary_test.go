@@ -355,6 +355,75 @@ func TestDictionaryListLocatesRowByID(t *testing.T) {
 	}
 }
 
+func TestDictionaryPageSortOrder(t *testing.T) {
+	for _, kind := range []string{"parameter", "criteria"} {
+		t.Run(kind, func(t *testing.T) {
+			app, d := newDictionaryTestApp(t)
+			if _, err := d.Exec(fmt.Sprintf(`
+				INSERT INTO %s_definitions (name, type, device_name, description, created_at, updated_at)
+				VALUES ('a', 'int', '', '', '', '2'), ('Z', 'double', '', 'path\q', '', '1'),
+				       ('Z', 'int', 'WIFI_TEST', 'pathq', '', '2'), ('Z', 'int', 'IPLAS', '', '', '2'),
+				       ('é', 'double', '', '', '', '1'), ('K10', 'int', '', '', '', '1'),
+				       ('K2', 'int', '', '', '', '2')`, kind)); err != nil {
+				t.Fatal(err)
+			}
+
+			endpoint := "/api/" + kind + "-definitions?"
+			check := func(t *testing.T, query string, page, size, total int, ids []int64) {
+				t.Helper()
+				resp, body := doRequest(t, app, "GET", endpoint+query)
+				var got struct {
+					Page     int `json:"page"`
+					PageSize int `json:"page_size"`
+					Total    int `json:"total"`
+					Items    []struct {
+						ID int64 `json:"id"`
+					} `json:"items"`
+				}
+				if err := json.Unmarshal([]byte(body), &got); err != nil {
+					t.Fatal(err)
+				}
+				gotIDs := make([]int64, 0, len(got.Items))
+				for _, item := range got.Items {
+					gotIDs = append(gotIDs, item.ID)
+				}
+				if resp.StatusCode != 200 || got.Page != page || got.PageSize != size ||
+					got.Total != total || got.Items == nil || !slices.Equal(gotIDs, ids) {
+					t.Fatalf("%s: want page=%d size=%d total=%d ids=%v, got %d %s",
+						query, page, size, total, ids, resp.StatusCode, body)
+				}
+			}
+
+			for _, tc := range []struct {
+				sort, order string
+				ids         []int64
+			}{
+				{"name", "asc", []int64{6, 7, 2, 3, 4, 1, 5}},
+				{"name", "desc", []int64{5, 1, 2, 3, 4, 7, 6}},
+				{"type", "asc", []int64{2, 5, 6, 7, 3, 4, 1}},
+				{"type", "desc", []int64{6, 7, 3, 4, 1, 2, 5}},
+				{"updated_at", "asc", []int64{6, 2, 5, 7, 3, 4, 1}},
+				{"updated_at", "desc", []int64{7, 3, 4, 1, 6, 2, 5}},
+				{"unsupported", "desc", []int64{1, 2, 3, 4, 5, 6, 7}},
+			} {
+				t.Run(tc.sort+"/"+tc.order, func(t *testing.T) {
+					order := fmt.Sprintf("sort=%s&order=%s&page_size=2", tc.sort, tc.order)
+					for i := 0; i < len(tc.ids); i += 2 {
+						page := i/2 + 1
+						ids := tc.ids[i:min(i+2, len(tc.ids))]
+						check(t, fmt.Sprintf("%s&page=%d", order, page), page, 2, 7, ids)
+						check(t, fmt.Sprintf("%s&definition_id=%d", order, ids[len(ids)-1]), page, 2, 7, ids)
+					}
+				})
+			}
+			check(t, "page_size=2&sort=name&page=9223372036854775807", 9223372036854775807, 2, 7, nil)
+			check(t, "page_size=1&search=%25Pa_h%5CQ%25&sort=type&order=desc&definition_id=3&page=2", 2, 1, 1, nil)
+			check(t, "page_size=1&search=%25Pa_h%5CQ%25&sort=type&order=desc&definition_id=2&page=2", 1, 1, 1, []int64{2})
+			check(t, "page_size=2&search=%25&sort=name", 1, 2, 7, []int64{6, 7})
+		})
+	}
+}
+
 func TestDictionaryUsageCountAndDeleteGuard(t *testing.T) {
 	app, d := newDictionaryTestApp(t)
 

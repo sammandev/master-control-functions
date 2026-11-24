@@ -9,6 +9,36 @@ WHERE (sqlc.narg('search')::text IS NULL
   AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text)
 ORDER BY id;
 
+-- name: ListParameterDefinitionsPage :many
+SELECT * FROM parameter_definitions
+WHERE (sqlc.narg('search')::text IS NULL
+       OR lower(name) LIKE lower(sqlc.narg('search')::text)
+       OR lower(description) LIKE lower(sqlc.narg('search')::text))
+  AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text)
+-- Match Go's bytewise order; secondary name and stable ID stay ascending.
+ORDER BY
+    (CASE WHEN NOT sqlc.arg('sort_desc')::boolean THEN CASE sqlc.arg('sort_col')::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C",
+    (CASE WHEN sqlc.arg('sort_desc')::boolean THEN CASE sqlc.arg('sort_col')::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C" DESC,
+    (CASE WHEN sqlc.arg('sort_col')::text IN ('type', 'updated_at') THEN name END) COLLATE "C",
+    id
+LIMIT sqlc.arg('page_size')::bigint OFFSET sqlc.arg('page_offset')::bigint;
+
+-- name: LocateParameterDefinition :one
+SELECT position FROM (
+    SELECT id, row_number() OVER (ORDER BY
+        (CASE WHEN NOT sqlc.arg('sort_desc')::boolean THEN CASE sqlc.arg('sort_col')::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C",
+        (CASE WHEN sqlc.arg('sort_desc')::boolean THEN CASE sqlc.arg('sort_col')::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C" DESC,
+        (CASE WHEN sqlc.arg('sort_col')::text IN ('type', 'updated_at') THEN name END) COLLATE "C",
+        id
+    ) AS position
+    FROM parameter_definitions
+    WHERE (sqlc.narg('search')::text IS NULL
+           OR lower(name) LIKE lower(sqlc.narg('search')::text)
+           OR lower(description) LIKE lower(sqlc.narg('search')::text))
+      AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text)
+) AS ranked
+WHERE id = sqlc.arg('definition_id');
+
 -- name: CountParameterDefinitions :one
 SELECT COUNT(*) FROM parameter_definitions
 WHERE (sqlc.narg('search')::text IS NULL

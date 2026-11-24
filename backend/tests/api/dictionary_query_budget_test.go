@@ -76,6 +76,7 @@ func TestDictionaryPageQueryBudget(t *testing.T) {
 
 			for _, size := range []int{2, 3} {
 				before := counter.calls.Load()
+				beforeRows := counter.rows.Load()
 				target := fmt.Sprintf("/api/%s-definitions?page_size=%d", kind, size)
 				resp, body := doRequest(t, app, "GET", target)
 				calls := counter.calls.Load() - before
@@ -94,6 +95,27 @@ func TestDictionaryPageQueryBudget(t *testing.T) {
 				} else {
 					t.Logf("page_size=%d: got 3 SQL queries", size)
 				}
+				if rows := counter.rows.Load() - beforeRows; rows != 1+2*int64(size) {
+					t.Errorf("page_size=%d: got %d SQL result rows, want %d (total, page, usage)", size, rows, 1+2*size)
+				}
+			}
+
+			beforeRows := counter.rows.Load()
+			resp, body := doRequest(t, app, "GET", fmt.Sprintf("/api/%s-definitions?page_size=1&sort=name&definition_id=3", kind))
+			var located struct {
+				Page  int `json:"page"`
+				Items []struct {
+					ID int64 `json:"id"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal([]byte(body), &located); err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != 200 || located.Page != 3 || len(located.Items) != 1 || located.Items[0].ID != 3 {
+				t.Fatalf("locate: %d %s", resp.StatusCode, body)
+			}
+			if rows := counter.rows.Load() - beforeRows; rows > 4 {
+				t.Errorf("locate: got %d SQL result rows, want at most 4 (total, position, page, usage)", rows)
 			}
 		})
 	}

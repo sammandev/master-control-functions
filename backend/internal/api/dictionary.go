@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
-	"sort"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -172,9 +172,10 @@ func valueParsesAs(defType, v string) bool {
 
 // dictionaryRoutes bundles the shared pieces one dictionary's handlers need.
 type dictionaryRoutes[T any] struct {
-	get   func(c fiber.Ctx, id int64) (T, error)
-	list  func(c fiber.Ctx, search, deviceName sql.NullString) ([]T, error)
-	count func(c fiber.Ctx, search, deviceName sql.NullString) (int64, error)
+	get      func(c fiber.Ctx, id int64) (T, error)
+	listPage func(c fiber.Ctx, lq dictionaryListQuery) ([]T, error)
+	locate   func(c fiber.Ctx, lq dictionaryListQuery, id int64) (int64, error)
+	count    func(c fiber.Ctx, search, deviceName sql.NullString) (int64, error)
 	// usage returns (total, orphaned): links referencing the definition by
 	// (name, device_name), and how many of those point at a missing
 	// Function (ADR-0003). ADR-0009 makes the count scope-aware: a scoped
@@ -189,7 +190,11 @@ type dictionaryRoutes[T any] struct {
 	idOf      func(T) int64
 	nameOf    func(T) string
 	scopeOf   func(T) string
-	sortKeys  map[string]func(T) string
+}
+
+type dictionaryListQuery struct {
+	listQuery
+	pattern, deviceName sql.NullString
 }
 
 type dictionaryUsage struct {
@@ -260,40 +265,29 @@ func (r dictionaryRoutes[T]) create() fiber.Handler {
 
 func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 	return func(c fiber.Ctx) error {
-		lq := parseListQuery(c)
-		var search, deviceName sql.NullString
+		lq := dictionaryListQuery{listQuery: parseListQuery(c)}
 		if pattern := likePattern(lq.search); pattern != "" {
-			search = nullStrPtr(&pattern)
+			lq.pattern = nullStrPtr(&pattern)
 		}
 		if args := c.RequestCtx().QueryArgs(); args.Has("device") {
-			deviceName = sql.NullString{String: string(args.Peek("device")), Valid: true}
+			lq.deviceName = sql.NullString{String: string(args.Peek("device")), Valid: true}
 		}
-		total, err := r.count(c, search, deviceName)
+		total, err := r.count(c, lq.pattern, lq.deviceName)
 		if err != nil {
 			return serverError(c, "count definitions", err)
 		}
-		items, err := r.list(c, search, deviceName)
+		if id, err := strconv.ParseInt(c.Query("definition_id"), 10, 64); err == nil && id > 0 {
+			position, err := r.locate(c, lq, id)
+			if err == nil {
+				lq.page = (position-1)/lq.pageSize + 1
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return serverError(c, "locate definition", err)
+			}
+		}
+		page, err := r.listPage(c, lq)
 		if err != nil {
 			return serverError(c, "list definitions", err)
 		}
-
-		// Unknown sort keys keep the store's ID order.
-		if keyFn := r.sortKeys[lq.sortCol]; keyFn != nil {
-			sort.SliceStable(items, func(i, j int) bool {
-				a, b := keyFn(items[i]), keyFn(items[j])
-				if a != b {
-					if lq.sortDesc {
-						return a > b
-					}
-					return a < b
-				}
-				// Deterministic tiebreak on name, mirroring the natural key.
-				return r.nameOf(items[i]) < r.nameOf(items[j])
-			})
-		}
-		locateRow(c, &lq, "definition_id", items, r.idOf)
-		start, end := lq.sliceBounds(len(items))
-		page := items[start:end]
 
 		var usageByID map[int64]dictionaryUsage
 		if len(page) > 0 {
@@ -407,9 +401,16 @@ func registerParameterDictionary(app *fiber.App, q *store.Queries) {
 		get: func(c fiber.Ctx, id int64) (store.ParameterDefinition, error) {
 			return q.GetParameterDefinition(c.Context(), id)
 		},
-		list: func(c fiber.Ctx, search, deviceName sql.NullString) ([]store.ParameterDefinition, error) {
-			return q.ListParameterDefinitions(c.Context(), store.ListParameterDefinitionsParams{
-				Search: search, DeviceName: deviceName,
+		listPage: func(c fiber.Ctx, lq dictionaryListQuery) ([]store.ParameterDefinition, error) {
+			return q.ListParameterDefinitionsPage(c.Context(), store.ListParameterDefinitionsPageParams{
+				Search: lq.pattern, DeviceName: lq.deviceName,
+				SortCol: lq.sortCol, SortDesc: lq.sortDesc, PageSize: lq.pageSize, PageOffset: lq.offset(),
+			})
+		},
+		locate: func(c fiber.Ctx, lq dictionaryListQuery, id int64) (int64, error) {
+			return q.LocateParameterDefinition(c.Context(), store.LocateParameterDefinitionParams{
+				Search: lq.pattern, DeviceName: lq.deviceName,
+				SortCol: lq.sortCol, SortDesc: lq.sortDesc, DefinitionID: id,
 			})
 		},
 		count: func(c fiber.Ctx, search, deviceName sql.NullString) (int64, error) {
@@ -488,11 +489,6 @@ func registerParameterDictionary(app *fiber.App, q *store.Queries) {
 		idOf:    func(d store.ParameterDefinition) int64 { return d.ID },
 		nameOf:  func(d store.ParameterDefinition) string { return d.Name },
 		scopeOf: func(d store.ParameterDefinition) string { return d.DeviceName },
-		sortKeys: map[string]func(store.ParameterDefinition) string{
-			"name":       func(d store.ParameterDefinition) string { return d.Name },
-			"type":       func(d store.ParameterDefinition) string { return d.Type },
-			"updated_at": func(d store.ParameterDefinition) string { return d.UpdatedAt },
-		},
 	}
 	registerDictionary(app, "/api/parameter-definitions", r)
 }
@@ -503,9 +499,16 @@ func registerCriteriaDictionary(app *fiber.App, q *store.Queries) {
 		get: func(c fiber.Ctx, id int64) (store.CriteriaDefinition, error) {
 			return q.GetCriteriaDefinition(c.Context(), id)
 		},
-		list: func(c fiber.Ctx, search, deviceName sql.NullString) ([]store.CriteriaDefinition, error) {
-			return q.ListCriteriaDefinitions(c.Context(), store.ListCriteriaDefinitionsParams{
-				Search: search, DeviceName: deviceName,
+		listPage: func(c fiber.Ctx, lq dictionaryListQuery) ([]store.CriteriaDefinition, error) {
+			return q.ListCriteriaDefinitionsPage(c.Context(), store.ListCriteriaDefinitionsPageParams{
+				Search: lq.pattern, DeviceName: lq.deviceName,
+				SortCol: lq.sortCol, SortDesc: lq.sortDesc, PageSize: lq.pageSize, PageOffset: lq.offset(),
+			})
+		},
+		locate: func(c fiber.Ctx, lq dictionaryListQuery, id int64) (int64, error) {
+			return q.LocateCriteriaDefinition(c.Context(), store.LocateCriteriaDefinitionParams{
+				Search: lq.pattern, DeviceName: lq.deviceName,
+				SortCol: lq.sortCol, SortDesc: lq.sortDesc, DefinitionID: id,
 			})
 		},
 		count: func(c fiber.Ctx, search, deviceName sql.NullString) (int64, error) {
@@ -582,11 +585,6 @@ func registerCriteriaDictionary(app *fiber.App, q *store.Queries) {
 		idOf:    func(d store.CriteriaDefinition) int64 { return d.ID },
 		nameOf:  func(d store.CriteriaDefinition) string { return d.Name },
 		scopeOf: func(d store.CriteriaDefinition) string { return d.DeviceName },
-		sortKeys: map[string]func(store.CriteriaDefinition) string{
-			"name":       func(d store.CriteriaDefinition) string { return d.Name },
-			"type":       func(d store.CriteriaDefinition) string { return d.Type },
-			"updated_at": func(d store.CriteriaDefinition) string { return d.UpdatedAt },
-		},
 	}
 	registerDictionary(app, "/api/criteria-definitions", r)
 }

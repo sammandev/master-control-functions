@@ -268,6 +268,112 @@ func (q *Queries) ListParameterDefinitions(ctx context.Context, arg ListParamete
 	return items, nil
 }
 
+const listParameterDefinitionsPage = `-- name: ListParameterDefinitionsPage :many
+SELECT id, name, description, type, unit, default_value, allowed_values, cardinality, value_pattern, required, device_name, created_at, updated_at FROM parameter_definitions
+WHERE ($1::text IS NULL
+       OR lower(name) LIKE lower($1::text)
+       OR lower(description) LIKE lower($1::text))
+  AND ($2::text IS NULL OR device_name = $2::text)
+ORDER BY
+    (CASE WHEN NOT $3::boolean THEN CASE $4::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C",
+    (CASE WHEN $3::boolean THEN CASE $4::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C" DESC,
+    (CASE WHEN $4::text IN ('type', 'updated_at') THEN name END) COLLATE "C",
+    id
+LIMIT $6::bigint OFFSET $5::bigint
+`
+
+type ListParameterDefinitionsPageParams struct {
+	Search     sql.NullString
+	DeviceName sql.NullString
+	SortDesc   bool
+	SortCol    string
+	PageOffset int64
+	PageSize   int64
+}
+
+// Match Go's bytewise order; secondary name and stable ID stay ascending.
+func (q *Queries) ListParameterDefinitionsPage(ctx context.Context, arg ListParameterDefinitionsPageParams) ([]ParameterDefinition, error) {
+	rows, err := q.db.QueryContext(ctx, listParameterDefinitionsPage,
+		arg.Search,
+		arg.DeviceName,
+		arg.SortDesc,
+		arg.SortCol,
+		arg.PageOffset,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ParameterDefinition
+	for rows.Next() {
+		var i ParameterDefinition
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Type,
+			&i.Unit,
+			&i.DefaultValue,
+			&i.AllowedValues,
+			&i.Cardinality,
+			&i.ValuePattern,
+			&i.Required,
+			&i.DeviceName,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const locateParameterDefinition = `-- name: LocateParameterDefinition :one
+SELECT position FROM (
+    SELECT id, row_number() OVER (ORDER BY
+        (CASE WHEN NOT $1::boolean THEN CASE $2::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C",
+        (CASE WHEN $1::boolean THEN CASE $2::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C" DESC,
+        (CASE WHEN $2::text IN ('type', 'updated_at') THEN name END) COLLATE "C",
+        id
+    ) AS position
+    FROM parameter_definitions
+    WHERE ($3::text IS NULL
+           OR lower(name) LIKE lower($3::text)
+           OR lower(description) LIKE lower($3::text))
+      AND ($4::text IS NULL OR device_name = $4::text)
+) AS ranked
+WHERE id = $5
+`
+
+type LocateParameterDefinitionParams struct {
+	SortDesc     bool
+	SortCol      string
+	Search       sql.NullString
+	DeviceName   sql.NullString
+	DefinitionID int64
+}
+
+func (q *Queries) LocateParameterDefinition(ctx context.Context, arg LocateParameterDefinitionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, locateParameterDefinition,
+		arg.SortDesc,
+		arg.SortCol,
+		arg.Search,
+		arg.DeviceName,
+		arg.DefinitionID,
+	)
+	var position int64
+	err := row.Scan(&position)
+	return position, err
+}
+
 const updateParameterDefinition = `-- name: UpdateParameterDefinition :one
 UPDATE parameter_definitions SET
     name = $1,
