@@ -57,7 +57,7 @@
 	let loadingList = $state(true);
 	let listError = $state('');
 	let bulkImportOpen = $state(false);
-	let exportSelection = $state<{ guideId?: number }>();
+	let exportSelection = $state<{ guide?: Pick<TroubleshootingGuideDetail, 'id' | 'title'> }>();
 
 	let selectedId = $state<number | null>(null);
 	let selectedDetail = $state<TroubleshootingGuideDetail | null>(null);
@@ -578,7 +578,7 @@
 				}}
 				onAddAlternate={openAddAlternate}
 				onEdit={openEdit}
-				onExport={(guide) => (exportSelection = { guideId: guide.id })}
+				onExport={({ id, title }) => (exportSelection = { guide: { id, title } })}
 				onDelete={(guide) => {
 					deleteTarget = guide;
 				}}
@@ -604,7 +604,7 @@
 
 {#if exportSelection}
 	<TroubleshootingExportDialog
-		initialGuideId={exportSelection.guideId}
+		initialGuide={exportSelection.guide}
 		{severities}
 		filters={{ search: search.trim(), category, device, error_code: errorCodeFilter }}
 		onClose={() => (exportSelection = undefined)}
