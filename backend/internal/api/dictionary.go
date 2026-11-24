@@ -276,7 +276,7 @@ func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 		if err != nil {
 			return serverError(c, "count definitions", err)
 		}
-		if id, err := strconv.ParseInt(c.Query("definition_id"), 10, 64); err == nil && id > 0 {
+		if id, err := strconv.ParseInt(c.Query("definition_id"), 10, 64); total > 0 && err == nil && id > 0 {
 			position, err := r.locate(c, lq, id)
 			if err == nil {
 				lq.page = (position-1)/lq.pageSize + 1
@@ -284,9 +284,12 @@ func (r dictionaryRoutes[T]) listHandler() fiber.Handler {
 				return serverError(c, "locate definition", err)
 			}
 		}
-		page, err := r.listPage(c, lq)
-		if err != nil {
-			return serverError(c, "list definitions", err)
+		var page []T
+		if lq.offset() < total {
+			page, err = r.listPage(c, lq)
+			if err != nil {
+				return serverError(c, "list definitions", err)
+			}
 		}
 
 		var usageByID map[int64]dictionaryUsage

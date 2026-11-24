@@ -24,20 +24,34 @@ ORDER BY
 LIMIT sqlc.arg('page_size')::bigint OFFSET sqlc.arg('page_offset')::bigint;
 
 -- name: LocateParameterDefinition :one
-SELECT position FROM (
-    SELECT id, row_number() OVER (ORDER BY
-        (CASE WHEN NOT sqlc.arg('sort_desc')::boolean THEN CASE sqlc.arg('sort_col')::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C",
-        (CASE WHEN sqlc.arg('sort_desc')::boolean THEN CASE sqlc.arg('sort_col')::text WHEN 'name' THEN name WHEN 'type' THEN type WHEN 'updated_at' THEN updated_at END END) COLLATE "C" DESC,
-        (CASE WHEN sqlc.arg('sort_col')::text IN ('type', 'updated_at') THEN name END) COLLATE "C",
-        id
-    ) AS position
-    FROM parameter_definitions
+WITH target AS (
+    SELECT t.id, t.name,
+           (CASE sqlc.arg('sort_col')::text WHEN 'name' THEN t.name WHEN 'type' THEN t.type WHEN 'updated_at' THEN t.updated_at END) COLLATE "C" AS sort_key
+    FROM parameter_definitions AS t
+    WHERE t.id = sqlc.arg('definition_id')
+    AND (sqlc.narg('search')::text IS NULL
+         OR lower(t.name) LIKE lower(sqlc.narg('search')::text)
+         OR lower(t.description) LIKE lower(sqlc.narg('search')::text))
+    AND (sqlc.narg('device_name')::text IS NULL OR t.device_name = sqlc.narg('device_name')::text)
+)
+SELECT (1 + (
+    SELECT count(*)
+    FROM parameter_definitions AS d
+    CROSS JOIN LATERAL (
+        SELECT (CASE sqlc.arg('sort_col')::text WHEN 'name' THEN d.name WHEN 'type' THEN d.type WHEN 'updated_at' THEN d.updated_at END) COLLATE "C" AS sort_key
+    ) AS candidate
     WHERE (sqlc.narg('search')::text IS NULL
-           OR lower(name) LIKE lower(sqlc.narg('search')::text)
-           OR lower(description) LIKE lower(sqlc.narg('search')::text))
-      AND (sqlc.narg('device_name')::text IS NULL OR device_name = sqlc.narg('device_name')::text)
-) AS ranked
-WHERE id = sqlc.arg('definition_id');
+         OR lower(d.name) LIKE lower(sqlc.narg('search')::text)
+         OR lower(d.description) LIKE lower(sqlc.narg('search')::text))
+    AND (sqlc.narg('device_name')::text IS NULL OR d.device_name = sqlc.narg('device_name')::text)
+    AND CASE
+        WHEN target.sort_key IS NULL THEN d.id < target.id
+        WHEN candidate.sort_key = target.sort_key THEN (d.name COLLATE "C", d.id) < (target.name COLLATE "C", target.id)
+        WHEN sqlc.arg('sort_desc')::boolean THEN candidate.sort_key > target.sort_key
+        ELSE candidate.sort_key < target.sort_key
+    END
+))::bigint AS position
+FROM target;
 
 -- name: CountParameterDefinitions :one
 SELECT COUNT(*) FROM parameter_definitions

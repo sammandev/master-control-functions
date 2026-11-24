@@ -117,6 +117,30 @@ func TestDictionaryPageQueryBudget(t *testing.T) {
 			if rows := counter.rows.Load() - beforeRows; rows > 4 {
 				t.Errorf("locate: got %d SQL result rows, want at most 4 (total, position, page, usage)", rows)
 			}
+
+			for _, tc := range []struct {
+				query string
+				total int
+			}{
+				{"search=no-match&definition_id=3", 0},
+				{"sort=name&order=desc&page_size=2&page=5", 3},
+			} {
+				beforeCalls, beforeRows := counter.calls.Load(), counter.rows.Load()
+				resp, body := doRequest(t, app, "GET", fmt.Sprintf("/api/%s-definitions?%s", kind, tc.query))
+				var got struct {
+					Total int               `json:"total"`
+					Items []json.RawMessage `json:"items"`
+				}
+				if err := json.Unmarshal([]byte(body), &got); err != nil {
+					t.Fatal(err)
+				}
+				if resp.StatusCode != 200 || got.Total != tc.total || got.Items == nil || len(got.Items) != 0 {
+					t.Fatalf("%s: got %d %s", tc.query, resp.StatusCode, body)
+				}
+				if calls, rows := counter.calls.Load()-beforeCalls, counter.rows.Load()-beforeRows; calls != 1 || rows != 1 {
+					t.Errorf("%s: got %d SQL queries and %d rows, want one count query returning one row", tc.query, calls, rows)
+				}
+			}
 		})
 	}
 }
