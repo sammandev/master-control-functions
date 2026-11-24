@@ -13,7 +13,7 @@ type registryItem struct {
 	SortOrder  int64  `json:"sort_order"`
 	BuiltIn    bool   `json:"built_in"`
 	Tone       string `json:"tone"`
-	GuideCount int64  `json:"guide_count"`
+	GuideCount *int64 `json:"guide_count"`
 }
 
 type registryList struct {
@@ -111,7 +111,7 @@ func TestTroubleshootingRegistryListIncludesCountsAndStableUpdates(t *testing.T)
 	}
 	categories := registryItems(t, categoryBody)
 	measurement := registryItemByKey(t, categories, "measurement")
-	if measurement.GuideCount == 0 {
+	if measurement.GuideCount == nil || *measurement.GuideCount == 0 {
 		t.Fatalf("measurement guide_count should include seeded guides: %+v", measurement)
 	}
 	for i := 1; i < len(categories); i++ {
@@ -119,6 +119,18 @@ func TestTroubleshootingRegistryListIncludesCountsAndStableUpdates(t *testing.T)
 			(categories[i-1].SortOrder == categories[i].SortOrder && strings.ToLower(categories[i-1].Label) > strings.ToLower(categories[i].Label)) {
 			t.Fatalf("categories not ordered by sort_order, label: %+v", categories)
 		}
+	}
+
+	resp, severityBody := doRequest(t, app, "GET", "/api/troubleshooting/severities")
+	if resp.StatusCode != 200 {
+		t.Fatalf("list severities: %d (%s)", resp.StatusCode, severityBody)
+	}
+	severities := registryItems(t, severityBody)
+	if critical := registryItemByKey(t, severities, "critical"); critical.GuideCount == nil || *critical.GuideCount != 4 {
+		t.Fatalf("critical guide_count should be 4 seeded guides: %s", severityBody)
+	}
+	if high := registryItemByKey(t, severities, "high"); high.GuideCount == nil || *high.GuideCount != 0 {
+		t.Fatalf("high guide_count should be present and equal 0: %s", severityBody)
 	}
 
 	resp, updatedBody := doJSON(t, app, "PUT", "/api/troubleshooting/severities/critical", `{"label":"Critical Priority","description":"Updated","sort_order":1,"tone":"destructive","key":"renamed","built_in":false}`)

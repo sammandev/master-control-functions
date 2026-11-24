@@ -594,26 +594,6 @@ func reorderTroubleshootingSeverities(q *store.Queries, d *sql.DB) fiber.Handler
 	}
 }
 
-func troubleshootingGuideRegistryCounts(c fiber.Ctx, q *store.Queries) (map[string]int64, map[string]int64, error) {
-	categoryRows, err := q.ListTroubleshootingCategoryGuideCounts(c.Context())
-	if err != nil {
-		return nil, nil, err
-	}
-	severityRows, err := q.ListTroubleshootingSeverityGuideCounts(c.Context())
-	if err != nil {
-		return nil, nil, err
-	}
-	categories := make(map[string]int64, len(categoryRows))
-	for _, row := range categoryRows {
-		categories[row.Key] = row.GuideCount
-	}
-	severities := make(map[string]int64, len(severityRows))
-	for _, row := range severityRows {
-		severities[row.Key] = row.GuideCount
-	}
-	return categories, severities, nil
-}
-
 func registryCategoryCount(c fiber.Ctx, q *store.Queries, key string) (int64, error) {
 	return q.CountTroubleshootingCategoryGuides(c.Context(), key)
 }
@@ -628,9 +608,13 @@ func listTroubleshootingCategories(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "list troubleshooting categories", err)
 		}
-		counts, _, err := troubleshootingGuideRegistryCounts(c, q)
+		countRows, err := q.ListTroubleshootingCategoryGuideCounts(c.Context())
 		if err != nil {
 			return serverError(c, "count troubleshooting categories", err)
+		}
+		counts := make(map[string]int64, len(countRows))
+		for _, row := range countRows {
+			counts[row.Key] = row.GuideCount
 		}
 		sort.Slice(rows, func(i, j int) bool {
 			if rows[i].SortOrder != rows[j].SortOrder {
@@ -652,9 +636,13 @@ func listTroubleshootingSeverities(q *store.Queries) fiber.Handler {
 		if err != nil {
 			return serverError(c, "list troubleshooting severities", err)
 		}
-		_, counts, err := troubleshootingGuideRegistryCounts(c, q)
+		countRows, err := q.ListTroubleshootingSeverityGuideCounts(c.Context())
 		if err != nil {
 			return serverError(c, "count troubleshooting severities", err)
+		}
+		counts := make(map[string]int64, len(countRows))
+		for _, row := range countRows {
+			counts[row.Key] = row.GuideCount
 		}
 		sort.Slice(rows, func(i, j int) bool {
 			if rows[i].SortOrder != rows[j].SortOrder {
