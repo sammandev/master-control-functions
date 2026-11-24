@@ -311,7 +311,7 @@ func (q *Queries) ListAllScriptKeyAudits(ctx context.Context) ([]ScriptKeyAudit,
 const listCriteriaDefinitionsByNameForReadiness = `-- name: ListCriteriaDefinitionsByNameForReadiness :many
 SELECT name, device_name, type, cardinality, value_pattern, allowed_values
 FROM criteria_definitions
-WHERE name IN (SELECT jsonb_array_elements_text($1::text::jsonb))
+WHERE name = ANY (ARRAY(SELECT jsonb_array_elements_text($1::text::jsonb)))
 ORDER BY id
 `
 
@@ -533,7 +533,7 @@ func (q *Queries) ListFunctionsByNaturalName(ctx context.Context, arg ListFuncti
 const listParameterDefinitionsByNameForReadiness = `-- name: ListParameterDefinitionsByNameForReadiness :many
 SELECT name, device_name, type, cardinality, value_pattern, allowed_values
 FROM parameter_definitions
-WHERE name IN (SELECT jsonb_array_elements_text($1::text::jsonb))
+WHERE name = ANY (ARRAY(SELECT jsonb_array_elements_text($1::text::jsonb)))
 ORDER BY id
 `
 

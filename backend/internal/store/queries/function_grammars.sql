@@ -105,13 +105,13 @@ ORDER BY id;
 -- name: ListParameterDefinitionsByNameForReadiness :many
 SELECT name, device_name, type, cardinality, value_pattern, allowed_values
 FROM parameter_definitions
-WHERE name IN (SELECT jsonb_array_elements_text(sqlc.arg(names_json)::text::jsonb))
+WHERE name = ANY (ARRAY(SELECT jsonb_array_elements_text(sqlc.arg(names_json)::text::jsonb)))
 ORDER BY id;
 
 -- name: ListCriteriaDefinitionsByNameForReadiness :many
 SELECT name, device_name, type, cardinality, value_pattern, allowed_values
 FROM criteria_definitions
-WHERE name IN (SELECT jsonb_array_elements_text(sqlc.arg(names_json)::text::jsonb))
+WHERE name = ANY (ARRAY(SELECT jsonb_array_elements_text(sqlc.arg(names_json)::text::jsonb)))
 ORDER BY id;
 
 -- name: ListFunctionExamplesForReadiness :many
