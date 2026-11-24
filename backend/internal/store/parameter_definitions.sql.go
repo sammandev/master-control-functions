@@ -30,6 +30,57 @@ func (q *Queries) CountParameterDefinitions(ctx context.Context, arg CountParame
 	return count, err
 }
 
+const countParameterPageUsage = `-- name: CountParameterPageUsage :many
+SELECT d.id,
+       COUNT(l.id) FILTER (
+           WHERE l.device_name = d.device_name
+              OR (d.device_name = '' AND scoped.id IS NULL)
+       ) AS usage_count,
+       COUNT(l.id) FILTER (
+           WHERE NOT EXISTS (
+               SELECT 1 FROM functions f
+               WHERE f.source = l.function_source AND f.name = l.function_name
+           )
+       ) AS orphan_usage_count
+FROM parameter_definitions d
+LEFT JOIN parameter_links l ON l.name = d.name
+LEFT JOIN parameter_definitions scoped ON scoped.name = l.name
+    AND scoped.device_name = l.device_name AND scoped.device_name <> ''
+WHERE d.id = ANY(string_to_array($1::text, ',')::bigint[])
+GROUP BY d.id
+`
+
+type CountParameterPageUsageRow struct {
+	ID               int64
+	UsageCount       int64
+	OrphanUsageCount int64
+}
+
+// Usage follows exact-scope-then-global resolution; orphan usage is
+// name-wide, regardless of device scope.
+func (q *Queries) CountParameterPageUsage(ctx context.Context, ids string) ([]CountParameterPageUsageRow, error) {
+	rows, err := q.db.QueryContext(ctx, countParameterPageUsage, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountParameterPageUsageRow
+	for rows.Next() {
+		var i CountParameterPageUsageRow
+		if err := rows.Scan(&i.ID, &i.UsageCount, &i.OrphanUsageCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countParameterUsageGlobal = `-- name: CountParameterUsageGlobal :one
 SELECT COUNT(*) FROM parameter_links l
 WHERE l.name = $1

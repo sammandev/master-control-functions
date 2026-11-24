@@ -46,6 +46,27 @@ RETURNING *;
 -- name: DeleteParameterDefinition :execrows
 DELETE FROM parameter_definitions WHERE id = $1;
 
+-- name: CountParameterPageUsage :many
+-- Usage follows exact-scope-then-global resolution; orphan usage is
+-- name-wide, regardless of device scope.
+SELECT d.id,
+       COUNT(l.id) FILTER (
+           WHERE l.device_name = d.device_name
+              OR (d.device_name = '' AND scoped.id IS NULL)
+       ) AS usage_count,
+       COUNT(l.id) FILTER (
+           WHERE NOT EXISTS (
+               SELECT 1 FROM functions f
+               WHERE f.source = l.function_source AND f.name = l.function_name
+           )
+       ) AS orphan_usage_count
+FROM parameter_definitions d
+LEFT JOIN parameter_links l ON l.name = d.name
+LEFT JOIN parameter_definitions scoped ON scoped.name = l.name
+    AND scoped.device_name = l.device_name AND scoped.device_name <> ''
+WHERE d.id = ANY(string_to_array(sqlc.arg('ids')::text, ',')::bigint[])
+GROUP BY d.id;
+
 -- name: CountParameterUsageScoped :one
 -- Scoped definition (ADR-0009): count links of the same device scope.
 SELECT COUNT(*) FROM parameter_links WHERE name = $1 AND device_name = $2;
