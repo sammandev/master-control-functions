@@ -540,6 +540,12 @@ func emitSequence(q *store.Queries) fiber.Handler {
 			Script   string            `json:"script"`
 			Errors   map[string]string `json:"errors"`
 		}
+		type functionData struct {
+			fn       store.Function
+			params   []composeField
+			criteria []composeField
+		}
+		functions := make(map[store.GetFunctionByNaturalKeyParams]functionData)
 		results := make([]stepEmit, 0, len(steps))
 		clean := make([]string, 0, len(steps))
 		for _, s := range steps {
@@ -562,19 +568,25 @@ func emitSequence(q *store.Queries) fiber.Handler {
 			}
 			item.Resolved = true
 
-			fn, err := q.GetFunctionByNaturalKey(c.Context(), store.GetFunctionByNaturalKeyParams{
+			key := store.GetFunctionByNaturalKeyParams{
 				Source:    s.FunctionSource,
 				Interface: s.FunctionInterface,
 				Name:      s.FunctionName,
-			})
-			if err != nil {
-				return serverError(c, "read step function", err)
 			}
-			pFields, cFields, err := composeFieldsFor(c, q, fn)
-			if err != nil {
-				return serverError(c, "list composer fields", err)
+			data, ok := functions[key]
+			if !ok {
+				fn, err := q.GetFunctionByNaturalKey(c.Context(), key)
+				if err != nil {
+					return serverError(c, "read step function", err)
+				}
+				pFields, cFields, err := composeFieldsFor(c, q, fn)
+				if err != nil {
+					return serverError(c, "list composer fields", err)
+				}
+				data = functionData{fn: fn, params: pFields, criteria: cFields}
+				functions[key] = data
 			}
-			script, fieldErrors := validateAndEmit(fn, pFields, cFields, composeRequest{
+			script, fieldErrors := validateAndEmit(data.fn, data.params, data.criteria, composeRequest{
 				Parameters: params,
 				Criteria:   criteria,
 				TimeoutMs:  s.TimeoutMs,
