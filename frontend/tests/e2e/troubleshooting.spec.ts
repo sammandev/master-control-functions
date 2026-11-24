@@ -744,15 +744,18 @@ test('shows resolution steps before alternative solutions finish loading', async
 		const alternate = page
 			.getByRole('region', { name: 'Alternative Solutions' })
 			.getByRole('button', { name: alternateTitle });
+		const copyAiContext = page.getByRole('button', { name: 'Copy AI Context', exact: true });
 		await expect.soft(page.getByRole('heading', { name: step })).toBeVisible();
 		await expect
 			.soft(page.getByRole('status').filter({ hasText: 'Loading alternative solutions…' }))
 			.toBeVisible();
+		await expect.soft(copyAiContext).toBeDisabled();
 		await expect(alternate).toBeHidden();
 		const screenshot = process.env.TROUBLESHOOTING_ALTERNATES_SCREENSHOT;
 		if (screenshot) await page.screenshot({ path: screenshot, animations: 'disabled' });
 		release.resolve();
 		await expect(alternate).toBeVisible();
+		await expect(copyAiContext).toBeEnabled();
 		await expect(page.getByRole('heading', { name: step })).toBeVisible();
 	} finally {
 		release.resolve();
