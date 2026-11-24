@@ -177,7 +177,7 @@
 							Loading…
 						{:else if loadError}
 							Sequences could not be loaded.
-						{:else if total === 0}
+						{:else if total === 0 && !searchDebounced}
 							No sequences yet.
 						{:else}
 							No sequences match the search.
